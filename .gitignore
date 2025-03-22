@@ -1,10 +1,37 @@
+# Haskell
 dist
 dist-*
 cabal-dev
-
-.direnv
-.envrc
-
-.pre-commit-config.yaml
-
+*.o
+*.hi
+*.hie
+*.chi
+*.chs.h
+*.dyn_o
+*.dyn_hi
+.hpc
+.hsenv
+.cabal-sandbox/
+cabal.sandbox.config
+*.prof
+*.aux
+*.hp
+*.eventlog
+.stack-work/
 cabal.project.local
+cabal.project.local~
+.HTF/
+.ghc.environment.*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.ionide/
+.hie/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+.envrc

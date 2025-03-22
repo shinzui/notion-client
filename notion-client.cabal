@@ -1,0 +1,119 @@
+cabal-version:      2.4
+name:               notion-client
+version:            0.1.0
+synopsis:           Notion bindings to Notion API
+description:
+  This package provides comprehensive and type-safe bindings
+  to the Notion API, providing both a Servant interface and
+  non-Servant interface for convenience.
+  .
+  Read the @README@ below for a fully worked usage example.
+  .
+  Otherwise, browse the "Notion.V1" module, which is the
+  intended package entrypoint.
+
+license:            BSD-3-Clause
+author:             Nadeem Bitar
+maintainer:         nadeem@gmail.com
+build-type:         Simple
+extra-source-files:
+  CHANGELOG.md
+  README.md
+
+library
+  default-language:   GHC2021
+  hs-source-dirs:     src
+  build-depends:
+    , aeson
+    , base                      >=4.15.0.0 && <5
+    , bytestring
+    , containers
+    , filepath
+    , http-api-data
+    , http-client-tls
+    , servant
+    , servant-client
+    , servant-multipart-api
+    , servant-multipart-client
+    , text
+    , time
+    , time-compat
+    , unordered-containers
+    , vector
+
+  exposed-modules:
+    Notion.V1
+    Notion.V1.Blocks
+    Notion.V1.Comments
+    Notion.V1.Common
+    Notion.V1.Databases
+    Notion.V1.Error
+    Notion.V1.ListOf
+    Notion.V1.Pages
+    Notion.V1.Pagination
+    Notion.V1.RichText
+    Notion.V1.Search
+    Notion.V1.Users
+
+  other-modules:      Notion.Prelude
+  default-extensions:
+    DataKinds
+    DerivingStrategies
+    DuplicateRecordFields
+    LambdaCase
+    OverloadedLabels
+    OverloadedStrings
+    RecordWildCards
+
+  ghc-options:        -Wall -Wno-missing-fields
+
+test-suite tasty
+  default-language:   GHC2021
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     tasty
+  main-is:            Main.hs
+  default-extensions:
+    DataKinds
+    DerivingStrategies
+    DuplicateRecordFields
+    LambdaCase
+    OverloadedLabels
+    OverloadedStrings
+    RecordWildCards
+
+  build-depends:
+    , aeson
+    , base
+    , http-client
+    , http-client-tls
+    , notion-client
+    , servant-client
+    , tasty
+    , tasty-hunit
+    , text
+
+  ghc-options:        -Wall
+
+executable notion-client-example
+  default-language:   GHC2021
+  hs-source-dirs:     notion-client-example
+  main-is:            Main.hs
+  default-extensions:
+    DataKinds
+    DerivingStrategies
+    DuplicateRecordFields
+    LambdaCase
+    OverloadedLabels
+    OverloadedStrings
+    RecordWildCards
+
+  build-depends:
+    , aeson
+    , base
+    , containers
+    , notion-client
+    , text
+    , unordered-containers
+    , vector
+
+  ghc-options:        -Wall
