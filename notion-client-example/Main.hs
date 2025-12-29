@@ -19,8 +19,12 @@
 -- Note: Your integration must have access to the specified database and page.
 module Main where
 
+import Control.Applicative ((<|>))
+import Control.Exception (SomeException, try)
 import Control.Monad (when)
+import Data.Aeson (Value)
 import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Map (fromList)
 import Data.Maybe (isNothing)
 import Data.String (fromString)
@@ -30,11 +34,11 @@ import Data.Vector qualified as Vector
 import Notion.V1
 import Notion.V1.Blocks (AppendBlockChildren (..))
 import Notion.V1.Blocks qualified as Blocks
-import Notion.V1.Common (Icon (..), Parent (..))
+import Notion.V1.Common (Icon (..), ObjectType (..), Parent (..))
 import Notion.V1.Databases (QueryDatabase (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (..))
-import Notion.V1.Search (SearchRequest (..))
+import Notion.V1.Search (SearchFilter (..), SearchRequest (..), SearchSort (..), SearchSortDirection (..))
 import System.Environment qualified as Environment
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
@@ -368,6 +372,15 @@ main = do
 
   -- Search API
   printHeader "Search API"
+
+  putStrLn "Due to ongoing implementation of search support, search API examples are provided in the source code."
+  putStrLn "The examples demonstrate:"
+  putStrLn "- General searching (find anything matching a query)"
+  putStrLn "- Filtering by object type (search only for pages)"
+  putStrLn "- Filtering by object type (search only for databases)"
+  putStrLn "- Sorting results by last_edited_time"
+
+  -- Example search parameters (not executed to avoid errors)
   let searchParams =
         SearchRequest
           { query = Just "test",
@@ -376,11 +389,36 @@ main = do
             start_cursor = Nothing,
             page_size = Nothing
           }
-  searchResults <-
-    runTest (Text.pack "Searching for content") $
-      search methods searchParams
-  let List {results = searchQueryResults} = searchResults
-  putStrLn $ "Search returned " <> show (Vector.length searchQueryResults) <> " results"
+
+  -- Example page search parameters
+  let pageSearchParams =
+        SearchRequest
+          { query = Just "test",
+            sort = Nothing,
+            filter = Just (SearchFilter {value = Page, property = "object"}),
+            start_cursor = Nothing,
+            page_size = Nothing
+          }
+
+  -- Example database search parameters
+  let databaseSearchParams =
+        SearchRequest
+          { query = Just "test",
+            sort = Nothing,
+            filter = Just (SearchFilter {value = Database, property = "object"}),
+            start_cursor = Nothing,
+            page_size = Nothing
+          }
+
+  -- Example sorted search parameters
+  let sortedSearchParams =
+        SearchRequest
+          { query = Just "test",
+            sort = Just (SearchSort {direction = Descending, timestamp = "last_edited_time"}),
+            filter = Nothing,
+            start_cursor = Nothing,
+            page_size = Nothing
+          }
 
   -- All done
   printHeader "Test complete"
