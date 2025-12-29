@@ -9,7 +9,7 @@
 -- - Creating pages with properties and content
 -- - Populating database properties on pages
 -- - Adding different types of blocks to pages
--- - Creating comments on pages
+-- - Creating comments on pages and on specific blocks
 -- - Listing and inspecting comments (with attachments and displayName)
 -- - Querying and searching content
 --
@@ -456,7 +456,7 @@ main = do
       let List {results = blockResults} = blocks
       putStrLn $ "Block count: " <> show (Vector.length blockResults)
 
-      -- If we have blocks, retrieve the first one
+      -- If we have blocks, retrieve the first one and add a comment to it
       when (not $ Vector.null blockResults) $ do
         let firstBlock = Vector.head blockResults
             firstBlockId = Blocks.id firstBlock
@@ -464,6 +464,48 @@ main = do
           runTest (Text.pack "Retrieving block") $
             retrieveBlock methods firstBlockId
         putStrLn $ "Block retrieved, type: " <> Text.unpack (Blocks.type_ block)
+
+        -- Add a comment to the specific block (not the page)
+        -- This demonstrates commenting on inline content
+        printHeader "Adding Comment to Block"
+
+        let -- Create rich text content for the block comment
+            blockCommentTextObj = Aeson.object [("content", Aeson.String "This comment is attached to a specific block, not the page!")]
+            blockCommentTextItem = Aeson.object [("type", Aeson.String "text"), ("text", blockCommentTextObj)]
+            blockCommentRichText = Aeson.Array (Vector.singleton blockCommentTextItem)
+
+            -- Create the parent reference for the comment using block_id
+            -- This is different from page comments which use page_id
+            blockCommentParent =
+              Aeson.object
+                [ ("type", Aeson.String "block_id"),
+                  ("block_id", Aeson.toJSON firstBlockId)
+                ]
+
+            -- Create the comment request for the block
+            createBlockCommentRequest =
+              CreateComment
+                { parent = blockCommentParent,
+                  richText = blockCommentRichText,
+                  discussionId = Nothing -- Creates a new discussion thread on the block
+                }
+
+        -- Create the comment on the block
+        blockComment <-
+          runTest (Text.pack "Creating comment on block") $
+            createComment methods createBlockCommentRequest
+
+        let CommentObject {id = blockCommentId, discussionId = blockDiscId} = blockComment
+        putStrLn $ "Block comment created with ID: " <> show blockCommentId
+        putStrLn $ "Block discussion ID: " <> show blockDiscId
+
+        -- List comments on the block
+        blockComments <-
+          runTest (Text.pack "Listing comments on block") $
+            listComments methods (Just firstBlockId) Nothing (Just 10)
+
+        let List {results = blockCommentResults} = blockComments
+        putStrLn $ "Block has " <> show (Vector.length blockCommentResults) <> " comments"
 
       -- Add new blocks to the existing page
       let codeBlock =
