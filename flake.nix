@@ -11,12 +11,11 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        ghcVersion = "ghc966";
-        frameworks = pkgs.darwin.apple_sdk.frameworks;
+        ghcVersion = "ghc9122";
         treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
         formatter = treefmtEval.config.build.wrapper;
 
-        # haskellPackages = pkgs.haskell.packages."${ghcVersion}";
+        haskellPackages = pkgs.haskell.packages."${ghcVersion}";
       in
       {
         checks = {
@@ -32,15 +31,12 @@
         };
         devShell = nixpkgs.legacyPackages.${system}.mkShell {
           inherit (self.checks.${system}.pre-commit-check) shellHook;
-          buildInputs = [
-            frameworks.Cocoa
-          ];
           nativeBuildInputs = [
             pkgs.zlib
             pkgs.xz
             pkgs.just
             pkgs.cabal-install
-            pkgs.haskell.packages."${ghcVersion}".haskell-language-server
+            haskellPackages.haskell-language-server
             pkgs.haskell.compiler."${ghcVersion}"
           ];
         };
