@@ -168,7 +168,16 @@ data Methods = Methods
     search :: SearchRequest -> IO (ListOf Value),
     -- \* Comments
     createComment :: Comments.CreateComment -> IO CommentObject,
-    listComments :: Maybe BlockID -> IO (ListOf CommentObject)
+    listComments ::
+      Maybe BlockID ->
+      -- \^ block_id
+      Maybe PageID ->
+      -- \^ page_id
+      Maybe Text ->
+      -- \^ start_cursor
+      Maybe Natural ->
+      -- \^ page_size
+      IO (ListOf CommentObject)
   }
 
 -- | Servant API
