@@ -2,9 +2,7 @@ module Main where
 
 import Data.Text qualified as Text
 import Notion.V1
-import Notion.V1.Common (UUID (..))
 import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (PageObject)
 import Notion.V1.Search (SearchRequest (..))
 import Notion.V1.Users (UserObject (..))
 import System.Environment qualified as Environment
@@ -44,7 +42,7 @@ tests = do
 testRetrieveCurrentUser :: Methods -> Assertion
 testRetrieveCurrentUser Methods {retrieveMyUser} = do
   user <- retrieveMyUser
-  let userId = Notion.V1.Users.id user
+  let UserObject {id = userId} = user
   -- Using Show instance of UUID to verify it's not empty
   assertBool "User object should have an ID" (show userId /= "")
 
@@ -64,7 +62,7 @@ testSearchAPI Methods {search} = do
             startCursor = Nothing,
             pageSize = Nothing
           }
-  searchResults <- search searchParams
+  _ <- search searchParams
   -- If this test runs without errors, it means timestamp parsing works
   assertBool "Search should run without timestamp parsing errors" True
 

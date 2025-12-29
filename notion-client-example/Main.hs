@@ -30,8 +30,7 @@ import Data.Maybe (isNothing)
 import Data.Text qualified as Text
 import DatabaseDemo (runDatabaseDemo)
 import Notion.V1 (getClientEnv, makeMethods)
-import Notion.V1.Common (ObjectType (..))
-import Notion.V1.Search (SearchFilter (..), SearchRequest (..), SearchSort (..), SearchSortDirection (..))
+import Notion.V1.Search (SearchRequest (..), SearchSort (..), SearchSortDirection (..), databaseFilter, pageFilter)
 import PageDemo (runPageDemo)
 import System.Environment qualified as Environment
 import UserDemo (runUserDemo)
@@ -95,22 +94,22 @@ main = do
             pageSize = Nothing
           }
 
-  -- Example page search parameters
+  -- Example page search parameters (using convenience constructor)
   let _pageSearchParams =
         SearchRequest
           { query = Just (Text.pack "test"),
             sort = Nothing,
-            filter = Just (SearchFilter {value = Page, property = Text.pack "object"}),
+            filter = Just pageFilter,
             startCursor = Nothing,
             pageSize = Nothing
           }
 
-  -- Example database search parameters
+  -- Example database search parameters (using convenience constructor)
   let _databaseSearchParams =
         SearchRequest
           { query = Just (Text.pack "test"),
             sort = Nothing,
-            filter = Just (SearchFilter {value = Database, property = Text.pack "object"}),
+            filter = Just databaseFilter,
             startCursor = Nothing,
             pageSize = Nothing
           }
