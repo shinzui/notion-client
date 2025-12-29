@@ -18,11 +18,8 @@ import Notion.V1.Common (ObjectType (..), UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Users (UserReference)
 
--- | Block ID type for Comments
+-- | Block ID type for Comments (pages are also blocks in Notion)
 type BlockID = UUID
-
--- | Page ID type for Comments
-type PageID = UUID
 
 -- | Comment ID
 type CommentID = UUID
@@ -95,12 +92,12 @@ instance ToJSON CreateComment where
   toJSON = genericToJSON aesonOptions
 
 -- | Servant API
+-- Note: To list comments on a page, use the page ID as block_id (pages are blocks in Notion)
 type API =
   "comments"
     :> ( ReqBody '[JSON] CreateComment
            :> Post '[JSON] CommentObject
            :<|> QueryParam "block_id" BlockID
-           :> QueryParam "page_id" PageID
            :> QueryParam "start_cursor" Text
            :> QueryParam "page_size" Natural
            :> Get '[JSON] (ListOf CommentObject)

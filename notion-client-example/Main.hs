@@ -381,12 +381,13 @@ main = do
       putStrLn $ "Page now contains " <> show (Vector.length allBlockResults) <> " blocks"
 
       -- Comments API demonstration (using the page)
+      -- Note: Pages are blocks in Notion, so we use the page ID as block_id
       printHeader "Comments API"
 
-      -- List comments on the page using new pagination parameters
+      -- List comments on the page using block_id (pages are blocks in Notion)
       comments <-
         runTest (Text.pack "Listing comments on page") $
-          listComments methods Nothing (Just pageId) Nothing (Just 10)
+          listComments methods (Just pageId) Nothing (Just 10)
 
       let List {results = commentResults} = comments
       putStrLn $ "Found " <> show (Vector.length commentResults) <> " comments on page"

@@ -168,11 +168,11 @@ data Methods = Methods
     search :: SearchRequest -> IO (ListOf Value),
     -- \* Comments
     createComment :: Comments.CreateComment -> IO CommentObject,
+    -- | List comments on a block or page. To list comments on a page, use the page ID
+    -- as the block_id parameter (pages are blocks in Notion).
     listComments ::
       Maybe BlockID ->
-      -- \^ block_id
-      Maybe PageID ->
-      -- \^ page_id
+      -- \^ block_id (use page ID here for page comments)
       Maybe Text ->
       -- \^ start_cursor
       Maybe Natural ->
