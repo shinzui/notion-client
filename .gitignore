@@ -35,3 +35,4 @@ cabal.project.local~
 Thumbs.db
 
 .envrc
+.claude/
