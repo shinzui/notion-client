@@ -38,9 +38,9 @@ instance ToJSON ObjectType where
 
 -- | Parent object that can be a database, page, block, or workspace
 data Parent
-  = DatabaseParent {database_id :: UUID}
-  | PageParent {page_id :: UUID}
-  | BlockParent {block_id :: UUID}
+  = DatabaseParent {databaseId :: UUID}
+  | PageParent {pageId :: UUID}
+  | BlockParent {blockId :: UUID}
   | WorkspaceParent {workspace :: Bool}
   deriving stock (Generic, Show)
 
@@ -162,7 +162,7 @@ instance ToJSON Cover where
 -- | Internal file object
 data File = File
   { url :: Text,
-    expiry_time :: Maybe POSIXTime
+    expiryTime :: Maybe POSIXTime
   }
   deriving stock (Generic, Show)
 

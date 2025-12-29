@@ -239,19 +239,19 @@ data WebhookEvent = WebhookEvent
     -- | When the event occurred (ISO 8601)
     timestamp :: POSIXTime,
     -- | Workspace where the event originated
-    workspace_id :: UUID,
+    workspaceId :: UUID,
     -- | Associated webhook subscription
-    subscription_id :: UUID,
+    subscriptionId :: UUID,
     -- | Integration that owns the subscription
-    integration_id :: UUID,
+    integrationId :: UUID,
     -- | Type of event
     type_ :: EventType,
     -- | Users/bots who triggered the action
     authors :: Vector Author,
     -- | Users/bots with access to the entity
-    accessible_by :: Vector AccessibleBy,
+    accessibleBy :: Vector AccessibleBy,
     -- | Delivery attempt number (1-8)
-    attempt_number :: Int,
+    attemptNumber :: Int,
     -- | Entity that triggered the event
     entity :: WebhookEntity,
     -- | Event-specific data (varies by event type)
@@ -265,13 +265,13 @@ instance FromJSON WebhookEvent where
       id <- o .: "id"
       timestampText <- o .: "timestamp"
       timestamp <- parseISO8601 timestampText
-      workspace_id <- o .: "workspace_id"
-      subscription_id <- o .: "subscription_id"
-      integration_id <- o .: "integration_id"
+      workspaceId <- o .: "workspace_id"
+      subscriptionId <- o .: "subscription_id"
+      integrationId <- o .: "integration_id"
       type_ <- o .: "type"
       authors <- o .: "authors"
-      accessible_by <- o .: "accessible_by"
-      attempt_number <- o .: "attempt_number"
+      accessibleBy <- o .: "accessible_by"
+      attemptNumber <- o .: "attempt_number"
       entity <- o .: "entity"
       data_ <- o .:? "data"
       pure WebhookEvent {..}
@@ -283,7 +283,7 @@ instance ToJSON WebhookEvent where
 -- | Verification payload sent by Notion when setting up a webhook
 -- Your endpoint should receive this and confirm the token in the Notion UI
 data VerificationPayload = VerificationPayload
-  { verification_token :: Text
+  { verificationToken :: Text
   }
   deriving stock (Eq, Show, Generic)
 

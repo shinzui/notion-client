@@ -4,10 +4,10 @@
 -- This example demonstrates using the Notion API client to interact with Notion:
 -- - Retrieving users and user information
 -- - Retrieving, querying, and creating databases
--- - Displaying database metadata (is_inline, in_trash, public_url, data_sources)
+-- - Displaying database metadata (isInline, inTrash, publicUrl, dataSources)
 -- - Creating pages with properties and content
 -- - Adding different types of blocks to pages
--- - Listing and inspecting comments (with attachments and display_name)
+-- - Listing and inspecting comments (with attachments and displayName)
 -- - Querying and searching content
 --
 -- To run this example:
@@ -178,20 +178,20 @@ main = do
           retrieveDatabase methods databaseId
       putStrLn $ "Database retrieved, ID: " <> databaseIdStr
 
-      -- Display new database fields (is_inline, in_trash, public_url, data_sources)
-      let DatabaseObject {is_inline, in_trash, public_url, data_sources} = database
-      putStrLn $ "  is_inline: " <> show is_inline
-      putStrLn $ "  in_trash: " <> show in_trash
-      putStrLn $ "  public_url: " <> show public_url
-      putStrLn $ "  data_sources: " <> show data_sources
+      -- Display new database fields (isInline, inTrash, publicUrl, dataSources)
+      let DatabaseObject {isInline, inTrash, publicUrl, dataSources} = database
+      putStrLn $ "  isInline: " <> show isInline
+      putStrLn $ "  inTrash: " <> show inTrash
+      putStrLn $ "  publicUrl: " <> show publicUrl
+      putStrLn $ "  dataSources: " <> show dataSources
 
       -- Query database
       let queryParams =
             QueryDatabase
               { filter = Nothing,
                 sorts = Nothing,
-                start_cursor = Nothing,
-                page_size = Nothing
+                startCursor = Nothing,
+                pageSize = Nothing
               }
       results <-
         runTest (Text.pack "Querying database") $
@@ -230,7 +230,7 @@ main = do
           -- Step 4: Assemble the CreatePage request
           createPageRequest =
             CreatePage
-              { parent = DatabaseParent {database_id = databaseId}, -- Specify parent database
+              { parent = DatabaseParent {databaseId = databaseId}, -- Specify parent database
                 properties = pageProperties, -- Required page properties
                 children = Just initialBlocks, -- Optional initial content
                 icon = Just (EmojiIcon "📝"), -- Optional page icon
@@ -397,17 +397,17 @@ main = do
         let firstComment = Vector.head commentResults
             CommentObject
               { id = commentId,
-                discussion_id = discId,
-                created_by = createdBy,
+                discussionId = discId,
+                createdBy = createdBy,
                 attachments = commentAttachments,
-                display_name = displayName
+                displayName = displayName
               } = firstComment
         putStrLn $ "First comment details:"
         putStrLn $ "  id: " <> show commentId
-        putStrLn $ "  discussion_id: " <> show discId
-        putStrLn $ "  created_by: " <> show createdBy
+        putStrLn $ "  discussionId: " <> show discId
+        putStrLn $ "  createdBy: " <> show createdBy
         putStrLn $ "  attachments: " <> show commentAttachments
-        putStrLn $ "  display_name: " <> show displayName
+        putStrLn $ "  displayName: " <> show displayName
     Nothing ->
       putStrLn "Skipping page tests (set NOTION_TEST_PAGE_ID to enable)"
 
@@ -427,8 +427,8 @@ main = do
           { query = Just "test",
             sort = Nothing,
             filter = Nothing,
-            start_cursor = Nothing,
-            page_size = Nothing
+            startCursor = Nothing,
+            pageSize = Nothing
           }
 
   -- Example page search parameters
@@ -437,8 +437,8 @@ main = do
           { query = Just "test",
             sort = Nothing,
             filter = Just (SearchFilter {value = Page, property = "object"}),
-            start_cursor = Nothing,
-            page_size = Nothing
+            startCursor = Nothing,
+            pageSize = Nothing
           }
 
   -- Example database search parameters
@@ -447,8 +447,8 @@ main = do
           { query = Just "test",
             sort = Nothing,
             filter = Just (SearchFilter {value = Database, property = "object"}),
-            start_cursor = Nothing,
-            page_size = Nothing
+            startCursor = Nothing,
+            pageSize = Nothing
           }
 
   -- Example sorted search parameters
@@ -457,8 +457,8 @@ main = do
           { query = Just "test",
             sort = Just (SearchSort {direction = Descending, timestamp = "last_edited_time"}),
             filter = Nothing,
-            start_cursor = Nothing,
-            page_size = Nothing
+            startCursor = Nothing,
+            pageSize = Nothing
           }
 
   -- All done

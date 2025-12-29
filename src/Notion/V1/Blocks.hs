@@ -26,11 +26,11 @@ type BlockID = UUID
 data BlockObject = BlockObject
   { id :: BlockID,
     parent :: Parent,
-    created_time :: POSIXTime,
-    last_edited_time :: POSIXTime,
-    created_by :: UserReference,
-    last_edited_by :: UserReference,
-    has_children :: Bool,
+    createdTime :: POSIXTime,
+    lastEditedTime :: POSIXTime,
+    createdBy :: UserReference,
+    lastEditedBy :: UserReference,
+    hasChildren :: Bool,
     archived :: Bool,
     type_ :: Text,
     content :: Value,
@@ -43,13 +43,13 @@ instance FromJSON BlockObject where
     Object o -> do
       id <- o .: "id"
       parent <- o .: "parent"
-      created_time_str <- o .: "created_time"
-      created_time <- parseISO8601 created_time_str
-      last_edited_time_str <- o .: "last_edited_time"
-      last_edited_time <- parseISO8601 last_edited_time_str
-      created_by <- o .: "created_by"
-      last_edited_by <- o .: "last_edited_by"
-      has_children <- o .: "has_children"
+      createdTimeStr <- o .: "created_time"
+      createdTime <- parseISO8601 createdTimeStr
+      lastEditedTimeStr <- o .: "last_edited_time"
+      lastEditedTime <- parseISO8601 lastEditedTimeStr
+      createdBy <- o .: "created_by"
+      lastEditedBy <- o .: "last_edited_by"
+      hasChildren <- o .: "has_children"
       archived <- o .: "archived"
       type_ <- o .: "type"
       -- Content is stored under a field named after the block type (e.g., "heading_1", "paragraph")

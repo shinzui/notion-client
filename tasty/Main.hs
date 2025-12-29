@@ -61,8 +61,8 @@ testSearchAPI Methods {search} = do
           { query = Just "test",
             sort = Nothing,
             filter = Nothing,
-            start_cursor = Nothing,
-            page_size = Nothing
+            startCursor = Nothing,
+            pageSize = Nothing
           }
   searchResults <- search searchParams
   -- If this test runs without errors, it means timestamp parsing works

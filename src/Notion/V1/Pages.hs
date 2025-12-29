@@ -33,15 +33,15 @@ type PageID = UUID
 -- | Notion page object
 data PageObject = PageObject
   { id :: PageID,
-    created_time :: POSIXTime,
-    last_edited_time :: POSIXTime,
-    created_by :: UserReference,
-    last_edited_by :: UserReference,
+    createdTime :: POSIXTime,
+    lastEditedTime :: POSIXTime,
+    createdBy :: UserReference,
+    lastEditedBy :: UserReference,
     cover :: Maybe Cover,
     icon :: Maybe Icon,
     parent :: Parent,
     archived :: Bool,
-    in_trash :: Bool,
+    inTrash :: Bool,
     properties :: Map Text PropertyItem,
     url :: Text,
     object :: ObjectType
@@ -52,17 +52,17 @@ instance FromJSON PageObject where
   parseJSON = \case
     Object o -> do
       id <- o .: "id"
-      created_time_str <- o .: "created_time"
-      created_time <- parseISO8601 created_time_str
-      last_edited_time_str <- o .: "last_edited_time"
-      last_edited_time <- parseISO8601 last_edited_time_str
-      created_by <- o .: "created_by"
-      last_edited_by <- o .: "last_edited_by"
+      createdTimeStr <- o .: "created_time"
+      createdTime <- parseISO8601 createdTimeStr
+      lastEditedTimeStr <- o .: "last_edited_time"
+      lastEditedTime <- parseISO8601 lastEditedTimeStr
+      createdBy <- o .: "created_by"
+      lastEditedBy <- o .: "last_edited_by"
       cover <- o .:? "cover"
       icon <- o .:? "icon"
       parent <- o .: "parent"
       archived <- o .: "archived"
-      in_trash <- o .: "in_trash"
+      inTrash <- o .: "in_trash"
       properties <- o .: "properties"
       url <- o .: "url"
       object <- o .: "object"

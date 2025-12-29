@@ -19,7 +19,7 @@ import Notion.V1.Common (Color (..), UUID)
 
 -- | Rich text object in Notion
 data RichText = RichText
-  { plain_text :: Text,
+  { plainText :: Text,
     href :: Maybe Text,
     annotations :: Annotations,
     type_ :: Text,
@@ -131,7 +131,7 @@ instance ToJSON Link where
 data Date = Date
   { start :: Text,
     end :: Maybe Text,
-    time_zone :: Maybe TimeZone
+    timeZone :: Maybe TimeZone
   }
   deriving stock (Generic, Show)
 

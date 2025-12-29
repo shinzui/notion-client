@@ -22,8 +22,8 @@ data SearchRequest = SearchRequest
   { query :: Maybe Text,
     sort :: Maybe SearchSort,
     filter :: Maybe SearchFilter,
-    start_cursor :: Maybe Text,
-    page_size :: Maybe Natural
+    startCursor :: Maybe Text,
+    pageSize :: Maybe Natural
   }
   deriving stock (Generic, Show)
 
@@ -37,8 +37,8 @@ _SearchRequest =
     { query = Nothing,
       sort = Nothing,
       filter = Nothing,
-      start_cursor = Nothing,
-      page_size = Nothing
+      startCursor = Nothing,
+      pageSize = Nothing
     }
 
 -- | Search sort direction

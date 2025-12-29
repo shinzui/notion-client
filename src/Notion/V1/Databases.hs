@@ -36,20 +36,20 @@ instance FromJSON DataSource where
 -- | Notion database object
 data DatabaseObject = DatabaseObject
   { id :: DatabaseID,
-    created_time :: POSIXTime,
-    last_edited_time :: POSIXTime,
-    created_by :: UserReference,
-    last_edited_by :: UserReference,
+    createdTime :: POSIXTime,
+    lastEditedTime :: POSIXTime,
+    createdBy :: UserReference,
+    lastEditedBy :: UserReference,
     title :: Value,
     description :: Value,
     properties :: Value,
     url :: Text,
     parent :: Parent,
     archived :: Bool,
-    is_inline :: Maybe Bool,
-    in_trash :: Maybe Bool,
-    public_url :: Maybe Text,
-    data_sources :: Maybe (Vector DataSource),
+    isInline :: Maybe Bool,
+    inTrash :: Maybe Bool,
+    publicUrl :: Maybe Text,
+    dataSources :: Maybe (Vector DataSource),
     object :: ObjectType
   }
   deriving stock (Generic, Show)
@@ -58,22 +58,22 @@ instance FromJSON DatabaseObject where
   parseJSON = \case
     Object o -> do
       id <- o .: "id"
-      created_time_str <- o .: "created_time"
-      created_time <- parseISO8601 created_time_str
-      last_edited_time_str <- o .: "last_edited_time"
-      last_edited_time <- parseISO8601 last_edited_time_str
-      created_by <- o .: "created_by"
-      last_edited_by <- o .: "last_edited_by"
+      createdTimeStr <- o .: "created_time"
+      createdTime <- parseISO8601 createdTimeStr
+      lastEditedTimeStr <- o .: "last_edited_time"
+      lastEditedTime <- parseISO8601 lastEditedTimeStr
+      createdBy <- o .: "created_by"
+      lastEditedBy <- o .: "last_edited_by"
       title <- o .: "title"
       description <- o .: "description"
       properties <- o .: "properties"
       url <- o .: "url"
       parent <- o .: "parent"
       archived <- o .: "archived"
-      is_inline <- o .:? "is_inline"
-      in_trash <- o .:? "in_trash"
-      public_url <- o .:? "public_url"
-      data_sources <- o .:? "data_sources"
+      isInline <- o .:? "is_inline"
+      inTrash <- o .:? "in_trash"
+      publicUrl <- o .:? "public_url"
+      dataSources <- o .:? "data_sources"
       object <- o .: "object"
       return DatabaseObject {..}
     _ -> fail "Expected object for DatabaseObject"
@@ -86,7 +86,7 @@ data CreateDatabase = CreateDatabase
     icon :: Maybe Icon,
     cover :: Maybe Cover,
     description :: Maybe Value,
-    is_inline :: Maybe Bool
+    isInline :: Maybe Bool
   }
   deriving stock (Generic, Show)
 
@@ -101,7 +101,7 @@ data UpdateDatabase = UpdateDatabase
     cover :: Maybe Cover,
     description :: Maybe Value,
     archived :: Maybe Bool,
-    is_inline :: Maybe Bool
+    isInline :: Maybe Bool
   }
   deriving stock (Generic, Show)
 
@@ -112,8 +112,8 @@ instance ToJSON UpdateDatabase where
 data QueryDatabase = QueryDatabase
   { filter :: Maybe Value,
     sorts :: Maybe [Value],
-    start_cursor :: Maybe Text,
-    page_size :: Maybe Natural
+    startCursor :: Maybe Text,
+    pageSize :: Maybe Natural
   }
   deriving stock (Generic, Show)
 

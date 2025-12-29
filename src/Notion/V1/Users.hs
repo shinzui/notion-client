@@ -27,7 +27,7 @@ type UserID = UUID
 data UserObject = UserObject
   { id :: UserID,
     name :: Maybe Text,
-    avatar_url :: Maybe Text,
+    avatarUrl :: Maybe Text,
     type_ :: UserType,
     person :: Maybe PersonUser,
     bot :: Maybe BotUser,
@@ -59,7 +59,7 @@ instance FromJSON PersonUser where
 -- | Bot user
 data BotUser = BotUser
   { owner :: Maybe UserOwner,
-    workspace_name :: Maybe Text
+    workspaceName :: Maybe Text
   }
   deriving stock (Generic, Show)
 
@@ -98,10 +98,10 @@ instance FromJSON UserReference where
 type API =
   "users"
     :> ( Capture "user_id" UserID
-          :> Get '[JSON] UserObject
-          :<|> QueryParam "page_size" Natural
-          :> QueryParam "start_cursor" Text
-          :> Get '[JSON] (ListOf UserObject)
-          :<|> "me"
-          :> Get '[JSON] UserObject
+           :> Get '[JSON] UserObject
+           :<|> QueryParam "page_size" Natural
+           :> QueryParam "start_cursor" Text
+           :> Get '[JSON] (ListOf UserObject)
+           :<|> "me"
+           :> Get '[JSON] UserObject
        )

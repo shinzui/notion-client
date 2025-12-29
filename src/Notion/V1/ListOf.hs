@@ -11,8 +11,8 @@ import Notion.Prelude
 -- | Notion API typically returns paginated results with this structure
 data ListOf a = List
   { results :: Vector a,
-    next_cursor :: Maybe Text,
-    has_more :: Bool,
+    nextCursor :: Maybe Text,
+    hasMore :: Bool,
     type_ :: Maybe Text,
     object :: Maybe Text
   }
@@ -22,8 +22,8 @@ instance (FromJSON a) => FromJSON (ListOf a) where
   parseJSON = \case
     Object o -> do
       results <- o .: "results"
-      next_cursor <- o .:? "next_cursor"
-      has_more <- o .:? "has_more" .!= False
+      nextCursor <- o .:? "next_cursor"
+      hasMore <- o .:? "has_more" .!= False
       type_ <- o .:? "type"
       object <- o .:? "object"
       return $ List {..}

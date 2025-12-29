@@ -87,8 +87,20 @@ dropTrailingUnderscore "_" = ""
 dropTrailingUnderscore "" = ""
 dropTrailingUnderscore (c : cs) = c : dropTrailingUnderscore cs
 
+-- | Convert camelCase to snake_case and handle trailing underscores
+-- e.g., "createdTime" -> "created_time", "type_" -> "type"
+camelToSnake :: String -> String
+camelToSnake = \case
+  [] -> []
+  (c : cs) -> Char.toLower c : go cs
+  where
+    go [] = []
+    go (c : cs)
+      | Char.isUpper c = '_' : Char.toLower c : go cs
+      | otherwise = c : go cs
+
 labelModifier :: String -> String
-labelModifier = map Char.toLower . dropTrailingUnderscore
+labelModifier = camelToSnake . dropTrailingUnderscore
 
 stripPrefix :: String -> String -> String
 stripPrefix prefix string = labelModifier suffix

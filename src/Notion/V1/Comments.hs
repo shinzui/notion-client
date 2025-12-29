@@ -40,7 +40,7 @@ instance FromJSON CommentAttachment where
 data CommentDisplayName = CommentDisplayName
   { type_ :: Text,
     emoji :: Maybe Text,
-    display_name :: Maybe Text
+    displayName :: Maybe Text
   }
   deriving stock (Generic, Show)
 
@@ -51,13 +51,13 @@ instance FromJSON CommentDisplayName where
 data CommentObject = CommentObject
   { id :: CommentID,
     parent :: Value,
-    discussion_id :: UUID,
-    created_time :: POSIXTime,
-    last_edited_time :: POSIXTime,
-    created_by :: UserReference,
-    rich_text :: Value,
+    discussionId :: UUID,
+    createdTime :: POSIXTime,
+    lastEditedTime :: POSIXTime,
+    createdBy :: UserReference,
+    richText :: Value,
     attachments :: Maybe (Vector CommentAttachment),
-    display_name :: Maybe CommentDisplayName,
+    displayName :: Maybe CommentDisplayName,
     object :: ObjectType
   }
   deriving stock (Generic, Show)
@@ -67,15 +67,15 @@ instance FromJSON CommentObject where
     Object o -> do
       id <- o .: "id"
       parent <- o .: "parent"
-      discussion_id <- o .: "discussion_id"
-      created_time_str <- o .: "created_time"
-      created_time <- parseISO8601 created_time_str
-      last_edited_time_str <- o .: "last_edited_time"
-      last_edited_time <- parseISO8601 last_edited_time_str
-      created_by <- o .: "created_by"
-      rich_text <- o .: "rich_text"
+      discussionId <- o .: "discussion_id"
+      createdTimeStr <- o .: "created_time"
+      createdTime <- parseISO8601 createdTimeStr
+      lastEditedTimeStr <- o .: "last_edited_time"
+      lastEditedTime <- parseISO8601 lastEditedTimeStr
+      createdBy <- o .: "created_by"
+      richText <- o .: "rich_text"
       attachments <- o .:? "attachments"
-      display_name <- o .:? "display_name"
+      displayName <- o .:? "display_name"
       object <- o .: "object"
       return CommentObject {..}
     _ -> fail "Expected object for CommentObject"
@@ -83,8 +83,8 @@ instance FromJSON CommentObject where
 -- | Create comment request
 data CreateComment = CreateComment
   { parent :: Value,
-    rich_text :: Value,
-    discussion_id :: Maybe UUID
+    richText :: Value,
+    discussionId :: Maybe UUID
   }
   deriving stock (Generic, Show)
 
