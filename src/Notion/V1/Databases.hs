@@ -12,7 +12,7 @@ module Notion.V1.Databases
   )
 where
 
-import Data.Aeson (Object, (.:))
+import Data.Aeson (Object, (.:), (.:?))
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
@@ -35,6 +35,9 @@ data DatabaseObject = DatabaseObject
     url :: Text,
     parent :: Parent,
     archived :: Bool,
+    is_inline :: Maybe Bool,
+    in_trash :: Maybe Bool,
+    public_url :: Maybe Text,
     object :: ObjectType
   }
   deriving stock (Generic, Show)
@@ -55,6 +58,9 @@ instance FromJSON DatabaseObject where
       url <- o .: "url"
       parent <- o .: "parent"
       archived <- o .: "archived"
+      is_inline <- o .:? "is_inline"
+      in_trash <- o .:? "in_trash"
+      public_url <- o .:? "public_url"
       object <- o .: "object"
       return DatabaseObject {..}
     _ -> fail "Expected object for DatabaseObject"
@@ -66,7 +72,8 @@ data CreateDatabase = CreateDatabase
     properties :: Value,
     icon :: Maybe Icon,
     cover :: Maybe Cover,
-    description :: Maybe Value
+    description :: Maybe Value,
+    is_inline :: Maybe Bool
   }
   deriving stock (Generic, Show)
 
@@ -79,7 +86,9 @@ data UpdateDatabase = UpdateDatabase
     properties :: Maybe Value,
     icon :: Maybe Icon,
     cover :: Maybe Cover,
-    description :: Maybe Value
+    description :: Maybe Value,
+    archived :: Maybe Bool,
+    is_inline :: Maybe Bool
   }
   deriving stock (Generic, Show)
 
@@ -102,14 +111,14 @@ instance ToJSON QueryDatabase where
 type API =
   "databases"
     :> ( ReqBody '[JSON] CreateDatabase
-          :> Post '[JSON] DatabaseObject
-          :<|> Capture "database_id" DatabaseID
-          :> Get '[JSON] DatabaseObject
-          :<|> Capture "database_id" DatabaseID
-          :> ReqBody '[JSON] UpdateDatabase
-          :> Patch '[JSON] DatabaseObject
-          :<|> Capture "database_id" DatabaseID
-          :> "query"
-          :> ReqBody '[JSON] QueryDatabase
-          :> Post '[JSON] (ListOf PageObject)
+           :> Post '[JSON] DatabaseObject
+           :<|> Capture "database_id" DatabaseID
+           :> Get '[JSON] DatabaseObject
+           :<|> Capture "database_id" DatabaseID
+           :> ReqBody '[JSON] UpdateDatabase
+           :> Patch '[JSON] DatabaseObject
+           :<|> Capture "database_id" DatabaseID
+           :> "query"
+           :> ReqBody '[JSON] QueryDatabase
+           :> Post '[JSON] (ListOf PageObject)
        )

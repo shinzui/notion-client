@@ -178,6 +178,9 @@ data PropertyValueType
   | LastEditedTime
   | LastEditedBy
   | Status
+  | UniqueId
+  | Button
+  | Verification
   deriving stock (Generic, Show)
 
 instance FromJSON PropertyValueType where
@@ -204,10 +207,10 @@ instance ToJSON SelectOption where
 type API =
   "pages"
     :> ( Capture "page_id" PageID
-          :> Get '[JSON] PageObject
-          :<|> ReqBody '[JSON] CreatePage
-          :> Post '[JSON] PageObject
-          :<|> Capture "page_id" PageID
-          :> ReqBody '[JSON] UpdatePage
-          :> Patch '[JSON] PageObject
+           :> Get '[JSON] PageObject
+           :<|> ReqBody '[JSON] CreatePage
+           :> Post '[JSON] PageObject
+           :<|> Capture "page_id" PageID
+           :> ReqBody '[JSON] UpdatePage
+           :> Patch '[JSON] PageObject
        )
