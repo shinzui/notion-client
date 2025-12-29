@@ -26,8 +26,10 @@ library
   build-depends:
     , aeson
     , base                      >=4.15.0.0 && <5
+    , base16-bytestring
     , bytestring
     , containers
+    , cryptohash-sha256
     , filepath
     , http-api-data
     , http-client-tls
@@ -54,6 +56,7 @@ library
     Notion.V1.RichText
     Notion.V1.Search
     Notion.V1.Users
+    Notion.V1.Webhooks
 
   other-modules:      Notion.Prelude
   default-extensions:

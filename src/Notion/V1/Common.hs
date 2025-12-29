@@ -19,7 +19,7 @@ import Notion.Prelude
 
 -- | UUID type for Notion resource IDs
 newtype UUID = UUID {text :: Text}
-  deriving newtype (FromJSON, IsString, Show, ToHttpApiData, ToJSON)
+  deriving newtype (Eq, FromJSON, IsString, Show, ToHttpApiData, ToJSON)
 
 -- | Possible Notion object types
 data ObjectType
