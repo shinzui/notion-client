@@ -95,6 +95,13 @@ executable notion-client-example
   default-language:   GHC2024
   hs-source-dirs:     notion-client-example
   main-is:            Main.hs
+  other-modules:
+    Blocks
+    Console
+    DatabaseDemo
+    PageDemo
+    UserDemo
+
   default-extensions:
     DuplicateRecordFields
     OverloadedLabels
