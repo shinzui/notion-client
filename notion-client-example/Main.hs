@@ -5,8 +5,11 @@
 -- - Retrieving users and user information
 -- - Retrieving, querying, and creating databases
 -- - Displaying database metadata (isInline, inTrash, publicUrl, dataSources)
+-- - Adding properties to databases (select, multi-select, etc.)
 -- - Creating pages with properties and content
+-- - Populating database properties on pages
 -- - Adding different types of blocks to pages
+-- - Creating comments on pages
 -- - Listing and inspecting comments (with attachments and displayName)
 -- - Querying and searching content
 --
@@ -36,9 +39,9 @@ import Data.Vector qualified as Vector
 import Notion.V1
 import Notion.V1.Blocks (AppendBlockChildren (..))
 import Notion.V1.Blocks qualified as Blocks
-import Notion.V1.Comments (CommentObject (..))
+import Notion.V1.Comments (CommentObject (..), CreateComment (..))
 import Notion.V1.Common (Icon (..), ObjectType (..), Parent (..))
-import Notion.V1.Databases (DatabaseObject (..), QueryDatabase (..))
+import Notion.V1.Databases (DatabaseObject (..), QueryDatabase (..), UpdateDatabase (..))
 import Notion.V1.Databases qualified as Databases
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (..))
@@ -199,6 +202,68 @@ main = do
       let List {results = queryResults} = results
       putStrLn $ "Query returned " <> show (Vector.length queryResults) <> " results"
 
+      -- Add a new property to the database
+      -- This adds a "Status" select property with predefined options
+      printHeader "Adding Property to Database"
+
+      let -- Define Status and Priority select properties with options
+          -- Properties are combined into a single object for the update request
+          combinedProperties =
+            Aeson.object
+              [ ( "Status",
+                  Aeson.object
+                    [ ("type", Aeson.String "select"),
+                      ( "select",
+                        Aeson.object
+                          [ ( "options",
+                              Aeson.Array $
+                                Vector.fromList
+                                  [ Aeson.object [("name", Aeson.String "Not Started"), ("color", Aeson.String "red")],
+                                    Aeson.object [("name", Aeson.String "In Progress"), ("color", Aeson.String "yellow")],
+                                    Aeson.object [("name", Aeson.String "Done"), ("color", Aeson.String "green")]
+                                  ]
+                            )
+                          ]
+                      )
+                    ]
+                ),
+                ( "Priority",
+                  Aeson.object
+                    [ ("type", Aeson.String "select"),
+                      ( "select",
+                        Aeson.object
+                          [ ( "options",
+                              Aeson.Array $
+                                Vector.fromList
+                                  [ Aeson.object [("name", Aeson.String "High"), ("color", Aeson.String "red")],
+                                    Aeson.object [("name", Aeson.String "Medium"), ("color", Aeson.String "yellow")],
+                                    Aeson.object [("name", Aeson.String "Low"), ("color", Aeson.String "gray")]
+                                  ]
+                            )
+                          ]
+                      )
+                    ]
+                )
+              ]
+
+          updateDbRequest =
+            UpdateDatabase
+              { title = Nothing, -- Keep existing title
+                properties = Just combinedProperties, -- Add new properties
+                icon = Nothing,
+                cover = Nothing,
+                description = Nothing,
+                archived = Nothing,
+                isInline = Nothing
+              }
+
+      -- Update the database with new properties
+      updatedDatabase <-
+        runTest (Text.pack "Adding Status and Priority properties to database") $
+          updateDatabase methods databaseId updateDbRequest
+
+      putStrLn $ "Database updated with new properties"
+
       -- Create a new page in the database with initial content
       let -- Step 1: Create title property (required for database pages)
           -- The "title" key should match your database title field name
@@ -207,8 +272,23 @@ main = do
           titleArray = Aeson.Array (Vector.singleton textItem)
           titleProp = Aeson.object [("title", titleArray)]
 
-          -- Step 2: Create page properties map
-          -- Add any database properties you want to set here
+          -- Step 2: Create select property values for Status and Priority
+          -- Select properties need a "select" wrapper with a "name" field
+          statusProp =
+            Aeson.object
+              [ ( "select",
+                  Aeson.object [("name", Aeson.String "In Progress")]
+                )
+              ]
+          priorityProp =
+            Aeson.object
+              [ ( "select",
+                  Aeson.object [("name", Aeson.String "High")]
+                )
+              ]
+
+          -- Step 3: Create page properties map with all properties
+          -- Add the title and the new Status/Priority properties
           pageProperties =
             fromList
               [ ( "title", -- This must match your database's title field name
@@ -216,10 +296,22 @@ main = do
                     { type_ = Title,
                       value = Just titleProp
                     }
+                ),
+                ( "Status", -- Set the Status property
+                  PropertyValue
+                    { type_ = Select,
+                      value = Just statusProp
+                    }
+                ),
+                ( "Priority", -- Set the Priority property
+                  PropertyValue
+                    { type_ = Select,
+                      value = Just priorityProp
+                    }
                 )
               ]
 
-          -- Step 3: Create initial blocks for the page (optional)
+          -- Step 4: Create initial blocks for the page (optional)
           -- Pages can be created with content already in them
           initialBlocks =
             Vector.fromList
@@ -227,7 +319,7 @@ main = do
                 createParagraphBlock "This page was created with initial content via the Notion API."
               ]
 
-          -- Step 4: Assemble the CreatePage request
+          -- Step 5: Assemble the CreatePage request
           createPageRequest =
             CreatePage
               { parent = DatabaseParent {databaseId = databaseId}, -- Specify parent database
@@ -281,6 +373,66 @@ main = do
 
       let List {results = blockResults} = pageBlocks
       putStrLn $ "Page now contains " <> show (Vector.length blockResults) <> " blocks"
+
+      -- Add a comment to the newly created page
+      printHeader "Adding Comment to Page"
+
+      let -- Create rich text content for the comment
+          commentTextObj = Aeson.object [("content", Aeson.String "This is an automated comment added via the Notion API! 🎉")]
+          commentTextItem = Aeson.object [("type", Aeson.String "text"), ("text", commentTextObj)]
+          commentRichText = Aeson.Array (Vector.singleton commentTextItem)
+
+          -- Create the parent reference for the comment
+          -- Comments can be attached to pages using page_id
+          commentParent =
+            Aeson.object
+              [ ("type", Aeson.String "page_id"),
+                ("page_id", Aeson.toJSON newPageId)
+              ]
+
+          -- Create the comment request
+          createCommentRequest =
+            CreateComment
+              { parent = commentParent,
+                richText = commentRichText,
+                discussionId = Nothing -- Creates a new discussion thread
+              }
+
+      -- Create the comment
+      newComment <-
+        runTest (Text.pack "Creating comment on page") $
+          createComment methods createCommentRequest
+
+      let CommentObject {id = commentId, discussionId = discId} = newComment
+      putStrLn $ "Comment created with ID: " <> show commentId
+      putStrLn $ "Discussion ID: " <> show discId
+
+      -- Add a reply to the same discussion thread
+      let replyTextObj = Aeson.object [("content", Aeson.String "This is a reply in the same discussion thread.")]
+          replyTextItem = Aeson.object [("type", Aeson.String "text"), ("text", replyTextObj)]
+          replyRichText = Aeson.Array (Vector.singleton replyTextItem)
+
+          -- Reply to existing discussion by providing discussion_id
+          replyRequest =
+            CreateComment
+              { parent = commentParent,
+                richText = replyRichText,
+                discussionId = Just discId -- Reply to the same discussion
+              }
+
+      replyComment <-
+        runTest (Text.pack "Adding reply to discussion") $
+          createComment methods replyRequest
+
+      putStrLn $ "Reply added to discussion"
+
+      -- List all comments on the page
+      allComments <-
+        runTest (Text.pack "Listing all comments on page") $
+          listComments methods (Just newPageId) Nothing (Just 10)
+
+      let List {results = commentResults} = allComments
+      putStrLn $ "Page now has " <> show (Vector.length commentResults) <> " comments"
     Nothing ->
       putStrLn "Skipping database tests (set NOTION_TEST_DATABASE_ID to enable)"
 
