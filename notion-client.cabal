@@ -1,4 +1,4 @@
-cabal-version:      2.4
+cabal-version:      3.4
 name:               notion-client
 version:            0.1.0
 synopsis:           Notion bindings to Notion API
@@ -21,7 +21,7 @@ extra-source-files:
   README.md
 
 library
-  default-language:   GHC2021
+  default-language:   GHC2024
   hs-source-dirs:     src
   build-depends:
     , aeson
@@ -57,10 +57,7 @@ library
 
   other-modules:      Notion.Prelude
   default-extensions:
-    DataKinds
-    DerivingStrategies
     DuplicateRecordFields
-    LambdaCase
     OverloadedLabels
     OverloadedStrings
     RecordWildCards
@@ -68,15 +65,12 @@ library
   ghc-options:        -Wall -Wno-missing-fields
 
 test-suite tasty
-  default-language:   GHC2021
+  default-language:   GHC2024
   type:               exitcode-stdio-1.0
   hs-source-dirs:     tasty
   main-is:            Main.hs
   default-extensions:
-    DataKinds
-    DerivingStrategies
     DuplicateRecordFields
-    LambdaCase
     OverloadedLabels
     OverloadedStrings
     RecordWildCards
@@ -95,14 +89,11 @@ test-suite tasty
   ghc-options:        -Wall
 
 executable notion-client-example
-  default-language:   GHC2021
+  default-language:   GHC2024
   hs-source-dirs:     notion-client-example
   main-is:            Main.hs
   default-extensions:
-    DataKinds
-    DerivingStrategies
     DuplicateRecordFields
-    LambdaCase
     OverloadedLabels
     OverloadedStrings
     RecordWildCards
