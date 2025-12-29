@@ -12,10 +12,10 @@ module Notion.V1.Search
   )
 where
 
+import Data.Aeson (Value)
 import Notion.Prelude
 import Notion.V1.Common (ObjectType (..))
 import Notion.V1.ListOf (ListOf)
-import Notion.V1.Pages (PageObject)
 
 -- | Search request
 data SearchRequest = SearchRequest
@@ -74,4 +74,4 @@ instance ToJSON SearchFilter where
 type API =
   "search"
     :> ReqBody '[JSON] SearchRequest
-    :> Post '[JSON] (ListOf PageObject)
+    :> Post '[JSON] (ListOf Value)
