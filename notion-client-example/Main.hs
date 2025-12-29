@@ -4,8 +4,10 @@
 -- This example demonstrates using the Notion API client to interact with Notion:
 -- - Retrieving users and user information
 -- - Retrieving, querying, and creating databases
+-- - Displaying database metadata (is_inline, in_trash, public_url, data_sources)
 -- - Creating pages with properties and content
 -- - Adding different types of blocks to pages
+-- - Listing and inspecting comments (with attachments and display_name)
 -- - Querying and searching content
 --
 -- To run this example:
@@ -34,8 +36,10 @@ import Data.Vector qualified as Vector
 import Notion.V1
 import Notion.V1.Blocks (AppendBlockChildren (..))
 import Notion.V1.Blocks qualified as Blocks
+import Notion.V1.Comments (CommentObject (..))
 import Notion.V1.Common (Icon (..), ObjectType (..), Parent (..))
-import Notion.V1.Databases (QueryDatabase (..))
+import Notion.V1.Databases (DatabaseObject (..), QueryDatabase (..))
+import Notion.V1.Databases qualified as Databases
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (..))
 import Notion.V1.Search (SearchFilter (..), SearchRequest (..), SearchSort (..), SearchSortDirection (..))
@@ -168,11 +172,18 @@ main = do
 
       printHeader "Database API"
 
-      -- Retrieve database
+      -- Retrieve database and display new fields
       database <-
         runTest (Text.pack "Retrieving database") $
           retrieveDatabase methods databaseId
       putStrLn $ "Database retrieved, ID: " <> databaseIdStr
+
+      -- Display new database fields (is_inline, in_trash, public_url, data_sources)
+      let DatabaseObject {is_inline, in_trash, public_url, data_sources} = database
+      putStrLn $ "  is_inline: " <> show is_inline
+      putStrLn $ "  in_trash: " <> show in_trash
+      putStrLn $ "  public_url: " <> show public_url
+      putStrLn $ "  data_sources: " <> show data_sources
 
       -- Query database
       let queryParams =
@@ -235,15 +246,16 @@ main = do
         runTest (Text.pack "Creating new page in database") $
           createPage methods createPageRequest
 
-      let newPageId = id newPage
-      putStrLn $ "New page created. Access at: " <> Text.unpack (url newPage)
+      let PageObject {id = newPageId, url = newPageUrl} = newPage
+      putStrLn $ "New page created. Access at: " <> Text.unpack newPageUrl
 
       -- Retrieve the new page
       retrievedPage <-
         runTest (Text.pack "Retrieving newly created page") $
           retrievePage methods newPageId
 
-      putStrLn $ "Retrieved page URL: " <> Text.unpack (url retrievedPage)
+      let PageObject {url = retrievedPageUrl} = retrievedPage
+      putStrLn $ "Retrieved page URL: " <> Text.unpack retrievedPageUrl
 
       -- Add blocks to the newly created page
       let additionalBlocks =
@@ -367,6 +379,34 @@ main = do
 
       let List {results = allBlockResults} = allBlocks
       putStrLn $ "Page now contains " <> show (Vector.length allBlockResults) <> " blocks"
+
+      -- Comments API demonstration (using the page)
+      printHeader "Comments API"
+
+      -- List comments on the page using new pagination parameters
+      comments <-
+        runTest (Text.pack "Listing comments on page") $
+          listComments methods Nothing (Just pageId) Nothing (Just 10)
+
+      let List {results = commentResults} = comments
+      putStrLn $ "Found " <> show (Vector.length commentResults) <> " comments on page"
+
+      -- Display comment details if any exist
+      when (not $ Vector.null commentResults) $ do
+        let firstComment = Vector.head commentResults
+            CommentObject
+              { id = commentId,
+                discussion_id = discId,
+                created_by = createdBy,
+                attachments = commentAttachments,
+                display_name = displayName
+              } = firstComment
+        putStrLn $ "First comment details:"
+        putStrLn $ "  id: " <> show commentId
+        putStrLn $ "  discussion_id: " <> show discId
+        putStrLn $ "  created_by: " <> show createdBy
+        putStrLn $ "  attachments: " <> show commentAttachments
+        putStrLn $ "  display_name: " <> show displayName
     Nothing ->
       putStrLn "Skipping page tests (set NOTION_TEST_PAGE_ID to enable)"
 
