@@ -3,6 +3,7 @@ module Notion.V1.Databases
   ( -- * Main types
     DatabaseID,
     DatabaseObject (..),
+    DataSource (..),
     CreateDatabase (..),
     UpdateDatabase (..),
     QueryDatabase (..),
@@ -22,6 +23,16 @@ import Notion.V1.Users (UserReference)
 -- | Database ID
 type DatabaseID = UUID
 
+-- | Data source reference within a database (API version 2025-09-03+)
+data DataSource = DataSource
+  { id :: UUID,
+    name :: Text
+  }
+  deriving stock (Generic, Show)
+
+instance FromJSON DataSource where
+  parseJSON = genericParseJSON aesonOptions
+
 -- | Notion database object
 data DatabaseObject = DatabaseObject
   { id :: DatabaseID,
@@ -38,6 +49,7 @@ data DatabaseObject = DatabaseObject
     is_inline :: Maybe Bool,
     in_trash :: Maybe Bool,
     public_url :: Maybe Text,
+    data_sources :: Maybe (Vector DataSource),
     object :: ObjectType
   }
   deriving stock (Generic, Show)
@@ -61,6 +73,7 @@ instance FromJSON DatabaseObject where
       is_inline <- o .:? "is_inline"
       in_trash <- o .:? "in_trash"
       public_url <- o .:? "public_url"
+      data_sources <- o .:? "data_sources"
       object <- o .: "object"
       return DatabaseObject {..}
     _ -> fail "Expected object for DatabaseObject"
