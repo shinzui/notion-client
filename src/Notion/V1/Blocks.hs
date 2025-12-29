@@ -12,10 +12,12 @@ module Notion.V1.Blocks
 where
 
 import Data.Aeson ((.:))
+import Data.Aeson.Key qualified as Key
 import Notion.Prelude
-import Notion.V1.Common (ObjectType (..), ParentID, UUID)
+import Notion.V1.Common (ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Users (UserReference)
+import Prelude hiding (id)
 
 -- | Block ID
 type BlockID = UUID
@@ -23,7 +25,7 @@ type BlockID = UUID
 -- | Notion block object
 data BlockObject = BlockObject
   { id :: BlockID,
-    parent :: ParentID,
+    parent :: Parent,
     created_time :: POSIXTime,
     last_edited_time :: POSIXTime,
     created_by :: UserReference,
@@ -50,7 +52,8 @@ instance FromJSON BlockObject where
       has_children <- o .: "has_children"
       archived <- o .: "archived"
       type_ <- o .: "type"
-      content <- o .: "content"
+      -- Content is stored under a field named after the block type (e.g., "heading_1", "paragraph")
+      content <- o .: Key.fromText type_
       object <- o .: "object"
       return BlockObject {..}
     _ -> fail "Expected object for BlockObject"
@@ -77,19 +80,19 @@ instance ToJSON AppendBlockChildren where
 type API =
   "blocks"
     :> ( Capture "block_id" BlockID
-          :> Get '[JSON] BlockObject
-          :<|> Capture "block_id" BlockID
-          :> ReqBody '[JSON] BlockContent
-          :> Patch '[JSON] BlockObject
-          :<|> Capture "block_id" BlockID
-          :> "children"
-          :> QueryParam "page_size" Natural
-          :> QueryParam "start_cursor" Text
-          :> Get '[JSON] (ListOf BlockObject)
-          :<|> Capture "block_id" BlockID
-          :> "children"
-          :> ReqBody '[JSON] AppendBlockChildren
-          :> Patch '[JSON] BlockObject
-          :<|> Capture "block_id" BlockID
-          :> Delete '[JSON] BlockObject
+           :> Get '[JSON] BlockObject
+           :<|> Capture "block_id" BlockID
+           :> ReqBody '[JSON] BlockContent
+           :> Patch '[JSON] BlockObject
+           :<|> Capture "block_id" BlockID
+           :> "children"
+           :> QueryParam "page_size" Natural
+           :> QueryParam "start_cursor" Text
+           :> Get '[JSON] (ListOf BlockObject)
+           :<|> Capture "block_id" BlockID
+           :> "children"
+           :> ReqBody '[JSON] AppendBlockChildren
+           :> Patch '[JSON] (ListOf BlockObject)
+           :<|> Capture "block_id" BlockID
+           :> Delete '[JSON] BlockObject
        )

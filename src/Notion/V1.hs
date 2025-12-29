@@ -34,7 +34,7 @@ module Notion.V1
 where
 
 import Control.Exception qualified as Exception
-import Data.Aeson (encode, toJSON)
+import Data.Aeson (encode)
 import Data.ByteString.Lazy (toStrict)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
@@ -86,23 +86,23 @@ makeMethods clientEnv token = Methods {..}
           :<|> queryDatabase
         )
         :<|> ( retrievePage
-                :<|> createPage
-                :<|> updatePage
-              )
+                 :<|> createPage
+                 :<|> updatePage
+               )
         :<|> ( retrieveBlock
-                :<|> updateBlock
-                :<|> retrieveBlockChildren_
-                :<|> appendBlockChildren
-                :<|> deleteBlock
-              )
+                 :<|> updateBlock
+                 :<|> retrieveBlockChildren_
+                 :<|> appendBlockChildren
+                 :<|> deleteBlock
+               )
         :<|> ( retrieveUser
-                :<|> listUsers_
-                :<|> retrieveMyUser
-              )
+                 :<|> listUsers_
+                 :<|> retrieveMyUser
+               )
         :<|> search_
         :<|> ( createComment
-                :<|> listComments_
-              )
+                 :<|> listComments_
+               )
       ) = Client.hoistClient @API Proxy run (Client.client @API Proxy) authorization notionVersion
 
     authorization = "Bearer " <> token
@@ -153,7 +153,7 @@ data Methods = Methods
       Maybe Text ->
       -- \^ start_cursor
       IO (ListOf BlockObject),
-    appendBlockChildren :: ParentID -> Blocks.AppendBlockChildren -> IO BlockObject,
+    appendBlockChildren :: ParentID -> Blocks.AppendBlockChildren -> IO (ListOf BlockObject),
     deleteBlock :: BlockID -> IO BlockObject,
     -- \* Users
     retrieveUser :: UserID -> IO UserObject,
@@ -165,7 +165,7 @@ data Methods = Methods
       IO (ListOf UserObject),
     retrieveMyUser :: IO UserObject,
     -- \* Search
-    search :: SearchRequest -> IO (ListOf PageObject),
+    search :: SearchRequest -> IO (ListOf Value),
     -- \* Comments
     createComment :: Comments.CreateComment -> IO CommentObject,
     listComments :: Maybe BlockID -> IO (ListOf CommentObject)
@@ -176,9 +176,9 @@ type API =
   Header' [Required, Strict] "Authorization" Text
     :> Header' [Required, Strict] "Notion-Version" Text
     :> ( Databases.API
-          :<|> Pages.API
-          :<|> Blocks.API
-          :<|> Users.API
-          :<|> Search.API
-          :<|> Comments.API
+           :<|> Pages.API
+           :<|> Blocks.API
+           :<|> Users.API
+           :<|> Search.API
+           :<|> Comments.API
        )
