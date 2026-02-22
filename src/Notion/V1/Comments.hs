@@ -12,11 +12,12 @@ module Notion.V1.Comments
   )
 where
 
-import Data.Aeson (Object, (.:), (.:?))
+import Data.Aeson ((.:), (.:?))
 import Notion.Prelude
 import Notion.V1.Common (ObjectType (..), UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Users (UserReference)
+import Prelude hiding (id)
 
 -- | Block ID type for Comments (pages are also blocks in Notion)
 type BlockID = UUID

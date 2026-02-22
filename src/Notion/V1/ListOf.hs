@@ -5,7 +5,7 @@ module Notion.V1.ListOf
   )
 where
 
-import Data.Aeson (Object, (.!=), (.:), (.:?))
+import Data.Aeson ((.!=), (.:), (.:?))
 import Notion.Prelude
 
 -- | Notion API typically returns paginated results with this structure

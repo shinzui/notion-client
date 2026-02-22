@@ -77,8 +77,8 @@ instance FromJSON UserOwner where
     Object o -> do
       ownerType <- o .: "type"
       case ownerType of
-        "user" -> UserOwner <$> pure ownerType <*> o .: "user"
-        "workspace" -> WorkspaceOwner <$> pure ownerType <*> o .: "workspace"
+        "user" -> UserOwner ownerType <$> (o .: "user")
+        "workspace" -> WorkspaceOwner ownerType <$> (o .: "workspace")
         _ -> fail $ "Unknown owner type: " <> unpack ownerType
     _ -> fail "Expected object for UserOwner"
 
