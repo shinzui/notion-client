@@ -49,6 +49,7 @@ import Data.Time.Clock qualified as Clock
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Time.Clock.POSIX qualified as Time
 import Data.Time.Format.ISO8601 qualified as ISO8601
+import Data.Time.LocalTime (ZonedTime, zonedTimeToUTC)
 import Data.Vector (Vector)
 import Data.Void (Void)
 import Data.Word (Word8)
@@ -116,7 +117,13 @@ aesonOptions =
     }
 
 -- | Parse an ISO8601 timestamp string to POSIXTime
+-- Handles both UTC format (Z suffix) and timezone offset format (+00:00)
 parseISO8601 :: Text -> Aeson.Parser POSIXTime
-parseISO8601 text = case ISO8601.iso8601ParseM (unpack text) of
-  Nothing -> fail $ "Failed to parse ISO8601 timestamp: " <> unpack text
-  Just utcTime -> return $ Time.utcTimeToPOSIXSeconds utcTime
+parseISO8601 text =
+  case (ISO8601.iso8601ParseM str :: Maybe Clock.UTCTime) of
+    Just utcTime -> return $ Time.utcTimeToPOSIXSeconds utcTime
+    Nothing -> case (ISO8601.iso8601ParseM str :: Maybe ZonedTime) of
+      Just zonedTime -> return $ Time.utcTimeToPOSIXSeconds (zonedTimeToUTC zonedTime)
+      Nothing -> fail $ "Failed to parse ISO8601 timestamp: " <> str
+  where
+    str = unpack text

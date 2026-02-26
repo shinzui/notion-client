@@ -44,14 +44,16 @@ data DatabaseObject = DatabaseObject
   { id :: DatabaseID,
     createdTime :: POSIXTime,
     lastEditedTime :: POSIXTime,
-    createdBy :: UserReference,
-    lastEditedBy :: UserReference,
+    createdBy :: Maybe UserReference,
+    lastEditedBy :: Maybe UserReference,
     title :: Value,
     description :: Maybe Value,
     properties :: Maybe Value,
+    icon :: Maybe Icon,
+    cover :: Maybe Cover,
     url :: Text,
     parent :: Parent,
-    archived :: Bool,
+    archived :: Maybe Bool,
     isInline :: Maybe Bool,
     inTrash :: Maybe Bool,
     isLocked :: Maybe Bool,
@@ -69,14 +71,16 @@ instance FromJSON DatabaseObject where
       createdTime <- parseISO8601 createdTimeStr
       lastEditedTimeStr <- o .: "last_edited_time"
       lastEditedTime <- parseISO8601 lastEditedTimeStr
-      createdBy <- o .: "created_by"
-      lastEditedBy <- o .: "last_edited_by"
+      createdBy <- o .:? "created_by"
+      lastEditedBy <- o .:? "last_edited_by"
       title <- o .: "title"
       description <- o .:? "description"
       properties <- o .:? "properties"
+      icon <- o .:? "icon"
+      cover <- o .:? "cover"
       url <- o .: "url"
       parent <- o .: "parent"
-      archived <- o .: "archived"
+      archived <- o .:? "archived"
       isInline <- o .:? "is_inline"
       inTrash <- o .:? "in_trash"
       isLocked <- o .:? "is_locked"

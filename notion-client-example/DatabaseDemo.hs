@@ -17,7 +17,7 @@ import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
 import Notion.V1.Common (Icon (..), Parent (..))
 import Notion.V1.DataSources qualified as DataSources
-import Notion.V1.Databases (DataSource (..), DatabaseObject (..), QueryDatabase (..))
+import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (..))
 import Prelude hiding (id)
@@ -43,21 +43,8 @@ runDatabaseDemo methods databaseIdStr = do
   putStrLn $ "  publicUrl: " <> show publicUrl
   putStrLn $ "  dataSources: " <> show dataSources
 
-  -- Query database
-  let queryParams =
-        QueryDatabase
-          { filter = Nothing,
-            sorts = Nothing,
-            startCursor = Nothing,
-            pageSize = Nothing
-          }
-  results <-
-    runTest (Text.pack "Querying database") $
-      queryDatabase methods databaseId queryParams
-  let List {results = queryResults} = results
-  putStrLn $ "Query returned " <> show (Vector.length queryResults) <> " results"
-
   -- Retrieve the first data source to inspect its schema
+  -- Note: In API version 2025-09-03, querying goes through data sources, not databases
   printHeader (Text.pack "Data Source API")
 
   let DataSource {id = dsId, name = dsName} = Vector.head dataSources
