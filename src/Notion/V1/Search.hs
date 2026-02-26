@@ -14,7 +14,7 @@ module Notion.V1.Search
 
     -- * Convenience constructors
     pageFilter,
-    databaseFilter,
+    dataSourceFilter,
 
     -- * Servant
     API,
@@ -24,7 +24,7 @@ where
 import Data.Aeson qualified as Aeson
 import Data.Vector qualified as Vector
 import Notion.Prelude
-import Notion.V1.Databases (DatabaseObject)
+import Notion.V1.DataSources (DataSourceObject)
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (PageObject)
 
@@ -72,21 +72,20 @@ instance ToJSON SearchSort where
   toJSON = genericToJSON aesonOptions
 
 -- | Object types supported by the search filter.
--- Note: The Notion Search API only supports filtering by 'page' or 'database'.
--- This is more restrictive than the general 'ObjectType' used elsewhere.
+-- In API version 2025-09-03, the search API filters by @page@ or @data_source@.
 data SearchObjectType
   = SearchPage
-  | SearchDatabase
+  | SearchDataSource
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON SearchObjectType where
   toJSON SearchPage = Aeson.String "page"
-  toJSON SearchDatabase = Aeson.String "database"
+  toJSON SearchDataSource = Aeson.String "data_source"
 
 instance FromJSON SearchObjectType where
   parseJSON = Aeson.withText "SearchObjectType" $ \case
     "page" -> pure SearchPage
-    "database" -> pure SearchDatabase
+    "data_source" -> pure SearchDataSource
     other -> fail $ "Unknown search object type: " <> unpack other
 
 -- | Search filter
@@ -103,9 +102,9 @@ instance ToJSON SearchFilter where
 pageFilter :: SearchFilter
 pageFilter = SearchFilter {value = SearchPage, property = "object"}
 
--- | Create a filter to search only for databases
-databaseFilter :: SearchFilter
-databaseFilter = SearchFilter {value = SearchDatabase, property = "object"}
+-- | Create a filter to search only for data sources
+dataSourceFilter :: SearchFilter
+dataSourceFilter = SearchFilter {value = SearchDataSource, property = "object"}
 
 -- | Servant API
 type API =
@@ -115,10 +114,10 @@ type API =
 
 -- * Response parsing
 
--- | A search result can be either a page or a database
+-- | A search result can be either a page or a data source
 data SearchResult
   = PageResult PageObject
-  | DatabaseResult DatabaseObject
+  | DataSourceResult DataSourceObject
   deriving stock (Show)
 
 instance FromJSON SearchResult where
@@ -127,7 +126,7 @@ instance FromJSON SearchResult where
     objectType <- obj Aeson..: "object"
     case objectType of
       "page" -> PageResult <$> Aeson.parseJSON v
-      "database" -> DatabaseResult <$> Aeson.parseJSON v
+      "data_source" -> DataSourceResult <$> Aeson.parseJSON v
       other -> fail $ "Unknown object type in search result: " <> other
 
 -- | Parse raw search results into typed 'SearchResult' values.

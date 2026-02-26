@@ -49,6 +49,7 @@ library
     Notion.V1.Comments
     Notion.V1.Common
     Notion.V1.Databases
+    Notion.V1.DataSources
     Notion.V1.Error
     Notion.V1.ListOf
     Notion.V1.Pages

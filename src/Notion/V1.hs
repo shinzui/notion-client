@@ -34,11 +34,8 @@ module Notion.V1
 where
 
 import Control.Exception qualified as Exception
-import Data.Aeson (encode)
-import Data.ByteString.Lazy (toStrict)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
-import Data.Text.Encoding (decodeUtf8)
 import Network.HTTP.Client.TLS qualified as TLS
 import Notion.Prelude
 import Notion.V1.Blocks (BlockID, BlockObject)
@@ -46,6 +43,8 @@ import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject)
 import Notion.V1.Comments qualified as Comments
 import Notion.V1.Common (ParentID)
+import Notion.V1.DataSources (DataSourceID, DataSourceObject)
+import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (CreateDatabase, DatabaseID, DatabaseObject, QueryDatabase, UpdateDatabase)
 import Notion.V1.Databases qualified as Databases
 import Notion.V1.ListOf (ListOf (..))
@@ -77,7 +76,7 @@ makeMethods ::
   Methods
 makeMethods clientEnv token = Methods {..}
   where
-    notionVersion = "2022-06-28" -- Current Notion API version as of this implementation
+    notionVersion = "2025-09-03" -- Notion API version with data source support
     -- If you experience 400 errors, check for updated versions at
     -- https://developers.notion.com/reference/versioning
     ( ( createDatabase
@@ -85,6 +84,11 @@ makeMethods clientEnv token = Methods {..}
           :<|> updateDatabase
           :<|> queryDatabase
         )
+        :<|> ( retrieveDataSource
+                 :<|> createDataSource
+                 :<|> updateDataSource
+                 :<|> queryDataSource
+               )
         :<|> ( retrievePage
                  :<|> createPage
                  :<|> updatePage
@@ -118,13 +122,6 @@ makeMethods clientEnv token = Methods {..}
           Exception.throwIO exception
         Right a -> return a
 
-    -- Function to encode JSON to Text
-    encodeToText = decodeUtf8 . toStrict . encode
-
-    -- Debug function to show JSON
-    debugCreatePage createPageReq =
-      pure . Text.unpack . encodeToText $ toJSON createPageReq
-
     -- Keep the ListOf structure
     listBlockChildren = retrieveBlockChildren_
     listUsers = listUsers_
@@ -138,11 +135,15 @@ data Methods = Methods
     retrieveDatabase :: DatabaseID -> IO DatabaseObject,
     updateDatabase :: DatabaseID -> UpdateDatabase -> IO DatabaseObject,
     queryDatabase :: DatabaseID -> QueryDatabase -> IO (ListOf PageObject),
+    -- \* Data Sources
+    retrieveDataSource :: DataSourceID -> IO DataSourceObject,
+    createDataSource :: DataSources.CreateDataSource -> IO DataSourceObject,
+    updateDataSource :: DataSourceID -> DataSources.UpdateDataSource -> IO DataSourceObject,
+    queryDataSource :: DataSourceID -> DataSources.QueryDataSource -> IO (ListOf PageObject),
     -- \* Pages
     createPage :: CreatePage -> IO PageObject,
     retrievePage :: PageID -> IO PageObject,
     updatePage :: PageID -> UpdatePage -> IO PageObject,
-    debugCreatePage :: CreatePage -> IO String, -- Debug version just returns the JSON
     -- \* Blocks
     retrieveBlock :: BlockID -> IO BlockObject,
     updateBlock :: BlockID -> Blocks.BlockContent -> IO BlockObject,
@@ -185,6 +186,7 @@ type API =
   Header' [Required, Strict] "Authorization" Text
     :> Header' [Required, Strict] "Notion-Version" Text
     :> ( Databases.API
+           :<|> DataSources.API
            :<|> Pages.API
            :<|> Blocks.API
            :<|> Users.API

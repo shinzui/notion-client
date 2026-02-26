@@ -1,13 +1,11 @@
 -- |
--- Notion API Client Example
+-- Notion API Client Example (API version 2025-09-03)
 --
 -- This example demonstrates using the Notion API client to interact with Notion:
 -- - Retrieving users and user information
--- - Retrieving, querying, and creating databases
--- - Displaying database metadata (isInline, inTrash, publicUrl, dataSources)
--- - Adding properties to databases (select, multi-select, etc.)
--- - Creating pages with properties and content
--- - Populating database properties on pages
+-- - Retrieving databases and their data sources
+-- - Updating data source schema (adding properties)
+-- - Creating pages under data sources with properties and content
 -- - Adding different types of blocks to pages
 -- - Creating comments on pages and on specific blocks
 -- - Listing and inspecting comments (with attachments and displayName)
@@ -30,7 +28,7 @@ import Data.Maybe (isNothing)
 import Data.Text qualified as Text
 import DatabaseDemo (runDatabaseDemo)
 import Notion.V1 (getClientEnv, makeMethods)
-import Notion.V1.Search (SearchRequest (..), SearchSort (..), SearchSortDirection (..), databaseFilter, pageFilter)
+import Notion.V1.Search (SearchRequest (..), SearchSort (..), SearchSortDirection (..), dataSourceFilter, pageFilter)
 import PageDemo (runPageDemo)
 import System.Environment qualified as Environment
 import UserDemo (runUserDemo)
@@ -81,7 +79,7 @@ main = do
   putStrLn "The examples demonstrate:"
   putStrLn "- General searching (find anything matching a query)"
   putStrLn "- Filtering by object type (search only for pages)"
-  putStrLn "- Filtering by object type (search only for databases)"
+  putStrLn "- Filtering by object type (search only for data sources)"
   putStrLn "- Sorting results by last_edited_time"
 
   -- Example search parameters (not executed to avoid errors)
@@ -104,12 +102,12 @@ main = do
             pageSize = Nothing
           }
 
-  -- Example database search parameters (using convenience constructor)
-  let _databaseSearchParams =
+  -- Example data source search parameters (using convenience constructor)
+  let _dataSourceSearchParams =
         SearchRequest
           { query = Just (Text.pack "test"),
             sort = Nothing,
-            filter = Just databaseFilter,
+            filter = Just dataSourceFilter,
             startCursor = Nothing,
             pageSize = Nothing
           }

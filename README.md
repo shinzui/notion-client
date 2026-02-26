@@ -1,12 +1,12 @@
 # Notion API Client for Haskell
 
-A type-safe Haskell client for the [Notion API](https://developers.notion.com/reference/intro).
+A type-safe Haskell client for the [Notion API](https://developers.notion.com/reference/intro) (version `2025-09-03`).
 
 ## Features
 
 - Type-safe API bindings using Servant
 - Comprehensive coverage of Notion API endpoints
-- Support for all Notion object types: Pages, Databases, Blocks, Users, etc.
+- Support for all Notion object types: Pages, Databases, Data Sources, Blocks, Users, etc.
 - Simple client interface with sensible defaults
 
 ## Installation
@@ -47,35 +47,38 @@ main = do
 
 ```haskell
 import Notion.V1
+import Notion.V1.Common (Parent(..))
 import Notion.V1.Pages
 import Data.Map qualified as Map
 import Data.Aeson (toJSON)
 
 createNewPage :: Methods -> IO PageObject
 createNewPage Methods{createPage} = do
-    let pageProperties = Map.fromList 
-            [ ("title", PropertyValue 
+    let pageProperties = Map.fromList
+            [ ("title", PropertyValue
                 { type_ = Title
                 , value = Just $ toJSON [-- rich text objects --]
                 })
             ]
-        
+
         newPage = _CreatePage
-            { parent = DatabaseParent { database_id = "database-id-here" }
+            { parent = DataSourceParent { dataSourceId = "data-source-id-here" }
             , properties = pageProperties
             }
-    
+
     createPage newPage
 ```
 
 ## API Coverage
 
-- Databases: Create, retrieve, update, and query databases
+- Databases: Create, retrieve, and update databases
+- Data Sources: Create, retrieve, update, and query data sources
 - Pages: Create, retrieve, and update pages
 - Blocks: Retrieve, update, append children, and delete blocks
 - Users: List, retrieve users and bot users
-- Search: Search for pages and databases
+- Search: Search for pages and data sources
 - Comments: Create and list comments
+- Webhooks: Event types and signature verification
 
 ## Running the Example
 

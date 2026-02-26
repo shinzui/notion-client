@@ -24,6 +24,7 @@ newtype UUID = UUID {text :: Text}
 -- | Possible Notion object types
 data ObjectType
   = Database
+  | DataSource
   | Page
   | Block
   | User
@@ -36,9 +37,10 @@ instance FromJSON ObjectType where
 instance ToJSON ObjectType where
   toJSON = genericToJSON aesonOptions
 
--- | Parent object that can be a database, page, block, or workspace
+-- | Parent object that can be a database, data source, page, block, or workspace
 data Parent
   = DatabaseParent {databaseId :: UUID}
+  | DataSourceParent {dataSourceId :: UUID}
   | PageParent {pageId :: UUID}
   | BlockParent {blockId :: UUID}
   | WorkspaceParent {workspace :: Bool}
@@ -55,6 +57,8 @@ instance FromJSON Parent where
           case parentType of
             "database" -> DatabaseParent <$> o .: "database_id"
             "database_id" -> DatabaseParent <$> o .: "database_id"
+            "data_source" -> DataSourceParent <$> o .: "data_source_id"
+            "data_source_id" -> DataSourceParent <$> o .: "data_source_id"
             "page" -> PageParent <$> o .: "page_id"
             "page_id" -> PageParent <$> o .: "page_id"
             "block" -> BlockParent <$> o .: "block_id"
@@ -64,22 +68,26 @@ instance FromJSON Parent where
         -- If no type field, check for specific ID fields to infer parent type
         Nothing -> do
           -- Try each possible parent ID field
-          if KeyMap.member "database_id" o
-            then DatabaseParent <$> o .: "database_id"
+          if KeyMap.member "data_source_id" o
+            then DataSourceParent <$> o .: "data_source_id"
             else
-              if KeyMap.member "page_id" o
-                then PageParent <$> o .: "page_id"
+              if KeyMap.member "database_id" o
+                then DatabaseParent <$> o .: "database_id"
                 else
-                  if KeyMap.member "block_id" o
-                    then BlockParent <$> o .: "block_id"
+                  if KeyMap.member "page_id" o
+                    then PageParent <$> o .: "page_id"
                     else
-                      if KeyMap.member "workspace" o
-                        then WorkspaceParent <$> o .: "workspace"
-                        else fail "Missing parent type or ID fields"
+                      if KeyMap.member "block_id" o
+                        then BlockParent <$> o .: "block_id"
+                        else
+                          if KeyMap.member "workspace" o
+                            then WorkspaceParent <$> o .: "workspace"
+                            else fail "Missing parent type or ID fields"
     _ -> fail "Expected object for Parent"
 
 instance ToJSON Parent where
   toJSON (DatabaseParent dbId) = object ["type" .= ("database_id" :: Text), "database_id" .= dbId]
+  toJSON (DataSourceParent dsId) = object ["type" .= ("data_source_id" :: Text), "data_source_id" .= dsId]
   toJSON (PageParent pId) = object ["type" .= ("page_id" :: Text), "page_id" .= pId]
   toJSON (BlockParent bId) = object ["type" .= ("block_id" :: Text), "block_id" .= bId]
   toJSON (WorkspaceParent ws) = object ["type" .= ("workspace" :: Text), "workspace" .= ws]

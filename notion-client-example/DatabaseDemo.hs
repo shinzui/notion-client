@@ -16,7 +16,8 @@ import Notion.V1 (Methods (..))
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
 import Notion.V1.Common (Icon (..), Parent (..))
-import Notion.V1.Databases (DatabaseObject (..), QueryDatabase (..), UpdateDatabase (..))
+import Notion.V1.DataSources qualified as DataSources
+import Notion.V1.Databases (DataSource (..), DatabaseObject (..), QueryDatabase (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (..))
 import Prelude hiding (id)
@@ -34,10 +35,11 @@ runDatabaseDemo methods databaseIdStr = do
       retrieveDatabase methods databaseId
   putStrLn $ "Database retrieved, ID: " <> databaseIdStr
 
-  -- Display new database fields (isInline, inTrash, publicUrl, dataSources)
-  let DatabaseObject {isInline, inTrash, publicUrl, dataSources} = database
+  -- Display database fields
+  let DatabaseObject {isInline, inTrash, publicUrl, dataSources, isLocked} = database
   putStrLn $ "  isInline: " <> show isInline
   putStrLn $ "  inTrash: " <> show inTrash
+  putStrLn $ "  isLocked: " <> show isLocked
   putStrLn $ "  publicUrl: " <> show publicUrl
   putStrLn $ "  dataSources: " <> show dataSources
 
@@ -55,12 +57,14 @@ runDatabaseDemo methods databaseIdStr = do
   let List {results = queryResults} = results
   putStrLn $ "Query returned " <> show (Vector.length queryResults) <> " results"
 
-  -- Add a new property to the database
-  -- This adds a "Status" select property with predefined options
-  printHeader (Text.pack "Adding Property to Database")
+  -- Add new properties to the database via its data source
+  -- In API version 2025-09-03, schema updates go through the data source API
+  printHeader (Text.pack "Adding Property via Data Source")
+
+  -- Get the first data source ID from the database
+  let DataSource {id = dsId} = Vector.head dataSources
 
   let -- Define Status and Priority select properties with options
-      -- Properties are combined into a single object for the update request
       combinedProperties =
         Aeson.object
           [ ( "Status",
@@ -99,23 +103,22 @@ runDatabaseDemo methods databaseIdStr = do
             )
           ]
 
-      updateDbRequest =
-        UpdateDatabase
-          { title = Nothing, -- Keep existing title
-            properties = Just combinedProperties, -- Add new properties
+      updateDsRequest =
+        DataSources.UpdateDataSource
+          { title = Nothing,
             icon = Nothing,
-            cover = Nothing,
-            description = Nothing,
+            properties = Just combinedProperties,
+            inTrash = Nothing,
             archived = Nothing,
-            isInline = Nothing
+            parent = Nothing
           }
 
-  -- Update the database with new properties
-  _updatedDatabase <-
-    runTest (Text.pack "Adding Status and Priority properties to database") $
-      updateDatabase methods databaseId updateDbRequest
+  -- Update the data source with new properties
+  _updatedDataSource <-
+    runTest (Text.pack "Adding Status and Priority properties via data source") $
+      updateDataSource methods dsId updateDsRequest
 
-  putStrLn "Database updated with new properties"
+  putStrLn "Data source updated with new properties"
 
   -- Create a new page in the database with initial content
   let -- Step 1: Create title property (required for database pages)
@@ -173,9 +176,10 @@ runDatabaseDemo methods databaseIdStr = do
           ]
 
       -- Step 5: Assemble the CreatePage request
+      -- In API version 2025-09-03, pages are created under a data source
       createPageRequest =
         CreatePage
-          { parent = DatabaseParent {databaseId = databaseId}, -- Specify parent database
+          { parent = DataSourceParent {dataSourceId = dsId}, -- Specify parent data source
             properties = pageProperties, -- Required page properties
             children = Just initialBlocks, -- Optional initial content
             icon = Just (EmojiIcon "📝"), -- Optional page icon
