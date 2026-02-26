@@ -73,6 +73,41 @@ runDatabaseDemo methods databaseIdStr = do
   let List {results = dsQueryResults} = dsResults
   putStrLn $ "Data source query returned " <> show (Vector.length dsQueryResults) <> " results"
 
+  -- Create a new data source within the database
+  printHeader (Text.pack "Creating Data Source")
+
+  let newDsProperties =
+        Aeson.object
+          [ ( "Name",
+              Aeson.object
+                [ ("type", Aeson.String "title"),
+                  ("title", Aeson.object [])
+                ]
+            ),
+            ( "Description",
+              Aeson.object
+                [ ("type", Aeson.String "rich_text"),
+                  ("rich_text", Aeson.object [])
+                ]
+            )
+          ]
+
+      createDsRequest =
+        DataSources.CreateDataSource
+          { parent = DatabaseParent {databaseId = databaseId},
+            properties = newDsProperties,
+            title = Nothing,
+            icon = Nothing
+          }
+
+  newDataSource <-
+    runTest (Text.pack "Creating new data source in database") $
+      createDataSource methods createDsRequest
+
+  let DataSources.DataSourceObject {id = newDsId, properties = newDsProps} = newDataSource
+  putStrLn $ "New data source created with ID: " <> show newDsId
+  putStrLn $ "  properties: " <> show newDsProps
+
   -- Update data source schema: add properties
   printHeader (Text.pack "Updating Data Source Schema")
 
