@@ -57,12 +57,37 @@ runDatabaseDemo methods databaseIdStr = do
   let List {results = queryResults} = results
   putStrLn $ "Query returned " <> show (Vector.length queryResults) <> " results"
 
-  -- Add new properties to the database via its data source
-  -- In API version 2025-09-03, schema updates go through the data source API
-  printHeader (Text.pack "Adding Property via Data Source")
+  -- Retrieve the first data source to inspect its schema
+  printHeader (Text.pack "Data Source API")
 
-  -- Get the first data source ID from the database
-  let DataSource {id = dsId} = Vector.head dataSources
+  let DataSource {id = dsId, name = dsName} = Vector.head dataSources
+  putStrLn $ "First data source: " <> Text.unpack dsName <> " (" <> show dsId <> ")"
+
+  dataSource <-
+    runTest (Text.pack "Retrieving data source") $
+      retrieveDataSource methods dsId
+  let DataSources.DataSourceObject {properties = dsProperties, parent = dsParent} = dataSource
+  putStrLn $ "  parent: " <> show dsParent
+  putStrLn $ "  properties: " <> show dsProperties
+
+  -- Query the data source directly (preferred over queryDatabase in 2025-09-03)
+  let dsQueryParams =
+        DataSources.QueryDataSource
+          { filter = Nothing,
+            sorts = Nothing,
+            startCursor = Nothing,
+            pageSize = Just 5,
+            archived = Nothing,
+            inTrash = Nothing
+          }
+  dsResults <-
+    runTest (Text.pack "Querying data source") $
+      queryDataSource methods dsId dsQueryParams
+  let List {results = dsQueryResults} = dsResults
+  putStrLn $ "Data source query returned " <> show (Vector.length dsQueryResults) <> " results"
+
+  -- Update data source schema: add properties
+  printHeader (Text.pack "Updating Data Source Schema")
 
   let -- Define Status and Priority select properties with options
       combinedProperties =

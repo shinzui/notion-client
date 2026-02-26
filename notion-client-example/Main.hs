@@ -22,13 +22,14 @@
 -- Note: Your integration must have access to the specified database and page.
 module Main where
 
-import Console (logError, printHeader)
+import Console (logError, printHeader, runTest)
 import Control.Monad (when)
 import Data.Maybe (isNothing)
 import Data.Text qualified as Text
+import Data.Vector qualified as Vector
 import DatabaseDemo (runDatabaseDemo)
-import Notion.V1 (getClientEnv, makeMethods)
-import Notion.V1.Search (SearchRequest (..), SearchSort (..), SearchSortDirection (..), dataSourceFilter, pageFilter)
+import Notion.V1 (Methods (..), getClientEnv, makeMethods)
+import Notion.V1.Search (SearchRequest (..), SearchResult (..), SearchSort (..), SearchSortDirection (..), dataSourceFilter, pageFilter, parseSearchResults)
 import PageDemo (runPageDemo)
 import System.Environment qualified as Environment
 import UserDemo (runUserDemo)
@@ -75,52 +76,55 @@ main = do
   -- Search API
   printHeader (Text.pack "Search API")
 
-  putStrLn "Due to ongoing implementation of search support, search API examples are provided in the source code."
-  putStrLn "The examples demonstrate:"
-  putStrLn "- General searching (find anything matching a query)"
-  putStrLn "- Filtering by object type (search only for pages)"
-  putStrLn "- Filtering by object type (search only for data sources)"
-  putStrLn "- Sorting results by last_edited_time"
-
-  -- Example search parameters (not executed to avoid errors)
-  let _searchParams =
+  -- General search
+  let searchParams =
         SearchRequest
-          { query = Just (Text.pack "test"),
-            sort = Nothing,
-            filter = Nothing,
-            startCursor = Nothing,
-            pageSize = Nothing
-          }
-
-  -- Example page search parameters (using convenience constructor)
-  let _pageSearchParams =
-        SearchRequest
-          { query = Just (Text.pack "test"),
-            sort = Nothing,
-            filter = Just pageFilter,
-            startCursor = Nothing,
-            pageSize = Nothing
-          }
-
-  -- Example data source search parameters (using convenience constructor)
-  let _dataSourceSearchParams =
-        SearchRequest
-          { query = Just (Text.pack "test"),
-            sort = Nothing,
-            filter = Just dataSourceFilter,
-            startCursor = Nothing,
-            pageSize = Nothing
-          }
-
-  -- Example sorted search parameters
-  let _sortedSearchParams =
-        SearchRequest
-          { query = Just (Text.pack "test"),
+          { query = Nothing,
             sort = Just (SearchSort {direction = Descending, timestamp = Text.pack "last_edited_time"}),
             filter = Nothing,
             startCursor = Nothing,
-            pageSize = Nothing
+            pageSize = Just 5
           }
+  rawResults <-
+    runTest (Text.pack "Searching (all objects, sorted by last_edited_time)") $
+      search methods searchParams
+
+  let typedResults = parseSearchResults rawResults
+  putStrLn $ "  Found " <> show (Vector.length typedResults) <> " typed results"
+  Vector.forM_ typedResults $ \result ->
+    case result of
+      PageResult _ -> putStrLn "  - page"
+      DataSourceResult _ -> putStrLn "  - data_source"
+
+  -- Search filtered to pages only
+  let pageSearchParams =
+        SearchRequest
+          { query = Nothing,
+            sort = Nothing,
+            filter = Just pageFilter,
+            startCursor = Nothing,
+            pageSize = Just 3
+          }
+  pageResults <-
+    runTest (Text.pack "Searching (pages only)") $
+      search methods pageSearchParams
+  let typedPageResults = parseSearchResults pageResults
+  putStrLn $ "  Found " <> show (Vector.length typedPageResults) <> " pages"
+
+  -- Search filtered to data sources only
+  let dsSearchParams =
+        SearchRequest
+          { query = Nothing,
+            sort = Nothing,
+            filter = Just dataSourceFilter,
+            startCursor = Nothing,
+            pageSize = Just 3
+          }
+  dsResults <-
+    runTest (Text.pack "Searching (data sources only)") $
+      search methods dsSearchParams
+  let typedDsResults = parseSearchResults dsResults
+  putStrLn $ "  Found " <> show (Vector.length typedDsResults) <> " data sources"
 
   -- All done
   printHeader (Text.pack "Test complete")
