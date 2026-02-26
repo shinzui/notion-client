@@ -167,7 +167,7 @@ data PropertyValueType
   | People
   | Files
   | Checkbox
-  | URL
+  | Url
   | Email
   | PhoneNumber
   | Formula
@@ -179,6 +179,7 @@ data PropertyValueType
   | LastEditedBy
   | Status
   | UniqueId
+  | Place
   | Button
   | Verification
   deriving stock (Generic, Show)
