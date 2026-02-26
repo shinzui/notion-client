@@ -13,8 +13,9 @@ module Notion.V1.Common
   )
 where
 
-import Data.Aeson (object, (.:), (.:?), (.=))
-import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson (Object, object, (.:), (.:?), (.=))
+import Data.Aeson.Types (Parser)
+import Data.Foldable (asum)
 import Notion.Prelude
 
 -- | UUID type for Notion resource IDs
@@ -49,41 +50,34 @@ data Parent
 instance FromJSON Parent where
   parseJSON = \case
     Object o -> do
-      -- First, check if we have a 'type' field
       mParentType <- o .:? "type"
       case mParentType of
-        -- If we have an explicit type field, use it for parsing
-        Just parentType ->
-          case parentType of
-            "database" -> DatabaseParent <$> o .: "database_id"
-            "database_id" -> DatabaseParent <$> o .: "database_id"
-            "data_source" -> DataSourceParent <$> o .: "data_source_id"
-            "data_source_id" -> DataSourceParent <$> o .: "data_source_id"
-            "page" -> PageParent <$> o .: "page_id"
-            "page_id" -> PageParent <$> o .: "page_id"
-            "block" -> BlockParent <$> o .: "block_id"
-            "block_id" -> BlockParent <$> o .: "block_id"
-            "workspace" -> WorkspaceParent <$> o .: "workspace"
-            _ -> fail $ "Unknown parent type: " <> unpack parentType
-        -- If no type field, check for specific ID fields to infer parent type
-        Nothing -> do
-          -- Try each possible parent ID field
-          if KeyMap.member "data_source_id" o
-            then DataSourceParent <$> o .: "data_source_id"
-            else
-              if KeyMap.member "database_id" o
-                then DatabaseParent <$> o .: "database_id"
-                else
-                  if KeyMap.member "page_id" o
-                    then PageParent <$> o .: "page_id"
-                    else
-                      if KeyMap.member "block_id" o
-                        then BlockParent <$> o .: "block_id"
-                        else
-                          if KeyMap.member "workspace" o
-                            then WorkspaceParent <$> o .: "workspace"
-                            else fail "Missing parent type or ID fields"
+        Just parentType -> parseByType parentType o
+        Nothing -> parseByKey o
     _ -> fail "Expected object for Parent"
+    where
+      parseByType :: Text -> Object -> Parser Parent
+      parseByType = \case
+        "database" -> fmap DatabaseParent . (.: "database_id")
+        "database_id" -> fmap DatabaseParent . (.: "database_id")
+        "data_source" -> fmap DataSourceParent . (.: "data_source_id")
+        "data_source_id" -> fmap DataSourceParent . (.: "data_source_id")
+        "page" -> fmap PageParent . (.: "page_id")
+        "page_id" -> fmap PageParent . (.: "page_id")
+        "block" -> fmap BlockParent . (.: "block_id")
+        "block_id" -> fmap BlockParent . (.: "block_id")
+        "workspace" -> fmap WorkspaceParent . (.: "workspace")
+        other -> \_ -> fail $ "Unknown parent type: " <> unpack other
+
+      parseByKey :: Object -> Parser Parent
+      parseByKey o =
+        asum
+          [ DataSourceParent <$> o .: "data_source_id",
+            DatabaseParent <$> o .: "database_id",
+            PageParent <$> o .: "page_id",
+            BlockParent <$> o .: "block_id",
+            WorkspaceParent <$> o .: "workspace"
+          ]
 
 instance ToJSON Parent where
   toJSON (DatabaseParent dbId) = object ["type" .= ("database_id" :: Text), "database_id" .= dbId]
