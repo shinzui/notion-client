@@ -1,6 +1,6 @@
 # Changelog for notion-client
 
-## 0.1.0 (2026-02-28)
+## 0.1.0.0 (2026-02-28)
 
 * Initial release
 * Support for core Notion API endpoints:
