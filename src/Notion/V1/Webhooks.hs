@@ -44,10 +44,10 @@ where
 
 import Crypto.Hash.SHA256 qualified as SHA256
 import Data.Aeson (object, (.:), (.:?), (.=))
+import Data.Bits (xor, (.|.))
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Base16 qualified as Base16
-import Data.List qualified
 import Data.Text.Encoding qualified as Text
 import Notion.Prelude hiding (ByteString)
 import Notion.V1.Common (UUID (..))
@@ -337,6 +337,4 @@ verifySignature verificationToken body headerSignature =
 constantTimeCompare :: ByteString -> ByteString -> Bool
 constantTimeCompare a b
   | BS.length a /= BS.length b = False
-  | otherwise = foldl' (\acc (x, y) -> acc && x == y) True (BS.zip a b)
-  where
-    foldl' = Data.List.foldl'
+  | otherwise = 0 == BS.foldl' (\acc w -> acc .|. w) 0 (BS.packZipWith xor a b)

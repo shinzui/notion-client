@@ -115,11 +115,7 @@ makeMethods clientEnv token = Methods {..}
     run clientM = do
       result <- Client.runClientM clientM clientEnv
       case result of
-        Left exception -> do
-          -- For debugging purposes, provide more information about errors
-          -- This helps diagnose issues like wrong API version or authentication problems
-          putStrLn $ "Notion API Error: " ++ show exception
-          Exception.throwIO exception
+        Left exception -> Exception.throwIO exception
         Right a -> return a
 
     -- Keep the ListOf structure

@@ -1,7 +1,7 @@
 cabal-version:      3.4
 name:               notion-client
 version:            0.1.0
-synopsis:           Notion bindings to Notion API
+synopsis:           Type-safe Haskell client for the Notion API
 description:
   This package provides comprehensive and type-safe bindings
   to the Notion API, providing both a Servant interface and
@@ -12,36 +12,47 @@ description:
   Otherwise, browse the "Notion.V1" module, which is the
   intended package entrypoint.
 
-license:            BSD-3-Clause
+license:            MIT
+license-file:       LICENSE
+category:           Web
 author:             Nadeem Bitar
 maintainer:         nadeem@gmail.com
+homepage:           https://github.com/shinzui/notion-client
+bug-reports:        https://github.com/shinzui/notion-client/issues
 build-type:         Simple
-extra-source-files:
+tested-with:        GHC ==9.12.2
+extra-doc-files:
   CHANGELOG.md
   README.md
+
+extra-source-files: LICENSE
+
+source-repository head
+  type:     git
+  location: https://github.com/shinzui/notion-client.git
 
 library
   default-language:   GHC2024
   hs-source-dirs:     src
   build-depends:
-    , aeson
+    , aeson                     >=2.2      && <2.3
     , base                      >=4.15.0.0 && <5
-    , base16-bytestring
-    , bytestring
-    , containers
-    , cryptohash-sha256
-    , filepath
-    , http-api-data
-    , http-client-tls
-    , servant
-    , servant-client
-    , servant-multipart-api
-    , servant-multipart-client
-    , text
-    , time
-    , time-compat
-    , unordered-containers
-    , vector
+    , base16-bytestring         >=1.0      && <1.1
+    , bytestring                >=0.11     && <0.13
+    , containers                >=0.6      && <0.8
+    , cryptohash-sha256         >=0.11     && <0.12
+    , filepath                  >=1.4      && <1.6
+    , http-api-data             >=0.6      && <0.7
+    , http-client-tls           >=0.3      && <0.4
+    , servant                   >=0.20     && <0.21
+    , servant-client            >=0.20     && <0.21
+    , servant-multipart-api     >=0.12     && <0.13
+    , servant-multipart-client  >=0.12     && <0.13
+    , text                      >=2.0      && <2.2
+    , time                      >=1.11     && <1.15
+    , time-compat               >=1.9      && <1.10
+    , unordered-containers      >=0.2      && <0.3
+    , vector                    >=0.13     && <0.14
 
   exposed-modules:
     Notion.V1
@@ -66,7 +77,7 @@ library
     OverloadedStrings
     RecordWildCards
 
-  ghc-options:        -Wall -Wno-missing-fields
+  ghc-options:        -Wall
 
 test-suite tasty
   default-language:   GHC2024

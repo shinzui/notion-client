@@ -2,6 +2,7 @@
 module Notion.V1.Common
   ( -- * Common types
     UUID,
+    BlockID,
     ObjectType (..),
     Parent (..),
     ParentID,
@@ -21,6 +22,9 @@ import Notion.Prelude
 -- | UUID type for Notion resource IDs
 newtype UUID = UUID {text :: Text}
   deriving newtype (Eq, FromJSON, IsString, Show, ToHttpApiData, ToJSON)
+
+-- | Block ID
+type BlockID = UUID
 
 -- | Possible Notion object types
 data ObjectType

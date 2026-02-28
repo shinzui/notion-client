@@ -10,8 +10,8 @@ module Notion.V1.Pages
     PropertyItem (..),
     PropertyValueType (..),
     SelectOption (..),
-    _CreatePage,
-    _UpdatePage,
+    mkCreatePage,
+    mkUpdatePage,
 
     -- * Servant
     API,
@@ -82,12 +82,12 @@ data CreatePage = CreatePage
 instance ToJSON CreatePage where
   toJSON = genericToJSON aesonOptions
 
--- | Default create page request
-_CreatePage :: CreatePage
-_CreatePage =
+-- | Smart constructor for 'CreatePage' with required fields
+mkCreatePage :: Parent -> PageProperties -> CreatePage
+mkCreatePage parent properties =
   CreatePage
-    { parent = error "parent required",
-      properties = error "properties required",
+    { parent,
+      properties,
       children = Nothing,
       icon = Nothing,
       cover = Nothing
@@ -105,11 +105,11 @@ data UpdatePage = UpdatePage
 instance ToJSON UpdatePage where
   toJSON = genericToJSON aesonOptions
 
--- | Default update page request
-_UpdatePage :: UpdatePage
-_UpdatePage =
+-- | Smart constructor for 'UpdatePage' with required fields
+mkUpdatePage :: PageProperties -> UpdatePage
+mkUpdatePage properties =
   UpdatePage
-    { properties = error "properties required",
+    { properties,
       archived = Nothing,
       icon = Nothing,
       cover = Nothing

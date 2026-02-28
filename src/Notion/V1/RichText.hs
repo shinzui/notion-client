@@ -14,6 +14,7 @@ module Notion.V1.RichText
   )
 where
 
+import Data.Aeson (object, (.:), (.:?), (.=))
 import Notion.Prelude
 import Notion.V1.Common (Color (..), UUID)
 
@@ -28,10 +29,32 @@ data RichText = RichText
   deriving stock (Generic, Show)
 
 instance FromJSON RichText where
-  parseJSON = genericParseJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
+  parseJSON = \case
+    Object o -> do
+      plainText <- o .: "plain_text"
+      href <- o .:? "href"
+      annotations <- o .: "annotations"
+      type_ <- o .: "type"
+      content <- case type_ of
+        "text" -> TextContentWrapper <$> o .: "text"
+        "mention" -> MentionContentWrapper <$> o .: "mention"
+        "equation" -> EquationContentWrapper <$> o .: "equation"
+        other -> fail $ "Unknown rich text type: " <> unpack other
+      return RichText {..}
+    _ -> fail "Expected object for RichText"
 
 instance ToJSON RichText where
-  toJSON = genericToJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
+  toJSON RichText {..} =
+    object $
+      [ "type" .= type_,
+        "plain_text" .= plainText,
+        "annotations" .= annotations
+      ]
+        ++ maybe [] (\h -> ["href" .= h]) href
+        ++ case content of
+          TextContentWrapper tc -> ["text" .= tc]
+          MentionContentWrapper mc -> ["mention" .= mc]
+          EquationContentWrapper ec -> ["equation" .= ec]
 
 -- | Text content
 data TextContent = TextContent
@@ -47,6 +70,13 @@ instance ToJSON TextContent where
   toJSON = genericToJSON aesonOptions
 
 -- | Mention content
+--
+-- Notion mentions have a @type@ discriminator and the content nested under
+-- the corresponding field name. For example:
+--
+-- @
+-- { "type": "user", "user": { "id": "..." } }
+-- @
 data MentionContent
   = UserMention {user :: UUID}
   | PageMention {page :: UUID}
@@ -56,10 +86,45 @@ data MentionContent
   deriving stock (Generic, Show)
 
 instance FromJSON MentionContent where
-  parseJSON = genericParseJSON aesonOptions
+  parseJSON = \case
+    Object o -> do
+      mentionType <- o .: "type"
+      case mentionType of
+        "user" -> do
+          userObj <- o .: "user"
+          UserMention <$> parseIdField userObj
+        "page" -> do
+          pageObj <- o .: "page"
+          PageMention <$> parseIdField pageObj
+        "database" -> do
+          dbObj <- o .: "database"
+          DatabaseMention <$> parseIdField dbObj
+        "date" -> DateMention <$> o .: "date"
+        "link_preview" -> do
+          lpObj <- o .: "link_preview"
+          LinkPreviewMention <$> parseUrlField lpObj
+        other -> fail $ "Unknown mention type: " <> unpack other
+    _ -> fail "Expected object for MentionContent"
+    where
+      parseIdField = \case
+        Object o -> o .: "id"
+        _ -> fail "Expected object with id field"
+      parseUrlField = \case
+        Object o -> o .: "url"
+        _ -> fail "Expected object with url field"
 
 instance ToJSON MentionContent where
-  toJSON = genericToJSON aesonOptions
+  toJSON = \case
+    UserMention uid ->
+      object ["type" .= ("user" :: Text), "user" .= object ["id" .= uid]]
+    PageMention pid ->
+      object ["type" .= ("page" :: Text), "page" .= object ["id" .= pid]]
+    DatabaseMention dbid ->
+      object ["type" .= ("database" :: Text), "database" .= object ["id" .= dbid]]
+    DateMention d ->
+      object ["type" .= ("date" :: Text), "date" .= d]
+    LinkPreviewMention u ->
+      object ["type" .= ("link_preview" :: Text), "link_preview" .= object ["url" .= u]]
 
 -- | Equation content
 newtype EquationContent = EquationContent
@@ -79,12 +144,6 @@ data RichTextContent
   | MentionContentWrapper MentionContent
   | EquationContentWrapper EquationContent
   deriving stock (Generic, Show)
-
-instance FromJSON RichTextContent where
-  parseJSON = genericParseJSON aesonOptions
-
-instance ToJSON RichTextContent where
-  toJSON = genericToJSON aesonOptions
 
 -- | Text annotations
 data Annotations = Annotations

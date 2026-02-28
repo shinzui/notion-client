@@ -2,7 +2,6 @@
 module Notion.V1.Error
   ( -- * Error types
     NotionError (..),
-    ErrorDetails (..),
   )
 where
 
@@ -14,16 +13,9 @@ data NotionError = NotionError
     status :: Natural,
     code :: Text,
     message :: Text,
-    details :: Maybe ErrorDetails
+    details :: Maybe Value
   }
   deriving stock (Generic, Show)
 
 instance FromJSON NotionError where
-  parseJSON = genericParseJSON aesonOptions
-
--- | Additional error details
-data ErrorDetails = ErrorDetails
-  deriving stock (Generic, Show)
-
-instance FromJSON ErrorDetails where
   parseJSON = genericParseJSON aesonOptions

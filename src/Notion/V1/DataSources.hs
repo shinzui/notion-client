@@ -17,7 +17,7 @@ where
 
 import Data.Aeson ((.:), (.:?))
 import Notion.Prelude
-import Notion.V1.Common (Cover, Icon, Parent, UUID)
+import Notion.V1.Common (Cover, Icon, ObjectType, Parent, UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Pages (PageObject)
 import Notion.V1.Users (UserReference)
@@ -45,7 +45,7 @@ data DataSourceObject = DataSourceObject
     publicUrl :: Maybe Text,
     icon :: Maybe Icon,
     cover :: Maybe Cover,
-    object :: Text
+    object :: ObjectType
   }
   deriving stock (Generic, Show)
 

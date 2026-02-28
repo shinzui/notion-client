@@ -14,13 +14,10 @@ where
 import Data.Aeson ((.:))
 import Data.Aeson.Key qualified as Key
 import Notion.Prelude
-import Notion.V1.Common (ObjectType (..), Parent, UUID)
+import Notion.V1.Common (BlockID, ObjectType (..), Parent)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Users (UserReference)
 import Prelude hiding (id)
-
--- | Block ID
-type BlockID = UUID
 
 -- | Notion block object
 data BlockObject = BlockObject

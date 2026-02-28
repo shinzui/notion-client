@@ -61,10 +61,9 @@ createNewPage Methods{createPage} = do
                 })
             ]
 
-        newPage = _CreatePage
-            { parent = DataSourceParent { dataSourceId = "data-source-id-here" }
-            , properties = pageProperties
-            }
+        newPage = mkCreatePage
+            (DataSourceParent { dataSourceId = "data-source-id-here" })
+            pageProperties
 
     createPage newPage
 ```
