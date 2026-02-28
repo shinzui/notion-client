@@ -111,4 +111,4 @@ cabal run notion-client-example
 
 ## License
 
-BSD-3-Clause
+MIT
