@@ -14,7 +14,7 @@
 -- main = do
 --     token <- Environment.getEnv "NOTION_TOKEN"
 --
---     clientEnv <- getClientEnv "https://api.notion.com"
+--     clientEnv <- getClientEnv "https://api.notion.com/v1"
 --
 --     let Methods{ retrievePage } = makeMethods clientEnv (Text.pack token)
 --
