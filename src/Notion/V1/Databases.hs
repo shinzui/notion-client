@@ -19,6 +19,7 @@ import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Pages (PageObject)
+import Notion.V1.RichText (RichText)
 import Notion.V1.Users (UserReference)
 import Prelude hiding (id)
 
@@ -46,8 +47,8 @@ data DatabaseObject = DatabaseObject
     lastEditedTime :: POSIXTime,
     createdBy :: Maybe UserReference,
     lastEditedBy :: Maybe UserReference,
-    title :: Value,
-    description :: Maybe Value,
+    title :: Vector RichText,
+    description :: Maybe (Vector RichText),
     properties :: Maybe Value,
     icon :: Maybe Icon,
     cover :: Maybe Cover,
@@ -106,11 +107,11 @@ instance ToJSON InitialDataSource where
 -- rather than a top-level @properties@ field.
 data CreateDatabase = CreateDatabase
   { parent :: Parent,
-    title :: Value,
+    title :: Vector RichText,
     initialDataSource :: Maybe InitialDataSource,
     icon :: Maybe Icon,
     cover :: Maybe Cover,
-    description :: Maybe Value,
+    description :: Maybe (Vector RichText),
     isInline :: Maybe Bool
   }
   deriving stock (Generic, Show)
@@ -124,10 +125,10 @@ instance ToJSON CreateDatabase where
 -- the Update Data Source API ('Notion.V1.DataSources.UpdateDataSource').
 -- This endpoint only handles database-level attributes.
 data UpdateDatabase = UpdateDatabase
-  { title :: Maybe Value,
+  { title :: Maybe (Vector RichText),
     icon :: Maybe Icon,
     cover :: Maybe Cover,
-    description :: Maybe Value,
+    description :: Maybe (Vector RichText),
     archived :: Maybe Bool,
     isInline :: Maybe Bool,
     inTrash :: Maybe Bool,

@@ -14,8 +14,9 @@ where
 
 import Data.Aeson ((.:), (.:?))
 import Notion.Prelude
-import Notion.V1.Common (BlockID, ObjectType (..), UUID)
+import Notion.V1.Common (BlockID, ExternalFile, File, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
+import Notion.V1.RichText (RichText)
 import Notion.V1.Users (UserReference)
 import Prelude hiding (id)
 
@@ -26,8 +27,8 @@ type CommentID = UUID
 data CommentAttachment = CommentAttachment
   { name :: Text,
     type_ :: Text,
-    external :: Maybe Value,
-    file :: Maybe Value
+    external :: Maybe ExternalFile,
+    file :: Maybe File
   }
   deriving stock (Generic, Show)
 
@@ -48,12 +49,12 @@ instance FromJSON CommentDisplayName where
 -- | Notion comment object
 data CommentObject = CommentObject
   { id :: CommentID,
-    parent :: Value,
+    parent :: Parent,
     discussionId :: UUID,
     createdTime :: POSIXTime,
     lastEditedTime :: POSIXTime,
     createdBy :: UserReference,
-    richText :: Value,
+    richText :: Vector RichText,
     attachments :: Maybe (Vector CommentAttachment),
     displayName :: Maybe CommentDisplayName,
     object :: ObjectType
@@ -80,8 +81,8 @@ instance FromJSON CommentObject where
 
 -- | Create comment request
 data CreateComment = CreateComment
-  { parent :: Value,
-    richText :: Value,
+  { parent :: Parent,
+    richText :: Vector RichText,
     discussionId :: Maybe UUID
   }
   deriving stock (Generic, Show)

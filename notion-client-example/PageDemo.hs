@@ -14,7 +14,9 @@ import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
+import Notion.V1.Common (Parent (..))
 import Notion.V1.ListOf (ListOf (..))
+import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Prelude hiding (id)
 
 -- | Run the Page API demonstration
@@ -50,18 +52,20 @@ runPageDemo methods pageIdStr = do
     -- This demonstrates commenting on inline content
     printHeader (Text.pack "Adding Comment to Block")
 
-    let -- Create rich text content for the block comment
-        blockCommentTextObj = Aeson.object [("content", Aeson.String "This comment is attached to a specific block, not the page!")]
-        blockCommentTextItem = Aeson.object [("type", Aeson.String "text"), ("text", blockCommentTextObj)]
-        blockCommentRichText = Aeson.Array (Vector.singleton blockCommentTextItem)
+    let -- Create rich text content for the block comment using typed RichText
+        blockCommentRichText =
+          Vector.singleton
+            RichText
+              { plainText = "This comment is attached to a specific block, not the page!",
+                href = Nothing,
+                annotations = defaultAnnotations,
+                type_ = "text",
+                content = TextContentWrapper (TextContent {content = "This comment is attached to a specific block, not the page!", link = Nothing})
+              }
 
-        -- Create the parent reference for the comment using block_id
-        -- This is different from page comments which use page_id
-        blockCommentParent =
-          Aeson.object
-            [ ("type", Aeson.String "block_id"),
-              ("block_id", Aeson.toJSON firstBlockId)
-            ]
+        -- Create the parent reference using the typed Parent constructor
+        -- This is different from page comments which use PageParent
+        blockCommentParent = BlockParent {blockId = firstBlockId}
 
         -- Create the comment request for the block
         createBlockCommentRequest =

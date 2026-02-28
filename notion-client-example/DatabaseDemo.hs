@@ -19,7 +19,8 @@ import Notion.V1.Common (Icon (..), Parent (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (..))
+import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (Select, Title))
+import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Prelude hiding (id)
 
 -- | Run the Database API demonstration
@@ -277,18 +278,19 @@ runDatabaseDemo methods databaseIdStr = do
   -- Add a comment to the newly created page
   printHeader (Text.pack "Adding Comment to Page")
 
-  let -- Create rich text content for the comment
-      commentTextObj = Aeson.object [("content", Aeson.String "This is an automated comment added via the Notion API! 🎉")]
-      commentTextItem = Aeson.object [("type", Aeson.String "text"), ("text", commentTextObj)]
-      commentRichText = Aeson.Array (Vector.singleton commentTextItem)
+  let -- Create rich text content for the comment using typed RichText
+      commentRichText =
+        Vector.singleton
+          RichText
+            { plainText = "This is an automated comment added via the Notion API! 🎉",
+              href = Nothing,
+              annotations = defaultAnnotations,
+              type_ = "text",
+              content = TextContentWrapper (TextContent {content = "This is an automated comment added via the Notion API! 🎉", link = Nothing})
+            }
 
-      -- Create the parent reference for the comment
-      -- Comments can be attached to pages using page_id
-      commentParent =
-        Aeson.object
-          [ ("type", Aeson.String "page_id"),
-            ("page_id", Aeson.toJSON newPageId)
-          ]
+      -- Create the parent reference using the typed Parent constructor
+      commentParent = PageParent {pageId = newPageId}
 
       -- Create the comment request
       createCommentRequest =
@@ -308,9 +310,16 @@ runDatabaseDemo methods databaseIdStr = do
   putStrLn $ "Discussion ID: " <> show discId
 
   -- Add a reply to the same discussion thread
-  let replyTextObj = Aeson.object [("content", Aeson.String "This is a reply in the same discussion thread.")]
-      replyTextItem = Aeson.object [("type", Aeson.String "text"), ("text", replyTextObj)]
-      replyRichText = Aeson.Array (Vector.singleton replyTextItem)
+  let -- Create reply rich text using typed RichText
+      replyRichText =
+        Vector.singleton
+          RichText
+            { plainText = "This is a reply in the same discussion thread.",
+              href = Nothing,
+              annotations = defaultAnnotations,
+              type_ = "text",
+              content = TextContentWrapper (TextContent {content = "This is a reply in the same discussion thread.", link = Nothing})
+            }
 
       -- Reply to existing discussion by providing discussion_id
       replyRequest =
