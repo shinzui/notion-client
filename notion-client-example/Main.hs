@@ -1,11 +1,17 @@
 -- |
--- Notion API Client Example (API version 2025-09-03)
+-- Notion API Client Example (API version 2026-03-11)
 --
 -- This example demonstrates using the Notion API client to interact with Notion:
 -- - Retrieving users and user information
 -- - Retrieving databases and their data sources
 -- - Updating data source schema (adding properties)
 -- - Creating pages under data sources with properties and content
+-- - Creating pages with markdown content (instead of block JSON)
+-- - Editing page content via markdown search-and-replace
+-- - Moving pages between parents
+-- - Listing data source templates and creating pages with templates
+-- - Creating, retrieving, updating, listing, and deleting database views
+-- - Listing custom emojis
 -- - Adding different types of blocks to pages
 -- - Creating comments on pages and on specific blocks
 -- - Listing and inspecting comments (with attachments and displayName)
@@ -24,15 +30,19 @@ module Main where
 
 import Console (logError, printHeader, runTest)
 import Control.Monad (when)
+import CustomEmojiDemo (runCustomEmojiDemo)
 import Data.Maybe (isNothing)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import DatabaseDemo (runDatabaseDemo)
+import MarkdownDemo (runMarkdownDemo)
 import Notion.V1 (Methods (..), getClientEnv, makeMethods)
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), SearchSort (..), SearchSortDirection (..), dataSourceFilter, pageFilter, parseSearchResults)
 import PageDemo (runPageDemo)
 import System.Environment qualified as Environment
+import TemplateDemo (runTemplateDemo)
 import UserDemo (runUserDemo)
+import ViewDemo (runViewDemo)
 
 main :: IO ()
 main = do
@@ -61,17 +71,25 @@ main = do
   -- User API demo
   runUserDemo methods
 
-  -- Optional Database tests
-  case databaseIdEnv of
-    Just databaseIdStr -> runDatabaseDemo methods databaseIdStr
-    Nothing ->
-      putStrLn "Skipping database tests (set NOTION_TEST_DATABASE_ID to enable)"
+  -- Custom Emojis demo (no setup needed)
+  runCustomEmojiDemo methods
 
   -- Optional Page tests
   case pageIdEnv of
-    Just pageIdStr -> runPageDemo methods pageIdStr
+    Just pageIdStr -> do
+      runPageDemo methods pageIdStr
+      runMarkdownDemo methods pageIdStr
     Nothing ->
-      putStrLn "Skipping page tests (set NOTION_TEST_PAGE_ID to enable)"
+      putStrLn "Skipping page/markdown tests (set NOTION_TEST_PAGE_ID to enable)"
+
+  -- Optional Database tests
+  case databaseIdEnv of
+    Just databaseIdStr -> do
+      runDatabaseDemo methods databaseIdStr
+      runViewDemo methods databaseIdStr
+      runTemplateDemo methods databaseIdStr
+    Nothing ->
+      putStrLn "Skipping database/view/template tests (set NOTION_TEST_DATABASE_ID to enable)"
 
   -- Search API
   printHeader (Text.pack "Search API")

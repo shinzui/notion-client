@@ -15,6 +15,18 @@ module Notion.V1.Pages
 
     -- * Markdown
     PageMarkdown (..),
+    UpdatePageMarkdown (..),
+    UpdateContentRequest (..),
+    ContentUpdate (..),
+    ReplaceContentRequest (..),
+    InsertContentRequest (..),
+    ReplaceContentRangeRequest (..),
+
+    -- * Move
+    MovePage (..),
+
+    -- * Templates
+    Template (..),
 
     -- * Servant
     API,
@@ -27,6 +39,7 @@ import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Notion.Prelude hiding (Number)
+import Notion.V1.Blocks (Position)
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.Users (UserReference)
 
@@ -87,13 +100,45 @@ instance ToJSON PageObject where
         "object" .= object
       ]
 
+-- | Template configuration for page creation and updates.
+--
+-- When applying a template, the @children@ parameter is prohibited as
+-- template processing happens asynchronously after the request completes.
+data Template
+  = -- | No template applied (default)
+    NoTemplate
+  | -- | Apply the data source's configured default template.
+    -- The optional 'Text' is an IANA timezone string (e.g., "America/New_York").
+    DefaultTemplate (Maybe Text)
+  | -- | Apply a specific template by its page ID.
+    -- The optional 'Text' is an IANA timezone string.
+    TemplateById UUID (Maybe Text)
+  deriving stock (Generic, Show)
+
+instance ToJSON Template where
+  toJSON NoTemplate =
+    Aeson.object ["type" .= ("none" :: Text)]
+  toJSON (DefaultTemplate mTz) =
+    Aeson.object $
+      ["type" .= ("default" :: Text)]
+        <> maybe [] (\tz -> ["timezone" .= tz]) mTz
+  toJSON (TemplateById templateId mTz) =
+    Aeson.object $
+      [ "type" .= ("template_id" :: Text),
+        "template_id" .= templateId
+      ]
+        <> maybe [] (\tz -> ["timezone" .= tz]) mTz
+
 -- | Create a page request
 data CreatePage = CreatePage
   { parent :: Parent,
     properties :: PageProperties,
     children :: Maybe (Vector Value),
+    markdown :: Maybe Text,
     icon :: Maybe Icon,
-    cover :: Maybe Cover
+    cover :: Maybe Cover,
+    template :: Maybe Template,
+    position :: Maybe Position
   }
   deriving stock (Generic, Show)
 
@@ -107,8 +152,11 @@ mkCreatePage parent properties =
     { parent,
       properties,
       children = Nothing,
+      markdown = Nothing,
       icon = Nothing,
-      cover = Nothing
+      cover = Nothing,
+      template = Nothing,
+      position = Nothing
     }
 
 -- | Update a page request
@@ -116,7 +164,9 @@ data UpdatePage = UpdatePage
   { properties :: PageProperties,
     inTrash :: Maybe Bool,
     icon :: Maybe Icon,
-    cover :: Maybe Cover
+    cover :: Maybe Cover,
+    template :: Maybe Template,
+    eraseContent :: Maybe Bool
   }
   deriving stock (Generic, Show)
 
@@ -130,7 +180,9 @@ mkUpdatePage properties =
     { properties,
       inTrash = Nothing,
       icon = Nothing,
-      cover = Nothing
+      cover = Nothing,
+      template = Nothing,
+      eraseContent = Nothing
     }
 
 -- | Page properties map
@@ -285,6 +337,109 @@ instance FromJSON PageMarkdown where
 instance ToJSON PageMarkdown where
   toJSON = genericToJSON aesonOptions
 
+-- | Move a page to a new parent
+data MovePage = MovePage
+  { parent :: Parent,
+    position :: Maybe Position
+  }
+  deriving stock (Generic, Show)
+
+instance ToJSON MovePage where
+  toJSON = genericToJSON aesonOptions
+
+-- | Update page markdown request
+--
+-- Uses the Notion markdown content API to edit page content via markdown.
+-- The API accepts a discriminated union with a @type@ field.
+data UpdatePageMarkdown
+  = -- | Targeted search-and-replace edits (recommended)
+    UpdateContent UpdateContentRequest
+  | -- | Replace entire page content (recommended)
+    ReplaceContent ReplaceContentRequest
+  | -- | Insert content at a position (legacy)
+    InsertContent InsertContentRequest
+  | -- | Replace a range of content (legacy)
+    ReplaceContentRange ReplaceContentRangeRequest
+  deriving stock (Generic, Show)
+
+instance ToJSON UpdatePageMarkdown where
+  toJSON (UpdateContent req) =
+    Aeson.object
+      [ "type" .= ("update_content" :: Text),
+        "update_content" .= req
+      ]
+  toJSON (ReplaceContent req) =
+    Aeson.object
+      [ "type" .= ("replace_content" :: Text),
+        "replace_content" .= req
+      ]
+  toJSON (InsertContent req) =
+    Aeson.object
+      [ "type" .= ("insert_content" :: Text),
+        "insert_content" .= req
+      ]
+  toJSON (ReplaceContentRange req) =
+    Aeson.object
+      [ "type" .= ("replace_content_range" :: Text),
+        "replace_content_range" .= req
+      ]
+
+-- | Request body for the @update_content@ command.
+-- Contains a list of search-and-replace operations (max 100).
+data UpdateContentRequest = UpdateContentRequest
+  { contentUpdates :: Vector ContentUpdate,
+    allowDeletingContent :: Maybe Bool
+  }
+  deriving stock (Generic, Show)
+
+instance ToJSON UpdateContentRequest where
+  toJSON = genericToJSON aesonOptions
+
+-- | A single search-and-replace operation
+data ContentUpdate = ContentUpdate
+  { oldStr :: Text,
+    newStr :: Text,
+    replaceAllMatches :: Maybe Bool
+  }
+  deriving stock (Generic, Show)
+
+instance ToJSON ContentUpdate where
+  toJSON = genericToJSON aesonOptions
+
+-- | Request body for the @replace_content@ command.
+-- Replaces the entire page content with new markdown.
+data ReplaceContentRequest = ReplaceContentRequest
+  { newStr :: Text,
+    allowDeletingContent :: Maybe Bool
+  }
+  deriving stock (Generic, Show)
+
+instance ToJSON ReplaceContentRequest where
+  toJSON = genericToJSON aesonOptions
+
+-- | Request body for the @insert_content@ command (legacy).
+-- Inserts markdown content at a position specified by an ellipsis-based selector.
+data InsertContentRequest = InsertContentRequest
+  { content :: Text,
+    after :: Maybe Text
+  }
+  deriving stock (Generic, Show)
+
+instance ToJSON InsertContentRequest where
+  toJSON = genericToJSON aesonOptions
+
+-- | Request body for the @replace_content_range@ command (legacy).
+-- Replaces content in a range specified by an ellipsis-based selector.
+data ReplaceContentRangeRequest = ReplaceContentRangeRequest
+  { content :: Text,
+    contentRange :: Text,
+    allowDeletingContent :: Maybe Bool
+  }
+  deriving stock (Generic, Show)
+
+instance ToJSON ReplaceContentRangeRequest where
+  toJSON = genericToJSON aesonOptions
+
 -- | Servant API
 type API =
   "pages"
@@ -299,4 +454,12 @@ type API =
            :> "markdown"
            :> QueryParam "include_transcript" Bool
            :> Get '[JSON] PageMarkdown
+           :<|> Capture "page_id" PageID
+           :> "markdown"
+           :> ReqBody '[JSON] UpdatePageMarkdown
+           :> Patch '[JSON] PageMarkdown
+           :<|> Capture "page_id" PageID
+           :> "move"
+           :> ReqBody '[JSON] MovePage
+           :> Post '[JSON] PageObject
        )

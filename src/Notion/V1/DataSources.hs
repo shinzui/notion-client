@@ -10,6 +10,10 @@ module Notion.V1.DataSources
     UpdateDataSource (..),
     QueryDataSource (..),
 
+    -- * Templates
+    TemplateRef (..),
+    ListTemplatesResponse (..),
+
     -- * Servant
     API,
   )
@@ -113,6 +117,28 @@ data QueryDataSource = QueryDataSource
 instance ToJSON QueryDataSource where
   toJSON = genericToJSON aesonOptions
 
+-- | A reference to a data source template
+data TemplateRef = TemplateRef
+  { id :: UUID,
+    name :: Text,
+    isDefault :: Bool
+  }
+  deriving stock (Generic, Show)
+
+instance FromJSON TemplateRef where
+  parseJSON = genericParseJSON aesonOptions
+
+-- | Response from @GET \/v1\/data_sources\/{data_source_id}\/templates@
+data ListTemplatesResponse = ListTemplatesResponse
+  { templates :: Vector TemplateRef,
+    hasMore :: Bool,
+    nextCursor :: Maybe Text
+  }
+  deriving stock (Generic, Show)
+
+instance FromJSON ListTemplatesResponse where
+  parseJSON = genericParseJSON aesonOptions
+
 -- | Servant API
 type API =
   "data_sources"
@@ -127,4 +153,10 @@ type API =
            :> "query"
            :> ReqBody '[JSON] QueryDataSource
            :> Post '[JSON] (ListOf PageObject)
+           :<|> Capture "data_source_id" DataSourceID
+           :> "templates"
+           :> QueryParam "name" Text
+           :> QueryParam "start_cursor" Text
+           :> QueryParam "page_size" Natural
+           :> Get '[JSON] ListTemplatesResponse
        )

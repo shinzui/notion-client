@@ -228,8 +228,11 @@ runDatabaseDemo methods databaseIdStr = do
           { parent = DataSourceParent {dataSourceId = dsId}, -- Specify parent data source
             properties = pageProperties, -- Required page properties
             children = Just initialBlocks, -- Optional initial content
+            markdown = Nothing, -- Could use markdown instead of children
             icon = Just (EmojiIcon "📝"), -- Optional page icon
-            cover = Nothing -- Optional page cover
+            cover = Nothing, -- Optional page cover
+            template = Nothing, -- No template
+            position = Nothing -- Default position
           }
 
   -- Add page to database

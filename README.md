@@ -1,6 +1,6 @@
 # Notion API Client for Haskell
 
-A type-safe Haskell client for the [Notion API](https://developers.notion.com/reference/intro) (version `2025-09-03`).
+A type-safe Haskell client for the [Notion API](https://developers.notion.com/reference/intro) (version `2026-03-11`).
 
 ## Features
 
@@ -68,16 +68,56 @@ createNewPage Methods{createPage} = do
     createPage newPage
 ```
 
+### Creating a page with markdown
+
+```haskell
+import Notion.V1
+import Notion.V1.Common (Parent(..))
+import Notion.V1.Pages
+
+createMarkdownPage :: Methods -> IO PageObject
+createMarkdownPage Methods{createPage} = do
+    let newPage = (mkCreatePage
+            (DataSourceParent { dataSourceId = "data-source-id" })
+            mempty)
+            { markdown = Just "# Hello\n\nThis page was created with **markdown**." }
+
+    createPage newPage
+```
+
+### Editing page content with markdown
+
+```haskell
+import Notion.V1
+import Notion.V1.Pages
+
+editPage :: Methods -> PageID -> IO PageMarkdown
+editPage Methods{updatePageMarkdown} pageId =
+    updatePageMarkdown pageId $
+        UpdateContent UpdateContentRequest
+            { contentUpdates = fromList
+                [ ContentUpdate
+                    { oldStr = "old text"
+                    , newStr = "new text"
+                    , replaceAllMatches = Nothing
+                    }
+                ]
+            , allowDeletingContent = Nothing
+            }
+```
+
 ## API Coverage
 
-- Databases: Create, retrieve, and update databases
-- Data Sources: Create, retrieve, update, and query data sources
-- Pages: Create, retrieve, and update pages
-- Blocks: Retrieve, update, append children, and delete blocks
-- Users: List, retrieve users and bot users
-- Search: Search for pages and data sources
-- Comments: Create and list comments
-- Webhooks: Event types and signature verification
+- **Databases**: Create, retrieve, update, and query databases
+- **Data Sources**: Create, retrieve, update, query data sources; list templates
+- **Pages**: Create (with blocks or markdown), retrieve, update, move pages; retrieve and update page markdown
+- **Blocks**: Retrieve, update, append children (with position control), and delete blocks
+- **Users**: List, retrieve users and bot users
+- **Views**: Create, retrieve, update, delete, list, and query database views (all 10 view types)
+- **Search**: Search for pages and data sources
+- **Comments**: Create and list comments
+- **Custom Emojis**: List workspace custom emojis
+- **Webhooks**: Event types (including view events) and signature verification
 
 ## Running the Example
 

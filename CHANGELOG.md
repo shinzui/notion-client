@@ -1,5 +1,26 @@
 # Changelog for notion-client
 
+## 0.4.0.0 (2026-03-29)
+
+### New Features
+* **Markdown Content API**: Add `updatePageMarkdown` method for editing page content via markdown with search-and-replace (`UpdateContent`), full replacement (`ReplaceContent`), and legacy insert/replace commands
+* **Create pages with markdown**: Add `markdown` field to `CreatePage` as alternative to `children`
+* **Move Page API**: Add `movePage` method (`POST /v1/pages/{page_id}/move`) to relocate pages between parents
+* **Template support**: Add `Template` type and `template`/`eraseContent` fields to `CreatePage` and `UpdatePage`
+* **List data source templates**: Add `listDataSourceTemplates` method (`GET /v1/data_sources/{id}/templates`)
+* **Views API**: New `Notion.V1.Views` module with full CRUD + list + query endpoints for database views (table, board, list, calendar, timeline, gallery, form, chart, map, dashboard)
+* **Custom Emojis API**: New `Notion.V1.CustomEmojis` module with `listCustomEmojis` method
+* **Native icons**: Add `NativeIcon` variant to `Icon` type (name + color)
+* **Custom emoji icons**: Add `CustomEmojiIcon` variant to `Icon` type
+* **View webhook events**: Add `ViewCreated`, `ViewUpdated`, `ViewDeleted` event types and `ViewEntity` entity type
+* **View object type**: Add `View` constructor to `ObjectType` enum
+* Add `position` field to `CreatePage` for controlling page placement within parent
+
+### Non-Breaking Changes
+* Add `markdown` field to `CreatePage` (defaults to `Nothing` via `mkCreatePage`)
+* Add `template`, `position` fields to `CreatePage` (defaults to `Nothing` via `mkCreatePage`)
+* Add `template`, `eraseContent` fields to `UpdatePage` (defaults to `Nothing` via `mkUpdatePage`)
+
 ## 0.3.0.0 (2026-03-29)
 
 ### Breaking Changes

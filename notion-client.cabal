@@ -59,6 +59,7 @@ library
     Notion.V1.Blocks
     Notion.V1.Comments
     Notion.V1.Common
+    Notion.V1.CustomEmojis
     Notion.V1.Databases
     Notion.V1.DataSources
     Notion.V1.Error
@@ -68,6 +69,7 @@ library
     Notion.V1.RichText
     Notion.V1.Search
     Notion.V1.Users
+    Notion.V1.Views
     Notion.V1.Webhooks
 
   other-modules:      Notion.Prelude
@@ -94,6 +96,7 @@ test-suite tasty
     , aeson
     , base
     , bytestring
+    , containers
     , http-client
     , http-client-tls
     , notion-client
@@ -112,9 +115,13 @@ executable notion-client-example
   other-modules:
     Blocks
     Console
+    CustomEmojiDemo
     DatabaseDemo
+    MarkdownDemo
     PageDemo
+    TemplateDemo
     UserDemo
+    ViewDemo
 
   default-extensions:
     DuplicateRecordFields

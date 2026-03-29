@@ -81,6 +81,10 @@ data EventType
     CommentCreated
   | CommentUpdated
   | CommentDeleted
+  | -- | View events (new in 2026-03-19)
+    ViewCreated
+  | ViewUpdated
+  | ViewDeleted
   | -- | Unknown event type (for forward compatibility)
     UnknownEvent Text
   deriving stock (Eq, Show, Generic)
@@ -110,6 +114,9 @@ instance FromJSON EventType where
     String "comment.created" -> pure CommentCreated
     String "comment.updated" -> pure CommentUpdated
     String "comment.deleted" -> pure CommentDeleted
+    String "view.created" -> pure ViewCreated
+    String "view.updated" -> pure ViewUpdated
+    String "view.deleted" -> pure ViewDeleted
     String other -> pure $ UnknownEvent other
     _ -> fail "Expected string for EventType"
 
@@ -138,6 +145,9 @@ instance ToJSON EventType where
     CommentCreated -> String "comment.created"
     CommentUpdated -> String "comment.updated"
     CommentDeleted -> String "comment.deleted"
+    ViewCreated -> String "view.created"
+    ViewUpdated -> String "view.updated"
+    ViewDeleted -> String "view.deleted"
     UnknownEvent t -> String t
 
 -- | Entity types in webhook events
@@ -146,6 +156,7 @@ data EntityType
   | DatabaseEntity
   | DataSourceEntity
   | CommentEntity
+  | ViewEntity
   | UnknownEntityType Text
   deriving stock (Eq, Show, Generic)
 
@@ -155,6 +166,7 @@ instance FromJSON EntityType where
     String "database" -> pure DatabaseEntity
     String "data_source" -> pure DataSourceEntity
     String "comment" -> pure CommentEntity
+    String "view" -> pure ViewEntity
     String other -> pure $ UnknownEntityType other
     _ -> fail "Expected string for EntityType"
 
@@ -164,6 +176,7 @@ instance ToJSON EntityType where
     DatabaseEntity -> String "database"
     DataSourceEntity -> String "data_source"
     CommentEntity -> String "comment"
+    ViewEntity -> String "view"
     UnknownEntityType t -> String t
 
 -- | Entity that triggered the webhook event

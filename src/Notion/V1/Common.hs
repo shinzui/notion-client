@@ -34,6 +34,7 @@ data ObjectType
   | Block
   | User
   | Comment
+  | View
   deriving stock (Eq, Show, Generic)
 
 instance FromJSON ObjectType where
@@ -127,6 +128,10 @@ data Icon
   = EmojiIcon {emoji :: Text}
   | FileIcon {file :: File}
   | ExternalIcon {external :: ExternalFile}
+  | -- | Native icon specified by name and optional color
+    NativeIcon {iconName :: Text, iconColor :: Maybe Text}
+  | -- | Custom emoji icon specified by ID
+    CustomEmojiIcon {customEmojiId :: UUID}
   deriving stock (Generic, Show)
 
 instance FromJSON Icon where
@@ -137,6 +142,8 @@ instance FromJSON Icon where
         "emoji" -> EmojiIcon <$> o .: "emoji"
         "file" -> FileIcon <$> o .: "file"
         "external" -> ExternalIcon <$> o .: "external"
+        "icon" -> NativeIcon <$> o .: "name" <*> o .:? "color"
+        "custom_emoji" -> CustomEmojiIcon <$> o .: "id"
         _ -> fail $ "Unknown icon type: " <> unpack iconType
     _ -> fail "Expected object for Icon"
 
@@ -144,6 +151,8 @@ instance ToJSON Icon where
   toJSON (EmojiIcon emoji) = object ["type" .= ("emoji" :: Text), "emoji" .= emoji]
   toJSON (FileIcon file) = object ["type" .= ("file" :: Text), "file" .= file]
   toJSON (ExternalIcon external) = object ["type" .= ("external" :: Text), "external" .= external]
+  toJSON (NativeIcon name color) = object $ ["type" .= ("icon" :: Text), "name" .= name] <> maybe [] (\c -> ["color" .= c]) color
+  toJSON (CustomEmojiIcon eid) = object ["type" .= ("custom_emoji" :: Text), "id" .= eid]
 
 -- | Cover object for pages/databases
 data Cover

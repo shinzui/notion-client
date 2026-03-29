@@ -42,18 +42,22 @@ import Notion.V1.Blocks (BlockID, BlockObject)
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject)
 import Notion.V1.Comments qualified as Comments
-import Notion.V1.Common (ParentID)
+import Notion.V1.Common (ParentID, UUID)
+import Notion.V1.CustomEmojis (CustomEmoji)
+import Notion.V1.CustomEmojis qualified as CustomEmojis
 import Notion.V1.DataSources (DataSourceID, DataSourceObject)
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (CreateDatabase, DatabaseID, DatabaseObject, QueryDatabase, UpdateDatabase)
 import Notion.V1.Databases qualified as Databases
 import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (CreatePage, PageID, PageMarkdown, PageObject, UpdatePage)
+import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, UpdatePage, UpdatePageMarkdown)
 import Notion.V1.Pages qualified as Pages
 import Notion.V1.Search (SearchRequest)
 import Notion.V1.Search qualified as Search
 import Notion.V1.Users (UserID, UserObject)
 import Notion.V1.Users qualified as Users
+import Notion.V1.Views (ViewObject)
+import Notion.V1.Views qualified as Views
 import Servant.Client (ClientEnv)
 import Servant.Client qualified as Client
 import Servant.Multipart.Client ()
@@ -88,11 +92,14 @@ makeMethods clientEnv token = Methods {..}
                  :<|> createDataSource
                  :<|> updateDataSource
                  :<|> queryDataSource
+                 :<|> listDataSourceTemplates_
                )
         :<|> ( retrievePage
                  :<|> createPage
                  :<|> updatePage
                  :<|> retrievePageMarkdown
+                 :<|> updatePageMarkdown
+                 :<|> movePage
                )
         :<|> ( retrieveBlock
                  :<|> updateBlock
@@ -108,6 +115,14 @@ makeMethods clientEnv token = Methods {..}
         :<|> ( createComment
                  :<|> listComments_
                )
+        :<|> ( createView
+                 :<|> retrieveView
+                 :<|> updateView
+                 :<|> deleteView
+                 :<|> listViews_
+                 :<|> queryView
+               )
+        :<|> listCustomEmojis_
       ) = Client.hoistClient @API Proxy run (Client.client @API Proxy) authorization notionVersion
 
     authorization = "Bearer " <> token
@@ -124,6 +139,9 @@ makeMethods clientEnv token = Methods {..}
     listUsers = listUsers_
     listComments = listComments_
     search = search_
+    listDataSourceTemplates = listDataSourceTemplates_
+    listViews = listViews_
+    listCustomEmojis = listCustomEmojis_
 
 -- | API methods
 data Methods = Methods
@@ -137,6 +155,16 @@ data Methods = Methods
     createDataSource :: DataSources.CreateDataSource -> IO DataSourceObject,
     updateDataSource :: DataSourceID -> DataSources.UpdateDataSource -> IO DataSourceObject,
     queryDataSource :: DataSourceID -> DataSources.QueryDataSource -> IO (ListOf PageObject),
+    -- | List templates available for a data source
+    listDataSourceTemplates ::
+      DataSourceID ->
+      Maybe Text ->
+      -- \^ name filter (exact match)
+      Maybe Text ->
+      -- \^ start_cursor
+      Maybe Natural ->
+      -- \^ page_size
+      IO DataSources.ListTemplatesResponse,
     -- \* Pages
     createPage :: CreatePage -> IO PageObject,
     retrievePage :: PageID -> IO PageObject,
@@ -146,6 +174,17 @@ data Methods = Methods
       Maybe Bool ->
       -- \^ include_transcript
       IO PageMarkdown,
+    -- | Update page content using markdown. Supports targeted search-and-replace
+    -- edits, full content replacement, and legacy insert/replace commands.
+    updatePageMarkdown ::
+      PageID ->
+      UpdatePageMarkdown ->
+      IO PageMarkdown,
+    -- | Move a page to a new parent (page or data source)
+    movePage ::
+      PageID ->
+      MovePage ->
+      IO PageObject,
     -- \* Blocks
     retrieveBlock :: BlockID -> IO BlockObject,
     updateBlock :: BlockID -> Blocks.BlockContent -> IO BlockObject,
@@ -180,7 +219,32 @@ data Methods = Methods
       -- \^ start_cursor
       Maybe Natural ->
       -- \^ page_size
-      IO (ListOf CommentObject)
+      IO (ListOf CommentObject),
+    -- \* Views
+    createView :: Views.CreateView -> IO ViewObject,
+    retrieveView :: Views.ViewID -> IO ViewObject,
+    updateView :: Views.ViewID -> Views.UpdateView -> IO ViewObject,
+    deleteView :: Views.ViewID -> IO ViewObject,
+    listViews ::
+      Maybe UUID ->
+      -- \^ database_id
+      Maybe UUID ->
+      -- \^ data_source_id
+      Maybe Text ->
+      -- \^ start_cursor
+      Maybe Natural ->
+      -- \^ page_size
+      IO (ListOf ViewObject),
+    queryView :: Views.ViewID -> Views.QueryView -> IO (ListOf PageObject),
+    -- \* Custom Emojis
+    listCustomEmojis ::
+      Maybe Text ->
+      -- \^ name filter (exact match)
+      Maybe Text ->
+      -- \^ start_cursor
+      Maybe Natural ->
+      -- \^ page_size
+      IO (ListOf CustomEmoji)
   }
 
 -- | Servant API
@@ -194,4 +258,6 @@ type API =
            :<|> Users.API
            :<|> Search.API
            :<|> Comments.API
+           :<|> Views.API
+           :<|> CustomEmojis.API
        )
