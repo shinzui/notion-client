@@ -94,6 +94,9 @@ instance FromJSON UserReference where
     Object o -> UserReference <$> o .: "id" <*> o .: "object"
     _ -> fail "Expected object for UserReference"
 
+instance ToJSON UserReference where
+  toJSON = genericToJSON aesonOptions
+
 -- | Servant API
 type API =
   "users"

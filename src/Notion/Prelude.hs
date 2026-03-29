@@ -4,6 +4,7 @@ module Notion.Prelude
     stripPrefix,
     labelModifier,
     parseISO8601,
+    posixToISO8601,
 
     -- * Re-exports
     module Data.Aeson,
@@ -127,3 +128,7 @@ parseISO8601 text =
       Nothing -> fail $ "Failed to parse ISO8601 timestamp: " <> str
   where
     str = unpack text
+
+-- | Convert POSIXTime to an ISO8601 timestamp string
+posixToISO8601 :: POSIXTime -> Text
+posixToISO8601 = pack . ISO8601.iso8601Show . Time.posixSecondsToUTCTime

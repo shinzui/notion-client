@@ -11,7 +11,8 @@ module Notion.V1.Blocks
   )
 where
 
-import Data.Aeson ((.:))
+import Data.Aeson ((.:), (.=))
+import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Notion.Prelude
 import Notion.V1.Common (BlockID, ObjectType (..), Parent)
@@ -54,6 +55,22 @@ instance FromJSON BlockObject where
       object <- o .: "object"
       return BlockObject {..}
     _ -> fail "Expected object for BlockObject"
+
+instance ToJSON BlockObject where
+  toJSON BlockObject {..} =
+    Aeson.object
+      [ "id" .= id,
+        "parent" .= parent,
+        "created_time" .= posixToISO8601 createdTime,
+        "last_edited_time" .= posixToISO8601 lastEditedTime,
+        "created_by" .= createdBy,
+        "last_edited_by" .= lastEditedBy,
+        "has_children" .= hasChildren,
+        "archived" .= archived,
+        "type" .= type_,
+        Key.fromText type_ .= content,
+        "object" .= object
+      ]
 
 -- | Block content for update
 newtype BlockContent = BlockContent

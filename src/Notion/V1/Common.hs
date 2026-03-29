@@ -1,7 +1,7 @@
 -- | Common Notion API types
 module Notion.V1.Common
   ( -- * Common types
-    UUID,
+    UUID (..),
     BlockID,
     ObjectType (..),
     Parent (..),
