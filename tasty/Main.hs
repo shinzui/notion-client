@@ -2,7 +2,9 @@ module Main where
 
 import Data.Text qualified as Text
 import Notion.V1
+import Notion.V1.Common (UUID (..))
 import Notion.V1.ListOf (ListOf (..))
+import Notion.V1.Pages (PageMarkdown (..))
 import Notion.V1.Search (SearchRequest (..))
 import Notion.V1.Users (UserObject (..))
 import System.Environment qualified as Environment
@@ -31,13 +33,24 @@ tests = do
       clientEnv <- getClientEnv "https://api.notion.com/v1"
       let methods = makeMethods clientEnv (Text.pack token)
 
+      mPageId <- lookupEnv "NOTION_TEST_PAGE_ID"
+
+      let markdownTests = case mPageId of
+            Just pageId ->
+              [ testCase "Retrieve page as markdown" $
+                  testRetrievePageMarkdown methods (Text.pack pageId)
+              ]
+            Nothing -> []
+
       pure $
         testGroup
           "Notion API Tests"
-          [ testCase "Retrieve current user" $ testRetrieveCurrentUser methods,
-            testCase "List users" $ testListUsers methods,
-            testCase "Timestamp parsing works" $ testSearchAPI methods
-          ]
+          ( [ testCase "Retrieve current user" $ testRetrieveCurrentUser methods,
+              testCase "List users" $ testListUsers methods,
+              testCase "Timestamp parsing works" $ testSearchAPI methods
+            ]
+              <> markdownTests
+          )
 
 testRetrieveCurrentUser :: Methods -> Assertion
 testRetrieveCurrentUser Methods {retrieveMyUser} = do
@@ -65,6 +78,12 @@ testSearchAPI Methods {search} = do
   _ <- search searchParams
   -- If this test runs without errors, it means timestamp parsing works
   assertBool "Search should run without timestamp parsing errors" True
+
+testRetrievePageMarkdown :: Methods -> Text.Text -> Assertion
+testRetrievePageMarkdown Methods {retrievePageMarkdown} pageId = do
+  result <- retrievePageMarkdown (UUID pageId) Nothing
+  let PageMarkdown {markdown = md} = result
+  assertBool "Markdown content should not be empty" (not $ Text.null md)
 
 lookupEnv :: String -> IO (Maybe String)
 lookupEnv var = Environment.lookupEnv var

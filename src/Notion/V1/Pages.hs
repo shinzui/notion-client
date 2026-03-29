@@ -13,15 +13,20 @@ module Notion.V1.Pages
     mkCreatePage,
     mkUpdatePage,
 
+    -- * Markdown
+    PageMarkdown (..),
+
     -- * Servant
     API,
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Maybe (fromMaybe)
 import Notion.Prelude hiding (Number)
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.Users (UserReference)
@@ -60,7 +65,7 @@ instance FromJSON PageObject where
       cover <- o .:? "cover"
       icon <- o .:? "icon"
       parent <- o .: "parent"
-      archived <- o .: "archived"
+      archived <- fmap (fromMaybe False) (o .:? "is_archived" <|> o .:? "archived")
       inTrash <- o .: "in_trash"
       properties <- o .: "properties"
       url <- o .: "url"
@@ -267,6 +272,23 @@ instance FromJSON SelectOption where
 instance ToJSON SelectOption where
   toJSON = genericToJSON aesonOptions
 
+-- | Response from @GET \/v1\/pages\/{page_id}\/markdown@
+--
+-- Contains the page content rendered as Notion-flavored enhanced markdown.
+data PageMarkdown = PageMarkdown
+  { id :: PageID,
+    markdown :: Text,
+    truncated :: Bool,
+    unknownBlockIds :: Vector UUID
+  }
+  deriving stock (Generic, Show)
+
+instance FromJSON PageMarkdown where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON PageMarkdown where
+  toJSON = genericToJSON aesonOptions
+
 -- | Servant API
 type API =
   "pages"
@@ -277,4 +299,8 @@ type API =
            :<|> Capture "page_id" PageID
            :> ReqBody '[JSON] UpdatePage
            :> Patch '[JSON] PageObject
+           :<|> Capture "page_id" PageID
+           :> "markdown"
+           :> QueryParam "include_transcript" Bool
+           :> Get '[JSON] PageMarkdown
        )

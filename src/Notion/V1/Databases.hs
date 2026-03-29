@@ -14,6 +14,7 @@ module Notion.V1.Databases
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?))
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
@@ -81,7 +82,7 @@ instance FromJSON DatabaseObject where
       cover <- o .:? "cover"
       url <- o .: "url"
       parent <- o .: "parent"
-      archived <- o .:? "archived"
+      archived <- o .:? "is_archived" <|> o .:? "archived"
       isInline <- o .:? "is_inline"
       inTrash <- o .:? "in_trash"
       isLocked <- o .:? "is_locked"

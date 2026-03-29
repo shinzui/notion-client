@@ -11,9 +11,11 @@ module Notion.V1.Blocks
   )
 where
 
-import Data.Aeson ((.:), (.=))
+import Control.Applicative ((<|>))
+import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
+import Data.Maybe (fromMaybe)
 import Notion.Prelude
 import Notion.V1.Common (BlockID, ObjectType (..), Parent)
 import Notion.V1.ListOf (ListOf)
@@ -48,7 +50,7 @@ instance FromJSON BlockObject where
       createdBy <- o .: "created_by"
       lastEditedBy <- o .: "last_edited_by"
       hasChildren <- o .: "has_children"
-      archived <- o .: "archived"
+      archived <- fmap (fromMaybe False) (o .:? "is_archived" <|> o .:? "archived")
       type_ <- o .: "type"
       -- Content is stored under a field named after the block type (e.g., "heading_1", "paragraph")
       content <- o .: Key.fromText type_

@@ -15,6 +15,7 @@ module Notion.V1.DataSources
   )
 where
 
+import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?))
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType, Parent, UUID)
@@ -40,7 +41,7 @@ data DataSourceObject = DataSourceObject
     url :: Text,
     parent :: Parent,
     databaseParent :: Maybe Parent,
-    archived :: Bool,
+    archived :: Maybe Bool,
     isInline :: Maybe Bool,
     inTrash :: Maybe Bool,
     publicUrl :: Maybe Text,
@@ -66,7 +67,7 @@ instance FromJSON DataSourceObject where
       url <- o .: "url"
       parent <- o .: "parent"
       databaseParent <- o .:? "database_parent"
-      archived <- o .: "archived"
+      archived <- o .:? "is_archived" <|> o .:? "archived"
       isInline <- o .:? "is_inline"
       inTrash <- o .:? "in_trash"
       publicUrl <- o .:? "public_url"

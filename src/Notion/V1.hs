@@ -48,7 +48,7 @@ import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (CreateDatabase, DatabaseID, DatabaseObject, QueryDatabase, UpdateDatabase)
 import Notion.V1.Databases qualified as Databases
 import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (CreatePage, PageID, PageObject, UpdatePage)
+import Notion.V1.Pages (CreatePage, PageID, PageMarkdown, PageObject, UpdatePage)
 import Notion.V1.Pages qualified as Pages
 import Notion.V1.Search (SearchRequest)
 import Notion.V1.Search qualified as Search
@@ -76,7 +76,7 @@ makeMethods ::
   Methods
 makeMethods clientEnv token = Methods {..}
   where
-    notionVersion = "2025-09-03" -- Notion API version with data source support
+    notionVersion = "2026-03-11" -- Notion API version with markdown content support
     -- If you experience 400 errors, check for updated versions at
     -- https://developers.notion.com/reference/versioning
     ( ( createDatabase
@@ -92,6 +92,7 @@ makeMethods clientEnv token = Methods {..}
         :<|> ( retrievePage
                  :<|> createPage
                  :<|> updatePage
+                 :<|> retrievePageMarkdown
                )
         :<|> ( retrieveBlock
                  :<|> updateBlock
@@ -140,6 +141,11 @@ data Methods = Methods
     createPage :: CreatePage -> IO PageObject,
     retrievePage :: PageID -> IO PageObject,
     updatePage :: PageID -> UpdatePage -> IO PageObject,
+    retrievePageMarkdown ::
+      PageID ->
+      Maybe Bool ->
+      -- \^ include_transcript
+      IO PageMarkdown,
     -- \* Blocks
     retrieveBlock :: BlockID -> IO BlockObject,
     updateBlock :: BlockID -> Blocks.BlockContent -> IO BlockObject,
