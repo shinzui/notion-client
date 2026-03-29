@@ -65,7 +65,6 @@ runDatabaseDemo methods databaseIdStr = do
             sorts = Nothing,
             startCursor = Nothing,
             pageSize = Just 5,
-            archived = Nothing,
             inTrash = Nothing
           }
   dsResults <-
@@ -157,7 +156,6 @@ runDatabaseDemo methods databaseIdStr = do
             icon = Nothing,
             properties = Just combinedProperties,
             inTrash = Nothing,
-            archived = Nothing,
             parent = Nothing
           }
 
@@ -260,7 +258,7 @@ runDatabaseDemo methods databaseIdStr = do
             createBulletedListItemBlock "Add rich content to pages",
             createBulletedListItemBlock "Query and retrieve data"
           ]
-      appendRequest = Blocks.AppendBlockChildren {children = additionalBlocks}
+      appendRequest = Blocks.AppendBlockChildren {children = additionalBlocks, position = Nothing}
 
   -- Add blocks to the page
   _updatedPage <-

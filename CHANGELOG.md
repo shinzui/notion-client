@@ -4,14 +4,24 @@
 
 ### Breaking Changes
 * Bump Notion API version from `2025-09-03` to `2026-03-11`
-* Change `DataSourceObject.archived` from `Bool` to `Maybe Bool` (field no longer guaranteed in API responses)
+* Remove `archived` field from `BlockObject` — use `inTrash` instead (renamed to match API)
+* Remove `archived` field from `PageObject` — use existing `inTrash` field
+* Remove `archived` field from `DatabaseObject` — use existing `inTrash` field
+* Remove `archived` field from `DataSourceObject` — use existing `inTrash` field
+* Rename `archived` to `inTrash` in `UpdatePage` request type
+* Remove `archived` from `UpdateDatabase` request type — use existing `inTrash` field
+* Remove `archived` from `UpdateDataSource` request type — use existing `inTrash` field
+* Remove `archived` from `QueryDataSource` request type — use existing `inTrash` field
+* Change `AppendBlockChildren` from `newtype` to `data` with new optional `position` field
 
 ### New Features
 * Add `PageMarkdown` type and `retrievePageMarkdown` method for `GET /v1/pages/{page_id}/markdown`
 * Support optional `include_transcript` query parameter for markdown retrieval
+* Add `Position` type (`AfterBlock`, `Start`, `End`) for specifying block insertion position
+* The `transcription` block type is renamed to `meeting_notes` by the API (no library code change needed since block types are `Text`)
 
 ### Bug Fixes
-* Handle API rename of `archived` to `is_archived` in responses for `PageObject`, `BlockObject`, `DatabaseObject`, and `DataSourceObject`
+* Fix backward-compatible `FromJSON` fallback: `.:?` with `<|>` was silently broken (always returned `Nothing`), now correctly falls back through `in_trash` → `is_archived` → `archived`
 
 ## 0.1.0.1 (2026-03-29)
 

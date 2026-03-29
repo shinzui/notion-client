@@ -93,6 +93,7 @@ test-suite tasty
   build-depends:
     , aeson
     , base
+    , bytestring
     , http-client
     , http-client-tls
     , notion-client
@@ -100,6 +101,7 @@ test-suite tasty
     , tasty
     , tasty-hunit
     , text
+    , vector
 
   ghc-options:        -Wall
 

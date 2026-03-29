@@ -41,7 +41,6 @@ data DataSourceObject = DataSourceObject
     url :: Text,
     parent :: Parent,
     databaseParent :: Maybe Parent,
-    archived :: Maybe Bool,
     isInline :: Maybe Bool,
     inTrash :: Maybe Bool,
     publicUrl :: Maybe Text,
@@ -67,9 +66,8 @@ instance FromJSON DataSourceObject where
       url <- o .: "url"
       parent <- o .: "parent"
       databaseParent <- o .:? "database_parent"
-      archived <- o .:? "is_archived" <|> o .:? "archived"
       isInline <- o .:? "is_inline"
-      inTrash <- o .:? "in_trash"
+      inTrash <- (fmap Just (o .: "in_trash")) <|> (fmap Just (o .: "is_archived")) <|> (fmap Just (o .: "archived")) <|> pure Nothing
       publicUrl <- o .:? "public_url"
       icon <- o .:? "icon"
       cover <- o .:? "cover"
@@ -95,7 +93,6 @@ data UpdateDataSource = UpdateDataSource
     icon :: Maybe Icon,
     properties :: Maybe Value,
     inTrash :: Maybe Bool,
-    archived :: Maybe Bool,
     parent :: Maybe Parent
   }
   deriving stock (Generic, Show)
@@ -109,7 +106,6 @@ data QueryDataSource = QueryDataSource
     sorts :: Maybe [Value],
     startCursor :: Maybe Text,
     pageSize :: Maybe Natural,
-    archived :: Maybe Bool,
     inTrash :: Maybe Bool
   }
   deriving stock (Generic, Show)

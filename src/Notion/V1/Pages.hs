@@ -26,7 +26,6 @@ import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.Maybe (fromMaybe)
 import Notion.Prelude hiding (Number)
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.Users (UserReference)
@@ -44,7 +43,6 @@ data PageObject = PageObject
     cover :: Maybe Cover,
     icon :: Maybe Icon,
     parent :: Parent,
-    archived :: Bool,
     inTrash :: Bool,
     properties :: Map Text PropertyItem,
     url :: Text,
@@ -65,8 +63,7 @@ instance FromJSON PageObject where
       cover <- o .:? "cover"
       icon <- o .:? "icon"
       parent <- o .: "parent"
-      archived <- fmap (fromMaybe False) (o .:? "is_archived" <|> o .:? "archived")
-      inTrash <- o .: "in_trash"
+      inTrash <- (o .: "in_trash") <|> (o .: "is_archived") <|> (o .: "archived") <|> pure False
       properties <- o .: "properties"
       url <- o .: "url"
       object <- o .: "object"
@@ -84,7 +81,6 @@ instance ToJSON PageObject where
         "cover" .= cover,
         "icon" .= icon,
         "parent" .= parent,
-        "archived" .= archived,
         "in_trash" .= inTrash,
         "properties" .= properties,
         "url" .= url,
@@ -118,7 +114,7 @@ mkCreatePage parent properties =
 -- | Update a page request
 data UpdatePage = UpdatePage
   { properties :: PageProperties,
-    archived :: Maybe Bool,
+    inTrash :: Maybe Bool,
     icon :: Maybe Icon,
     cover :: Maybe Cover
   }
@@ -132,7 +128,7 @@ mkUpdatePage :: PageProperties -> UpdatePage
 mkUpdatePage properties =
   UpdatePage
     { properties,
-      archived = Nothing,
+      inTrash = Nothing,
       icon = Nothing,
       cover = Nothing
     }

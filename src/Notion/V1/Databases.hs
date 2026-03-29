@@ -55,7 +55,6 @@ data DatabaseObject = DatabaseObject
     cover :: Maybe Cover,
     url :: Text,
     parent :: Parent,
-    archived :: Maybe Bool,
     isInline :: Maybe Bool,
     inTrash :: Maybe Bool,
     isLocked :: Maybe Bool,
@@ -82,9 +81,8 @@ instance FromJSON DatabaseObject where
       cover <- o .:? "cover"
       url <- o .: "url"
       parent <- o .: "parent"
-      archived <- o .:? "is_archived" <|> o .:? "archived"
       isInline <- o .:? "is_inline"
-      inTrash <- o .:? "in_trash"
+      inTrash <- (fmap Just (o .: "in_trash")) <|> (fmap Just (o .: "is_archived")) <|> (fmap Just (o .: "archived")) <|> pure Nothing
       isLocked <- o .:? "is_locked"
       publicUrl <- o .:? "public_url"
       dataSources <- o .: "data_sources"
@@ -130,7 +128,6 @@ data UpdateDatabase = UpdateDatabase
     icon :: Maybe Icon,
     cover :: Maybe Cover,
     description :: Maybe (Vector RichText),
-    archived :: Maybe Bool,
     isInline :: Maybe Bool,
     inTrash :: Maybe Bool,
     parent :: Maybe Parent

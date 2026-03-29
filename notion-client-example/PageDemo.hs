@@ -144,7 +144,7 @@ runPageDemo methods pageIdStr = do
             )
           ]
       specializedBlocks = Vector.fromList [codeBlock, quoteBlock, calloutBlock]
-      appendRequest = Blocks.AppendBlockChildren {children = specializedBlocks}
+      appendRequest = Blocks.AppendBlockChildren {children = specializedBlocks, position = Nothing}
 
   -- Append blocks to the existing page
   _updatedPage <-

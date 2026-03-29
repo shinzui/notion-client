@@ -5,6 +5,7 @@ module Notion.V1.Blocks
     BlockObject (..),
     BlockContent (..),
     AppendBlockChildren (..),
+    Position (..),
 
     -- * Servant
     API,
@@ -15,9 +16,8 @@ import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
-import Data.Maybe (fromMaybe)
 import Notion.Prelude
-import Notion.V1.Common (BlockID, ObjectType (..), Parent)
+import Notion.V1.Common (BlockID, ObjectType (..), Parent, UUID (..))
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Users (UserReference)
 import Prelude hiding (id)
@@ -31,7 +31,7 @@ data BlockObject = BlockObject
     createdBy :: UserReference,
     lastEditedBy :: UserReference,
     hasChildren :: Bool,
-    archived :: Bool,
+    inTrash :: Bool,
     type_ :: Text,
     content :: Value,
     object :: ObjectType
@@ -50,7 +50,7 @@ instance FromJSON BlockObject where
       createdBy <- o .: "created_by"
       lastEditedBy <- o .: "last_edited_by"
       hasChildren <- o .: "has_children"
-      archived <- fmap (fromMaybe False) (o .:? "is_archived" <|> o .:? "archived")
+      inTrash <- (o .: "in_trash") <|> (o .: "is_archived") <|> (o .: "archived") <|> pure False
       type_ <- o .: "type"
       -- Content is stored under a field named after the block type (e.g., "heading_1", "paragraph")
       content <- o .: Key.fromText type_
@@ -68,7 +68,7 @@ instance ToJSON BlockObject where
         "created_by" .= createdBy,
         "last_edited_by" .= lastEditedBy,
         "has_children" .= hasChildren,
-        "archived" .= archived,
+        "in_trash" .= inTrash,
         "type" .= type_,
         Key.fromText type_ .= content,
         "object" .= object
@@ -83,14 +83,48 @@ newtype BlockContent = BlockContent
 instance ToJSON BlockContent where
   toJSON = genericToJSON aesonOptions
 
+-- | Block insertion position for the Append Block Children endpoint.
+--
+-- In API version 2026-03-11, the old @after@ parameter was replaced by a
+-- @position@ object supporting three placement types.
+data Position
+  = -- | Insert after a specific block (replaces the old @after@ parameter)
+    AfterBlock UUID
+  | -- | Insert at the beginning of the parent
+    Start
+  | -- | Insert at the end of the parent (the default when @position@ is omitted)
+    End
+  deriving stock (Generic, Show)
+
+instance ToJSON Position where
+  toJSON (AfterBlock blockId) =
+    Aeson.object
+      [ "type" .= ("after_block" :: Text),
+        "after_block" .= Aeson.object ["id" .= text blockId]
+      ]
+  toJSON Start =
+    Aeson.object
+      [ "type" .= ("start" :: Text),
+        "start" .= Aeson.object []
+      ]
+  toJSON End =
+    Aeson.object
+      [ "type" .= ("end" :: Text),
+        "end" .= Aeson.object []
+      ]
+
 -- | Append children to a block
-newtype AppendBlockChildren = AppendBlockChildren
-  { children :: Vector Value
+data AppendBlockChildren = AppendBlockChildren
+  { children :: Vector Value,
+    position :: Maybe Position
   }
   deriving stock (Generic, Show)
 
 instance ToJSON AppendBlockChildren where
-  toJSON = genericToJSON aesonOptions
+  toJSON AppendBlockChildren {..} =
+    Aeson.object $
+      ["children" .= children]
+        <> maybe [] (\p -> ["position" .= p]) position
 
 -- | Servant API
 type API =
