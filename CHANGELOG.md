@@ -1,6 +1,6 @@
 # Changelog for notion-client
 
-## 0.4.0.0 (2026-03-29)
+## 0.3.1.0 (2026-03-29)
 
 ### New Features
 * **Markdown Content API**: Add `updatePageMarkdown` method for editing page content via markdown with search-and-replace (`UpdateContent`), full replacement (`ReplaceContent`), and legacy insert/replace commands
