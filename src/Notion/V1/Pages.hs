@@ -9,6 +9,9 @@ module Notion.V1.Pages
     mkCreatePage,
     mkUpdatePage,
 
+    -- * Property item
+    PropertyItemResponse (..),
+
     -- * Markdown
     PageMarkdown (..),
     UpdatePageMarkdown (..),
@@ -32,9 +35,11 @@ where
 import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Notion.Prelude
 import Notion.V1.Blocks (Position)
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
+import Notion.V1.ListOf (ListOf)
 import Notion.V1.PropertyValue (PropertyValue)
 import Notion.V1.Users (UserReference)
 
@@ -306,6 +311,30 @@ data ReplaceContentRangeRequest = ReplaceContentRangeRequest
 instance ToJSON ReplaceContentRangeRequest where
   toJSON = genericToJSON aesonOptions
 
+-- | Response from the page property item endpoint.
+--
+-- The Notion API returns either a single property value (for most property types)
+-- or a paginated list of items (for title, rich_text, relation, and people properties
+-- that can have many items).
+data PropertyItemResponse
+  = -- | A single property value
+    SinglePropertyItem PropertyValue
+  | -- | A paginated list of property items. The 'Text' is the property type name.
+    PaginatedPropertyItems (ListOf PropertyValue) Text
+  deriving stock (Show)
+
+instance FromJSON PropertyItemResponse where
+  parseJSON = \case
+    Object o -> do
+      -- Check if this is a paginated response (has "results" key) or single item
+      if KeyMap.member "results" o
+        then do
+          listOf <- Aeson.parseJSON (Object o)
+          propType <- o .: "property_item" >>= (.: "type")
+          pure $ PaginatedPropertyItems listOf propType
+        else SinglePropertyItem <$> Aeson.parseJSON (Object o)
+    _ -> fail "Expected object for PropertyItemResponse"
+
 -- | Servant API
 type API =
   "pages"
@@ -316,6 +345,12 @@ type API =
            :<|> Capture "page_id" PageID
            :> ReqBody '[JSON] UpdatePage
            :> Patch '[JSON] PageObject
+           :<|> Capture "page_id" PageID
+           :> "properties"
+           :> Capture "property_id" Text
+           :> QueryParam "start_cursor" Text
+           :> QueryParam "page_size" Natural
+           :> Get '[JSON] PropertyItemResponse
            :<|> Capture "page_id" PageID
            :> "markdown"
            :> QueryParam "include_transcript" Bool

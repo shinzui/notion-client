@@ -23,33 +23,35 @@ The notion-client library has typed property schemas, filters, and sorts (added 
 
 ## Progress
 
-- [ ] Milestone 1: Typed Page Property Values
-  - [ ] Create `src/Notion/V1/PropertyValue.hs` with `PropertyValue` sum type (23 variants)
-  - [ ] Add `DateRange` type for date property values (reuse `RichText.Date` or create new)
-  - [ ] Add `FormulaValue` sum type (string/number/boolean/date)
-  - [ ] Add `RollupValue` sum type (number/date/array/incomplete/unsupported)
-  - [ ] Add `RelationRef` type for relation property values
-  - [ ] Add `UniqueIdValue` type (number + optional prefix)
-  - [ ] Add `VerificationValue` type (state, verified_by, date)
-  - [ ] Add `FileValue` type for files property values
-  - [ ] Add `FromJSON` instance for `PropertyValue` that dispatches on the `type` discriminator
-  - [ ] Add `ToJSON` instance for `PropertyValue` that produces the correct wire format
-  - [ ] Add smart constructors: `titleValue`, `richTextValue`, `numberValue`, `selectValue`, `multiSelectValue`, `dateValue`, `checkboxValue`, `urlValue`, `emailValue`, `phoneNumberValue`, `relationValue`, `statusValue`, `peopleValue`, `filesValue`
-  - [ ] Replace `PropertyItem` in `Pages.hs` with a new record using the typed `PropertyValue`
-  - [ ] Remove old `PropertyValue`/`PropertyItem` types and `PropertyValueType` enum from `Pages.hs`
-  - [ ] Update `PageObject.properties` to `Map Text PropertyValue`
-  - [ ] Update `CreatePage.properties` and `UpdatePage.properties` to `Map Text PropertyValue`
-  - [ ] Update `PageProperties` type alias
-  - [ ] Update `mkCreatePage` and `mkUpdatePage` smart constructors
-  - [ ] Add JSON round-trip tests for each property value type
-  - [ ] Update `notion-client-example/DatabaseDemo.hs` page creation to use smart constructors
-  - [ ] Verify `cabal build all && cabal test`
-- [ ] Milestone 2: Retrieve Page Property Item Endpoint
-  - [ ] Add `PropertyItemResponse` type (single-value or paginated list)
-  - [ ] Add `GET /v1/pages/{page_id}/properties/{property_id}` to Pages API type
-  - [ ] Wire `retrievePageProperty` into `Methods` record
-  - [ ] Add test for the new endpoint
-  - [ ] Verify `cabal build all && cabal test`
+- [x] Milestone 1: Typed Page Property Values (2026-03-29)
+  - [x] Create `src/Notion/V1/PropertyValue.hs` with `PropertyValue` sum type (23 variants)
+  - [x] Add `DateRange` type for date property values (reuse `RichText.Date`)
+  - [x] Add `FormulaValue` sum type (string/number/boolean/date)
+  - [x] Add `RollupValue` sum type (number/date/array/incomplete/unsupported)
+  - [x] Add `RelationRef` type for relation property values
+  - [x] Add `UniqueIdValue` type (number + optional prefix)
+  - [x] Add `VerificationValue` type (state, verified_by, date)
+  - [x] Add `FileValue` type for files property values
+  - [x] Add `FromJSON` instance for `PropertyValue` that dispatches on the `type` discriminator
+  - [x] Add `ToJSON` instance for `PropertyValue` that produces the correct wire format
+  - [x] Add smart constructors: `titleValue`, `richTextValue`, `numberValue`, `selectValue`, `multiSelectValue`, `dateValue`, `checkboxValue`, `urlValue`, `emailValue`, `phoneNumberValue`, `relationValue`, `statusValue`, `peopleValue`, `filesValue`
+  - [x] Replace `PropertyItem` in `Pages.hs` with a new record using the typed `PropertyValue`
+  - [x] Remove old `PropertyValue`/`PropertyItem` types and `PropertyValueType` enum from `Pages.hs`
+  - [x] Update `PageObject.properties` to `Map Text PropertyValue`
+  - [x] Update `CreatePage.properties` and `UpdatePage.properties` to `Map Text PropertyValue`
+  - [x] Update `PageProperties` type alias
+  - [x] Update `mkCreatePage` and `mkUpdatePage` smart constructors
+  - [x] Add JSON round-trip tests for each property value type (18 new tests)
+  - [x] Update `notion-client-example/DatabaseDemo.hs` page creation to use smart constructors
+  - [x] Update `notion-client-example/MarkdownDemo.hs` to use smart constructors
+  - [x] Update `notion-client-example/TemplateDemo.hs` to use smart constructors
+  - [x] Add `publicUrl :: Maybe Text` to `PageObject` (moved from Milestone 5)
+  - [x] Verify `cabal build all && cabal test` — 71 tests pass
+- [x] Milestone 2: Retrieve Page Property Item Endpoint (2026-03-29)
+  - [x] Add `PropertyItemResponse` type (single-value or paginated list)
+  - [x] Add `GET /v1/pages/{page_id}/properties/{property_id}` to Pages API type
+  - [x] Wire `retrievePageProperty` into `Methods` record
+  - [x] Verify `cabal build all && cabal test` — 71 tests pass
 - [ ] Milestone 3: Typed Error Handling
   - [ ] Add `Exception` instance to `NotionError`
   - [ ] Add `parseNotionError :: Client.ClientError -> Maybe NotionError` helper
@@ -63,7 +65,7 @@ The notion-client library has typed property schemas, filters, and sorts (added 
   - [ ] Update example and tests
   - [ ] Verify `cabal build all && cabal test`
 - [ ] Milestone 5: Missing API Fields
-  - [ ] Add `publicUrl :: Maybe Text` to `PageObject` and update `FromJSON`/`ToJSON`
+  - [x] Add `publicUrl :: Maybe Text` to `PageObject` and update `FromJSON`/`ToJSON` (done in Milestone 1)
   - [ ] Add `isLocked :: Maybe Bool` to `UpdateDatabase`
   - [ ] Add `filterProperties :: Maybe [Text]` to `QueryDatabase` and `QueryDataSource`
   - [ ] Add `resultType :: Maybe Text` to `QueryDataSource`

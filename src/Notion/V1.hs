@@ -50,7 +50,7 @@ import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (CreateDatabase, DatabaseID, DatabaseObject, QueryDatabase, UpdateDatabase)
 import Notion.V1.Databases qualified as Databases
 import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, UpdatePage, UpdatePageMarkdown)
+import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
 import Notion.V1.Pages qualified as Pages
 import Notion.V1.Search (SearchRequest)
 import Notion.V1.Search qualified as Search
@@ -97,6 +97,7 @@ makeMethods clientEnv token = Methods {..}
         :<|> ( retrievePage
                  :<|> createPage
                  :<|> updatePage
+                 :<|> retrievePageProperty
                  :<|> retrievePageMarkdown
                  :<|> updatePageMarkdown
                  :<|> movePage
@@ -169,6 +170,17 @@ data Methods = Methods
     createPage :: CreatePage -> IO PageObject,
     retrievePage :: PageID -> IO PageObject,
     updatePage :: PageID -> UpdatePage -> IO PageObject,
+    -- | Retrieve a single page property item.
+    -- For title, rich_text, relation, and people properties, the response may be paginated.
+    retrievePageProperty ::
+      PageID ->
+      Text ->
+      -- \^ property_id
+      Maybe Text ->
+      -- \^ start_cursor
+      Maybe Natural ->
+      -- \^ page_size
+      IO PropertyItemResponse,
     retrievePageMarkdown ::
       PageID ->
       Maybe Bool ->
