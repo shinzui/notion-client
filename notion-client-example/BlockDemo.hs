@@ -151,10 +151,10 @@ runBlockDemo methods pageIdStr = do
             }
 
       -- Paragraph with non-default color
-      coloredParagraph = ParagraphBlock boldRichText Blue Nothing
+      coloredParagraph = ParagraphBlock boldRichText Blue Nothing Vector.empty
 
       -- Toggleable heading
-      toggleableHeading = Heading2Block (mkRichText "This heading is toggleable") Default True
+      toggleableHeading = Heading2Block (mkRichText "This heading is toggleable") Default True Vector.empty
 
       fullControlBlocks =
         Vector.fromList
@@ -211,7 +211,52 @@ runBlockDemo methods pageIdStr = do
       _ -> putStrLn $ prefix <> Text.unpack (Blocks.type_ block)
 
   -- -----------------------------------------------------------------------
-  -- Section 6: Position-based insertion
+  -- Section 6: Nested blocks (children)
+  -- -----------------------------------------------------------------------
+  printHeader (Text.pack "Nested Blocks (Children)")
+
+  let nestedBlocks =
+        Vector.fromList
+          [ headingBlock 2 (mkRichText "Nested Block Examples"),
+            -- Toggle with two paragraph children
+            toggleBlock (mkRichText "Click to expand this toggle")
+              `withChildren` Vector.fromList
+                [ textBlock "First nested paragraph inside the toggle.",
+                  textBlock "Second nested paragraph inside the toggle."
+                ],
+            -- Bulleted list with nested sub-items
+            bulletedListItemBlock (mkRichText "Parent list item")
+              `withChildren` Vector.fromList
+                [ bulletedListItemBlock (mkRichText "Sub-item one"),
+                  bulletedListItemBlock (mkRichText "Sub-item two")
+                ],
+            -- Column layout with two columns
+            ColumnListBlock
+              { children =
+                  Vector.fromList
+                    [ ColumnBlock
+                        { children = Vector.singleton (textBlock "Left column content")
+                        },
+                      ColumnBlock
+                        { children = Vector.singleton (textBlock "Right column content")
+                        }
+                    ]
+              },
+            dividerBlock
+          ]
+      appendReq5 = AppendBlockChildren {children = nestedBlocks, position = Nothing}
+
+  result5 <-
+    runTest (Text.pack "Appending nested blocks") $
+      appendBlockChildren methods testPageId appendReq5
+  putStrLn $ "Appended " <> show (Vector.length $ results result5) <> " nested blocks"
+
+  -- Verify has_children on the toggle
+  let toggleResult = (Vector.toList (results result5)) !! 1
+  putStrLn $ "Toggle has_children: " <> show (Blocks.hasChildren toggleResult)
+
+  -- -----------------------------------------------------------------------
+  -- Section 7: Position-based insertion
   -- -----------------------------------------------------------------------
   printHeader (Text.pack "Position-based Insertion")
 

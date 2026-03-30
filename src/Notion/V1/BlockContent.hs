@@ -38,6 +38,9 @@ module Notion.V1.BlockContent
     bookmarkBlock,
     dividerBlock,
     imageBlock,
+
+    -- * Combinators
+    withChildren,
   )
 where
 
@@ -392,59 +395,75 @@ data BlockContent
     ParagraphBlock
       { richText :: Vector RichText,
         color :: Color,
-        paragraphIcon :: Maybe Icon
+        paragraphIcon :: Maybe Icon,
+        children :: Vector BlockContent
       }
   | -- | Heading level 1.
+    --
+    -- Children are only accepted by the API when @isToggleable@ is @True@.
     Heading1Block
       { richText :: Vector RichText,
         color :: Color,
-        isToggleable :: Bool
+        isToggleable :: Bool,
+        children :: Vector BlockContent
       }
   | -- | Heading level 2.
+    --
+    -- Children are only accepted by the API when @isToggleable@ is @True@.
     Heading2Block
       { richText :: Vector RichText,
         color :: Color,
-        isToggleable :: Bool
+        isToggleable :: Bool,
+        children :: Vector BlockContent
       }
   | -- | Heading level 3.
+    --
+    -- Children are only accepted by the API when @isToggleable@ is @True@.
     Heading3Block
       { richText :: Vector RichText,
         color :: Color,
-        isToggleable :: Bool
+        isToggleable :: Bool,
+        children :: Vector BlockContent
       }
   | -- | Bulleted list item.
     BulletedListItemBlock
       { richText :: Vector RichText,
-        color :: Color
+        color :: Color,
+        children :: Vector BlockContent
       }
   | -- | Numbered list item with optional format and start index.
     NumberedListItemBlock
       { richText :: Vector RichText,
         color :: Color,
         listFormat :: Maybe ListFormat,
-        listStartIndex :: Maybe Natural
+        listStartIndex :: Maybe Natural,
+        children :: Vector BlockContent
       }
   | -- | To-do checkbox item.
     ToDoBlock
       { richText :: Vector RichText,
         color :: Color,
-        checked :: Bool
+        checked :: Bool,
+        children :: Vector BlockContent
       }
   | -- | Toggle block (content revealed on click).
     ToggleBlock
       { richText :: Vector RichText,
-        color :: Color
+        color :: Color,
+        children :: Vector BlockContent
       }
   | -- | Quote block.
     QuoteBlock
       { richText :: Vector RichText,
-        color :: Color
+        color :: Color,
+        children :: Vector BlockContent
       }
   | -- | Callout block with icon.
     CalloutBlock
       { richText :: Vector RichText,
         color :: Color,
-        calloutIcon :: Maybe Icon
+        calloutIcon :: Maybe Icon,
+        children :: Vector BlockContent
       }
   | -- | Code block with language.
     CodeBlock
@@ -507,14 +526,23 @@ data BlockContent
       { color :: Color
       }
   | -- | Column list (container for columns).
+    --
+    -- Children must be 'ColumnBlock' values, with at least 2 entries.
     ColumnListBlock
+      { children :: Vector BlockContent
+      }
   | -- | Single column within a column list.
     ColumnBlock
+      { children :: Vector BlockContent
+      }
   | -- | Table block.
+    --
+    -- Children must be 'TableRowBlock' values.
     TableBlock
       { tableWidth :: Natural,
         hasColumnHeader :: Bool,
-        hasRowHeader :: Bool
+        hasRowHeader :: Bool,
+        children :: Vector BlockContent
       }
   | -- | Table row.
     TableRowBlock
@@ -529,8 +557,11 @@ data BlockContent
       { title :: Text
       }
   | -- | Synced block (original or reference).
+    --
+    -- Children are only valid when @syncedFrom@ is 'SyncedOriginal'.
     SyncedBlockContent
-      { syncedFrom :: SyncedFrom
+      { syncedFrom :: SyncedFrom,
+        children :: Vector BlockContent
       }
   | -- | Unsupported block type returned by the API.
     UnsupportedBlock
@@ -541,6 +572,12 @@ data BlockContent
 -- ---------------------------------------------------------------------------
 -- Serialization helpers
 -- ---------------------------------------------------------------------------
+
+-- | Include @\"children\"@ key only when the vector is non-empty.
+childrenPairs :: Vector BlockContent -> [Pair]
+childrenPairs cs
+  | Vector.null cs = []
+  | otherwise = ["children" .= cs]
 
 -- | Extract the JSON type name from a 'BlockContent' value.
 blockContentType :: BlockContent -> Text
@@ -557,33 +594,64 @@ blockContentFields = \case
       object $
         ["rich_text" .= richText, "color" .= color]
           <> maybe [] (\i -> ["icon" .= i]) paragraphIcon
+          <> childrenPairs children
     )
   Heading1Block {..} ->
-    ("heading_1", object ["rich_text" .= richText, "color" .= color, "is_toggleable" .= isToggleable])
+    ( "heading_1",
+      object $
+        ["rich_text" .= richText, "color" .= color, "is_toggleable" .= isToggleable]
+          <> childrenPairs children
+    )
   Heading2Block {..} ->
-    ("heading_2", object ["rich_text" .= richText, "color" .= color, "is_toggleable" .= isToggleable])
+    ( "heading_2",
+      object $
+        ["rich_text" .= richText, "color" .= color, "is_toggleable" .= isToggleable]
+          <> childrenPairs children
+    )
   Heading3Block {..} ->
-    ("heading_3", object ["rich_text" .= richText, "color" .= color, "is_toggleable" .= isToggleable])
+    ( "heading_3",
+      object $
+        ["rich_text" .= richText, "color" .= color, "is_toggleable" .= isToggleable]
+          <> childrenPairs children
+    )
   BulletedListItemBlock {..} ->
-    ("bulleted_list_item", object ["rich_text" .= richText, "color" .= color])
+    ( "bulleted_list_item",
+      object $
+        ["rich_text" .= richText, "color" .= color]
+          <> childrenPairs children
+    )
   NumberedListItemBlock {..} ->
     ( "numbered_list_item",
       object $
         ["rich_text" .= richText, "color" .= color]
           <> maybe [] (\f -> ["list_format" .= f]) listFormat
           <> maybe [] (\i -> ["list_start_index" .= i]) listStartIndex
+          <> childrenPairs children
     )
   ToDoBlock {..} ->
-    ("to_do", object ["rich_text" .= richText, "color" .= color, "checked" .= checked])
+    ( "to_do",
+      object $
+        ["rich_text" .= richText, "color" .= color, "checked" .= checked]
+          <> childrenPairs children
+    )
   ToggleBlock {..} ->
-    ("toggle", object ["rich_text" .= richText, "color" .= color])
+    ( "toggle",
+      object $
+        ["rich_text" .= richText, "color" .= color]
+          <> childrenPairs children
+    )
   QuoteBlock {..} ->
-    ("quote", object ["rich_text" .= richText, "color" .= color])
+    ( "quote",
+      object $
+        ["rich_text" .= richText, "color" .= color]
+          <> childrenPairs children
+    )
   CalloutBlock {..} ->
     ( "callout",
       object $
         ["rich_text" .= richText, "color" .= color]
           <> maybe [] (\i -> ["icon" .= i]) calloutIcon
+          <> childrenPairs children
     )
   CodeBlock {..} ->
     ("code", object ["rich_text" .= richText, "caption" .= caption, "language" .= language])
@@ -618,12 +686,16 @@ blockContentFields = \case
     ("breadcrumb", object [])
   TableOfContentsBlock {..} ->
     ("table_of_contents", object ["color" .= color])
-  ColumnListBlock ->
-    ("column_list", object [])
-  ColumnBlock ->
-    ("column", object [])
+  ColumnListBlock {..} ->
+    ("column_list", object $ childrenPairs children)
+  ColumnBlock {..} ->
+    ("column", object $ childrenPairs children)
   TableBlock {..} ->
-    ("table", object ["table_width" .= tableWidth, "has_column_header" .= hasColumnHeader, "has_row_header" .= hasRowHeader])
+    ( "table",
+      object $
+        ["table_width" .= tableWidth, "has_column_header" .= hasColumnHeader, "has_row_header" .= hasRowHeader]
+          <> childrenPairs children
+    )
   TableRowBlock {..} ->
     ("table_row", object ["cells" .= cells])
   ChildPageBlock {..} ->
@@ -631,7 +703,11 @@ blockContentFields = \case
   ChildDatabaseBlock {..} ->
     ("child_database", object ["title" .= title])
   SyncedBlockContent {..} ->
-    ("synced_block", object ["synced_from" .= syncedFrom])
+    ( "synced_block",
+      object $
+        ["synced_from" .= syncedFrom]
+          <> childrenPairs children
+    )
   UnsupportedBlock ->
     ("unsupported", object [])
   UnknownBlock typeName val ->
@@ -650,49 +726,59 @@ parseBlockContent typeName val = case typeName of
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
     paragraphIcon <- o .:? "icon"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure ParagraphBlock {..}
   "heading_1" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
     isToggleable <- fromMaybe False <$> o .:? "is_toggleable"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure Heading1Block {..}
   "heading_2" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
     isToggleable <- fromMaybe False <$> o .:? "is_toggleable"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure Heading2Block {..}
   "heading_3" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
     isToggleable <- fromMaybe False <$> o .:? "is_toggleable"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure Heading3Block {..}
   "bulleted_list_item" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure BulletedListItemBlock {..}
   "numbered_list_item" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
     listFormat <- o .:? "list_format"
     listStartIndex <- o .:? "list_start_index"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure NumberedListItemBlock {..}
   "to_do" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
     checked <- fromMaybe False <$> o .:? "checked"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure ToDoBlock {..}
   "toggle" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure ToggleBlock {..}
   "quote" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure QuoteBlock {..}
   "callout" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     color <- fromMaybe Default <$> o .:? "color"
     calloutIcon <- o .:? "icon"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure CalloutBlock {..}
   "code" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
@@ -740,12 +826,17 @@ parseBlockContent typeName val = case typeName of
   "table_of_contents" -> parseObj $ \o -> do
     color <- fromMaybe Default <$> o .:? "color"
     pure TableOfContentsBlock {..}
-  "column_list" -> pure ColumnListBlock
-  "column" -> pure ColumnBlock
+  "column_list" -> parseObj $ \o -> do
+    children <- fromMaybe Vector.empty <$> o .:? "children"
+    pure ColumnListBlock {..}
+  "column" -> parseObj $ \o -> do
+    children <- fromMaybe Vector.empty <$> o .:? "children"
+    pure ColumnBlock {..}
   "table" -> parseObj $ \o -> do
     tableWidth <- o .: "table_width"
     hasColumnHeader <- o .: "has_column_header"
     hasRowHeader <- o .: "has_row_header"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure TableBlock {..}
   "table_row" -> parseObj $ \o -> do
     cells <- o .: "cells"
@@ -758,6 +849,7 @@ parseBlockContent typeName val = case typeName of
     pure ChildDatabaseBlock {..}
   "synced_block" -> parseObj $ \o -> do
     syncedFrom <- o .: "synced_from"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
     pure SyncedBlockContent {..}
   "unsupported" -> pure UnsupportedBlock
   _ -> pure (UnknownBlock typeName val)
@@ -823,37 +915,37 @@ textBlock = paragraphBlock . mkRichText
 
 -- | Create a paragraph block.
 paragraphBlock :: Vector RichText -> BlockContent
-paragraphBlock rt = ParagraphBlock rt Default Nothing
+paragraphBlock rt = ParagraphBlock rt Default Nothing Vector.empty
 
 -- | Create a heading block at the given level (1, 2, or 3; defaults to 3).
 headingBlock :: Int -> Vector RichText -> BlockContent
-headingBlock 1 rt = Heading1Block rt Default False
-headingBlock 2 rt = Heading2Block rt Default False
-headingBlock _ rt = Heading3Block rt Default False
+headingBlock 1 rt = Heading1Block rt Default False Vector.empty
+headingBlock 2 rt = Heading2Block rt Default False Vector.empty
+headingBlock _ rt = Heading3Block rt Default False Vector.empty
 
 -- | Create a bulleted list item block.
 bulletedListItemBlock :: Vector RichText -> BlockContent
-bulletedListItemBlock rt = BulletedListItemBlock rt Default
+bulletedListItemBlock rt = BulletedListItemBlock rt Default Vector.empty
 
 -- | Create a numbered list item block.
 numberedListItemBlock :: Vector RichText -> BlockContent
-numberedListItemBlock rt = NumberedListItemBlock rt Default Nothing Nothing
+numberedListItemBlock rt = NumberedListItemBlock rt Default Nothing Nothing Vector.empty
 
 -- | Create a to-do block.
 toDoBlock :: Vector RichText -> Bool -> BlockContent
-toDoBlock rt isChecked = ToDoBlock rt Default isChecked
+toDoBlock rt isChecked = ToDoBlock rt Default isChecked Vector.empty
 
 -- | Create a toggle block.
 toggleBlock :: Vector RichText -> BlockContent
-toggleBlock rt = ToggleBlock rt Default
+toggleBlock rt = ToggleBlock rt Default Vector.empty
 
 -- | Create a quote block.
 quoteBlock :: Vector RichText -> BlockContent
-quoteBlock rt = QuoteBlock rt Default
+quoteBlock rt = QuoteBlock rt Default Vector.empty
 
 -- | Create a callout block with an optional icon.
 calloutBlock :: Vector RichText -> Maybe Icon -> BlockContent
-calloutBlock rt icon = CalloutBlock rt Default icon
+calloutBlock rt icon = CalloutBlock rt Default icon Vector.empty
 
 -- | Create a code block with a language.
 codeBlock :: Vector RichText -> CodeLanguage -> BlockContent
@@ -874,3 +966,23 @@ dividerBlock = DividerBlock
 -- | Create an image block from a file source.
 imageBlock :: FileSource -> BlockContent
 imageBlock src = ImageBlock src Vector.empty
+
+-- | Attach children to a block. For constructors that do not support
+-- children, the block is returned unchanged.
+withChildren :: BlockContent -> Vector BlockContent -> BlockContent
+withChildren block cs = case block of
+  ParagraphBlock {} -> block {children = cs}
+  Heading1Block {} -> block {children = cs}
+  Heading2Block {} -> block {children = cs}
+  Heading3Block {} -> block {children = cs}
+  BulletedListItemBlock {} -> block {children = cs}
+  NumberedListItemBlock {} -> block {children = cs}
+  ToDoBlock {} -> block {children = cs}
+  ToggleBlock {} -> block {children = cs}
+  QuoteBlock {} -> block {children = cs}
+  CalloutBlock {} -> block {children = cs}
+  ColumnListBlock {} -> block {children = cs}
+  ColumnBlock {} -> block {children = cs}
+  TableBlock {} -> block {children = cs}
+  SyncedBlockContent {} -> block {children = cs}
+  _ -> block

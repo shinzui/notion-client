@@ -9,7 +9,7 @@ import Data.Scientific (Scientific)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1
-import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), blockContentType, bookmarkBlock, bulletedListItemBlock, codeBlock, headingBlock, imageBlock, mkRichText, paragraphBlock, textBlock)
+import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), blockContentType, bookmarkBlock, bulletedListItemBlock, codeBlock, headingBlock, imageBlock, mkRichText, paragraphBlock, textBlock, toggleBlock, withChildren)
 import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (..))
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
@@ -244,6 +244,10 @@ jsonParsingTests =
       testCase "BlockContent round-trip: table" testBlockContentTable,
       testCase "BlockContent round-trip: bookmark" testBlockContentBookmark,
       testCase "BlockContent round-trip: unknown block" testBlockContentUnknown,
+      testCase "BlockContent round-trip: toggle with nested children" testBlockContentNestedToggle,
+      testCase "BlockContent round-trip: column list with columns" testBlockContentNestedColumnList,
+      testCase "BlockContent round-trip: withChildren combinator" testBlockContentWithChildren,
+      testCase "BlockContent: childless blocks omit children key" testBlockContentNoChildrenKey,
       testCase "BlockUpdate omits type key" testBlockUpdateSerialization
     ]
 
@@ -366,7 +370,7 @@ testBlockContentParagraph :: Assertion
 testBlockContentParagraph = roundTrip $ paragraphBlock (mkRichText "Hello world")
 
 testBlockContentHeading :: Assertion
-testBlockContentHeading = roundTrip $ Heading1Block (mkRichText "Title") Default True
+testBlockContentHeading = roundTrip $ Heading1Block (mkRichText "Title") Default True Vector.empty
 
 testBlockContentCode :: Assertion
 testBlockContentCode = roundTrip $ codeBlock (mkRichText "main = pure ()") Haskell
@@ -378,13 +382,56 @@ testBlockContentDivider :: Assertion
 testBlockContentDivider = roundTrip DividerBlock
 
 testBlockContentTable :: Assertion
-testBlockContentTable = roundTrip $ TableBlock 3 True False
+testBlockContentTable = roundTrip $ TableBlock 3 True False Vector.empty
 
 testBlockContentBookmark :: Assertion
 testBlockContentBookmark = roundTrip $ bookmarkBlock "https://haskell.org"
 
 testBlockContentUnknown :: Assertion
 testBlockContentUnknown = roundTrip $ UnknownBlock "custom_widget" (Aeson.object [("data", Aeson.String "test")])
+
+testBlockContentNestedToggle :: Assertion
+testBlockContentNestedToggle =
+  roundTrip $
+    ToggleBlock
+      { richText = mkRichText "Click to expand",
+        color = Default,
+        children =
+          Vector.fromList
+            [ textBlock "First child",
+              textBlock "Second child"
+            ]
+      }
+
+testBlockContentNestedColumnList :: Assertion
+testBlockContentNestedColumnList =
+  roundTrip $
+    ColumnListBlock
+      { children =
+          Vector.fromList
+            [ ColumnBlock {children = Vector.singleton (textBlock "Column 1 content")},
+              ColumnBlock {children = Vector.singleton (textBlock "Column 2 content")}
+            ]
+      }
+
+testBlockContentWithChildren :: Assertion
+testBlockContentWithChildren = do
+  let block = toggleBlock (mkRichText "Toggle") `withChildren` Vector.fromList [textBlock "Inner"]
+  roundTrip block
+  case block of
+    ToggleBlock {children} ->
+      assertEqual "should have 1 child" 1 (Vector.length children)
+    other -> assertFailure $ "Expected ToggleBlock, got: " <> show other
+
+testBlockContentNoChildrenKey :: Assertion
+testBlockContentNoChildrenKey = do
+  let json = Aeson.toJSON (paragraphBlock (mkRichText "No kids"))
+  case json of
+    Aeson.Object o -> case KeyMap.lookup "paragraph" o of
+      Just (Aeson.Object inner) ->
+        assertBool "childless block should not have 'children' key" (not $ KeyMap.member "children" inner)
+      _ -> assertFailure "Expected paragraph object"
+    _ -> assertFailure "Expected object"
 
 testBlockUpdateSerialization :: Assertion
 testBlockUpdateSerialization = do
@@ -866,6 +913,19 @@ testPageBlockLifecycle methods@Methods {createPage, appendBlockChildren, listBlo
       BlockObject {id = blockId} = firstBlock
   retrieved <- retrieveBlock blockId
   assertEqual "Retrieved block ID should match" blockId (Notion.V1.Blocks.id retrieved)
+
+  -- Append a toggle block with nested children
+  let nestedToggle =
+        toggleBlock (mkRichText "Toggle with children")
+          `withChildren` Vector.fromList [textBlock "Child paragraph 1", textBlock "Child paragraph 2"]
+      nestedReq = AppendBlockChildren {children = Vector.singleton nestedToggle, position = Nothing}
+  nestedResult <- appendBlockChildren pageId nestedReq
+  let toggleObj = Vector.head (results nestedResult)
+  assertBool "Toggle should have children" (Blocks.hasChildren toggleObj)
+
+  -- Fetch the toggle's children
+  toggleChildren <- listBlockChildren (Blocks.id toggleObj) Nothing Nothing
+  assertEqual "Toggle should have 2 children" 2 (Vector.length $ results toggleChildren)
 
   -- Append a block at the start position
   let startBlock = mkParagraphBlock "Inserted at start."

@@ -30,17 +30,17 @@ This is observable by running the example app and the e2e tests, which will crea
 
 ## Progress
 
-- [ ] Add `children :: Vector BlockContent` field to all constructors that support children (14 constructors)
-- [ ] Update `blockContentFields` to serialize children when non-empty
-- [ ] Update `parseBlockContent` to parse optional children
-- [ ] Update smart constructors to default children to `Vector.empty`
-- [ ] Add `withChildren` combinator for ergonomic child attachment
-- [ ] Update `FromJSON BlockContent` (standalone) to handle recursive children
-- [ ] Update round-trip tests
-- [ ] Add new unit tests for nested block serialization
-- [ ] Add e2e test: create toggle with nested children, verify via listBlockChildren
-- [ ] Update BlockDemo example with nested block examples
-- [ ] Verify full build: `cabal build all && cabal test`
+- [x] Add `children :: Vector BlockContent` field to all constructors that support children (14 constructors) — 2026-03-30
+- [x] Update `blockContentFields` to serialize children when non-empty — 2026-03-30
+- [x] Update `parseBlockContent` to parse optional children — 2026-03-30
+- [x] Update smart constructors to default children to `Vector.empty` — 2026-03-30
+- [x] Add `withChildren` combinator for ergonomic child attachment — 2026-03-30
+- [x] Update `FromJSON BlockContent` (standalone) to handle recursive children — 2026-03-30 (recursive parsing works via existing `FromJSON BlockContent` instance; `parseBlockContent` now parses `children` field)
+- [x] Update round-trip tests — 2026-03-30
+- [x] Add new unit tests for nested block serialization — 2026-03-30 (4 new tests: nested toggle, nested column list, withChildren combinator, no-children-key assertion)
+- [x] Add e2e test: create toggle with nested children, verify via listBlockChildren — 2026-03-30
+- [x] Update BlockDemo example with nested block examples — 2026-03-30 (toggle with children, nested bulleted list, column layout)
+- [x] Verify full build: `cabal build all && cabal test` — 2026-03-30 (all 87 tests pass)
 
 
 ## Surprises & Discoveries
@@ -73,7 +73,7 @@ This is observable by running the example app and the e2e tests, which will crea
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+Implementation completed in a single pass. All 14 constructors received children fields, serialization omits the field when empty (verified by unit test), and the recursive JSON parsing works through the existing `FromJSON BlockContent` instance. The e2e test confirmed that creating a toggle with inline children via a single `appendBlockChildren` call works correctly — the API returns `has_children = True` and `listBlockChildren` on the toggle returns the 2 child paragraphs. All 87 tests pass (4 new unit tests + 1 new e2e step).
 
 
 ## Context and Orientation
