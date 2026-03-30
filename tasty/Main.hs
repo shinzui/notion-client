@@ -9,7 +9,7 @@ import Data.Scientific (Scientific)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1
-import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), blockContentType, bookmarkBlock, bulletedListItemBlock, codeBlock, headingBlock, imageBlock, mkRichText, paragraphBlock, textBlock, toggleBlock, withChildren)
+import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), SyncedFrom (..), blockContentType, bookmarkBlock, bulletedListItemBlock, calloutBlock, codeBlock, dividerBlock, headingBlock, imageBlock, mkRichText, numberedListItemBlock, paragraphBlock, quoteBlock, textBlock, toDoBlock, toggleBlock, withChildren)
 import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (..))
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
@@ -246,8 +246,22 @@ jsonParsingTests =
       testCase "BlockContent round-trip: unknown block" testBlockContentUnknown,
       testCase "BlockContent round-trip: toggle with nested children" testBlockContentNestedToggle,
       testCase "BlockContent round-trip: column list with columns" testBlockContentNestedColumnList,
+      testCase "BlockContent round-trip: paragraph with children" testBlockContentNestedParagraph,
+      testCase "BlockContent round-trip: heading (toggleable) with children" testBlockContentNestedHeading,
+      testCase "BlockContent round-trip: bulleted list with children" testBlockContentNestedBulletedList,
+      testCase "BlockContent round-trip: numbered list with children" testBlockContentNestedNumberedList,
+      testCase "BlockContent round-trip: to-do with children" testBlockContentNestedToDo,
+      testCase "BlockContent round-trip: quote with children" testBlockContentNestedQuote,
+      testCase "BlockContent round-trip: callout with children" testBlockContentNestedCallout,
+      testCase "BlockContent round-trip: table with row children" testBlockContentNestedTable,
+      testCase "BlockContent round-trip: synced block with children" testBlockContentNestedSyncedBlock,
+      testCase "BlockContent round-trip: two-level nesting" testBlockContentTwoLevelNesting,
       testCase "BlockContent round-trip: withChildren combinator" testBlockContentWithChildren,
+      testCase "BlockContent: withChildren no-op on non-child types" testWithChildrenNoOp,
       testCase "BlockContent: childless blocks omit children key" testBlockContentNoChildrenKey,
+      testCase "BlockContent: blocks with children include children key" testBlockContentHasChildrenKey,
+      testCase "BlockUpdate with nested children" testBlockUpdateWithChildren,
+      testCase "BlockContent: parse from raw JSON with children" testParseBlockContentWithChildren,
       testCase "BlockUpdate omits type key" testBlockUpdateSerialization
     ]
 
@@ -423,6 +437,110 @@ testBlockContentWithChildren = do
       assertEqual "should have 1 child" 1 (Vector.length children)
     other -> assertFailure $ "Expected ToggleBlock, got: " <> show other
 
+testBlockContentNestedParagraph :: Assertion
+testBlockContentNestedParagraph =
+  roundTrip $
+    paragraphBlock (mkRichText "Parent paragraph")
+      `withChildren` Vector.singleton (textBlock "Child of paragraph")
+
+testBlockContentNestedHeading :: Assertion
+testBlockContentNestedHeading =
+  roundTrip $
+    Heading1Block
+      { richText = mkRichText "Toggleable heading",
+        color = Default,
+        isToggleable = True,
+        children = Vector.singleton (textBlock "Under the heading")
+      }
+
+testBlockContentNestedBulletedList :: Assertion
+testBlockContentNestedBulletedList =
+  roundTrip $
+    bulletedListItemBlock (mkRichText "Parent bullet")
+      `withChildren` Vector.fromList
+        [ bulletedListItemBlock (mkRichText "Sub-bullet A"),
+          bulletedListItemBlock (mkRichText "Sub-bullet B")
+        ]
+
+testBlockContentNestedNumberedList :: Assertion
+testBlockContentNestedNumberedList =
+  roundTrip $
+    numberedListItemBlock (mkRichText "Parent numbered")
+      `withChildren` Vector.fromList
+        [ numberedListItemBlock (mkRichText "Sub 1"),
+          numberedListItemBlock (mkRichText "Sub 2")
+        ]
+
+testBlockContentNestedToDo :: Assertion
+testBlockContentNestedToDo =
+  roundTrip $
+    toDoBlock (mkRichText "Task with sub-tasks") False
+      `withChildren` Vector.fromList
+        [ toDoBlock (mkRichText "Sub-task done") True,
+          toDoBlock (mkRichText "Sub-task pending") False
+        ]
+
+testBlockContentNestedQuote :: Assertion
+testBlockContentNestedQuote =
+  roundTrip $
+    quoteBlock (mkRichText "A quote")
+      `withChildren` Vector.singleton (textBlock "Attribution line")
+
+testBlockContentNestedCallout :: Assertion
+testBlockContentNestedCallout =
+  roundTrip $
+    calloutBlock (mkRichText "Notice") (Just (EmojiIcon "⚠️"))
+      `withChildren` Vector.fromList
+        [ textBlock "Detail one",
+          textBlock "Detail two"
+        ]
+
+testBlockContentNestedTable :: Assertion
+testBlockContentNestedTable =
+  roundTrip $
+    TableBlock
+      { tableWidth = 2,
+        hasColumnHeader = True,
+        hasRowHeader = False,
+        children =
+          Vector.fromList
+            [ TableRowBlock {cells = Vector.fromList [mkRichText "A", mkRichText "B"]},
+              TableRowBlock {cells = Vector.fromList [mkRichText "1", mkRichText "2"]}
+            ]
+      }
+
+testBlockContentNestedSyncedBlock :: Assertion
+testBlockContentNestedSyncedBlock =
+  roundTrip $
+    SyncedBlockContent
+      { syncedFrom = SyncedOriginal,
+        children = Vector.fromList [textBlock "Synced content", bulletedListItemBlock (mkRichText "Synced item")]
+      }
+
+testBlockContentTwoLevelNesting :: Assertion
+testBlockContentTwoLevelNesting =
+  roundTrip $
+    toggleBlock (mkRichText "Outer")
+      `withChildren` Vector.fromList
+        [ quoteBlock (mkRichText "Middle")
+            `withChildren` Vector.singleton (textBlock "Deepest"),
+          textBlock "Also in outer"
+        ]
+
+testWithChildrenNoOp :: Assertion
+testWithChildrenNoOp = do
+  let code = codeBlock (mkRichText "x = 1") Haskell
+      codeWithKids = code `withChildren` Vector.singleton (textBlock "ignored")
+  assertEqual "withChildren should be no-op on CodeBlock" code codeWithKids
+
+  let div = dividerBlock
+      divWithKids = div `withChildren` Vector.singleton (textBlock "ignored")
+  assertEqual "withChildren should be no-op on DividerBlock" div divWithKids
+
+  let bk = bookmarkBlock "https://example.com"
+      bkWithKids = bk `withChildren` Vector.singleton (textBlock "ignored")
+  assertEqual "withChildren should be no-op on BookmarkBlock" bk bkWithKids
+
 testBlockContentNoChildrenKey :: Assertion
 testBlockContentNoChildrenKey = do
   let json = Aeson.toJSON (paragraphBlock (mkRichText "No kids"))
@@ -432,6 +550,59 @@ testBlockContentNoChildrenKey = do
         assertBool "childless block should not have 'children' key" (not $ KeyMap.member "children" inner)
       _ -> assertFailure "Expected paragraph object"
     _ -> assertFailure "Expected object"
+
+testBlockContentHasChildrenKey :: Assertion
+testBlockContentHasChildrenKey = do
+  let block = toggleBlock (mkRichText "T") `withChildren` Vector.singleton (textBlock "C")
+      json = Aeson.toJSON block
+  case json of
+    Aeson.Object o -> case KeyMap.lookup "toggle" o of
+      Just (Aeson.Object inner) -> do
+        assertBool "block with children should have 'children' key" (KeyMap.member "children" inner)
+        case KeyMap.lookup "children" inner of
+          Just (Aeson.Array arr) ->
+            assertEqual "children array should have 1 element" 1 (Vector.length arr)
+          _ -> assertFailure "Expected children to be an array"
+      _ -> assertFailure "Expected toggle object"
+    _ -> assertFailure "Expected object"
+
+testBlockUpdateWithChildren :: Assertion
+testBlockUpdateWithChildren = do
+  let block = toggleBlock (mkRichText "T") `withChildren` Vector.singleton (textBlock "C")
+      update = Blocks.BlockUpdate block
+      json = Aeson.toJSON update
+  case json of
+    Aeson.Object o -> do
+      assertBool "should have 'toggle' key" (KeyMap.member "toggle" o)
+      assertBool "should NOT have 'type' key" (not $ KeyMap.member "type" o)
+      case KeyMap.lookup "toggle" o of
+        Just (Aeson.Object inner) ->
+          assertBool "update should include 'children' key" (KeyMap.member "children" inner)
+        _ -> assertFailure "Expected toggle object in update"
+    _ -> assertFailure "Expected object from BlockUpdate ToJSON"
+
+testParseBlockContentWithChildren :: Assertion
+testParseBlockContentWithChildren = do
+  let json =
+        "{\"type\":\"toggle\",\"toggle\":{\"rich_text\":[{\"type\":\"text\",\"text\":"
+          <> "{\"content\":\"Click\",\"link\":null},\"annotations\":{\"bold\":false,"
+          <> "\"italic\":false,\"strikethrough\":false,\"underline\":false,\"code\":false,"
+          <> "\"color\":\"default\"},\"plain_text\":\"Click\",\"href\":null}],"
+          <> "\"color\":\"default\",\"children\":[{\"type\":\"paragraph\",\"paragraph\":"
+          <> "{\"rich_text\":[{\"type\":\"text\",\"text\":{\"content\":\"Inner\",\"link\":null},"
+          <> "\"annotations\":{\"bold\":false,\"italic\":false,\"strikethrough\":false,"
+          <> "\"underline\":false,\"code\":false,\"color\":\"default\"},\"plain_text\":\"Inner\","
+          <> "\"href\":null}],\"color\":\"default\"}}]}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse: " <> err
+    Right block -> case (block :: BlockContent) of
+      ToggleBlock {children} -> do
+        assertEqual "should have 1 child" 1 (Vector.length children)
+        case Vector.head children of
+          ParagraphBlock {richText} ->
+            assertBool "child should have rich text" (not $ Vector.null richText)
+          other -> assertFailure $ "Expected ParagraphBlock child, got: " <> show other
+      other -> assertFailure $ "Expected ToggleBlock, got: " <> show other
 
 testBlockUpdateSerialization :: Assertion
 testBlockUpdateSerialization = do
