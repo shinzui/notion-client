@@ -943,7 +943,7 @@ testListTemplates methods@Methods {listDataSourceTemplates} dbIdText = do
 testQueryDataSource :: Methods -> Text.Text -> Assertion
 testQueryDataSource methods@Methods {queryDataSource} dbIdText = do
   dsId <- getFirstDataSourceId methods dbIdText
-  let queryReq = DataSources.QueryDataSource {filter = Nothing, sorts = Nothing, startCursor = Nothing, pageSize = Just 5, inTrash = Nothing}
+  let queryReq = DataSources.QueryDataSource {filter = Nothing, sorts = Nothing, startCursor = Nothing, pageSize = Just 5, inTrash = Nothing, filterProperties = Nothing}
   result <- queryDataSource dsId queryReq
   -- Just verify the endpoint responds and returns valid structure
   assertBool "Query should return results list" (hasMore result || Vector.null (results result) || not (Vector.null (results result)))

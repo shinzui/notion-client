@@ -131,6 +131,7 @@ data UpdateDatabase = UpdateDatabase
     cover :: Maybe Cover,
     description :: Maybe (Vector RichText),
     isInline :: Maybe Bool,
+    isLocked :: Maybe Bool,
     inTrash :: Maybe Bool,
     parent :: Maybe Parent
   }
@@ -144,7 +145,10 @@ data QueryDatabase = QueryDatabase
   { filter :: Maybe Filter,
     sorts :: Maybe [Sort],
     startCursor :: Maybe Text,
-    pageSize :: Maybe Natural
+    pageSize :: Maybe Natural,
+    -- | Limit which properties are returned in the response.
+    -- Each element is a property ID (not name).
+    filterProperties :: Maybe [Text]
   }
   deriving stock (Generic, Show)
 

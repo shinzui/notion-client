@@ -89,7 +89,9 @@ data CreateDataSource = CreateDataSource
   { parent :: Parent,
     properties :: Map Text PropertySchema,
     title :: Maybe (Vector RichText),
-    icon :: Maybe Icon
+    description :: Maybe (Vector RichText),
+    icon :: Maybe Icon,
+    cover :: Maybe Cover
   }
   deriving stock (Generic, Show)
 
@@ -132,7 +134,10 @@ data QueryDataSource = QueryDataSource
     sorts :: Maybe [Sort],
     startCursor :: Maybe Text,
     pageSize :: Maybe Natural,
-    inTrash :: Maybe Bool
+    inTrash :: Maybe Bool,
+    -- | Limit which properties are returned in the response.
+    -- Each element is a property ID (not name).
+    filterProperties :: Maybe [Text]
   }
   deriving stock (Generic, Show)
 

@@ -68,7 +68,8 @@ runDatabaseDemo methods databaseIdStr = do
             sorts = Just [PropertySort "Name" Ascending],
             startCursor = Nothing,
             pageSize = Just 5,
-            inTrash = Nothing
+            inTrash = Nothing,
+            filterProperties = Nothing
           }
   dsResults <-
     runTest (Text.pack "Querying data source") $
@@ -90,7 +91,9 @@ runDatabaseDemo methods databaseIdStr = do
           { parent = DatabaseParent {databaseId = databaseId},
             properties = newDsProperties,
             title = Nothing,
-            icon = Nothing
+            description = Nothing,
+            icon = Nothing,
+            cover = Nothing
           }
 
   newDataSource <-

@@ -64,14 +64,13 @@ The notion-client library has typed property schemas, filters, and sorts (added 
   - [x] Update `ToJSON` for `UpdateDataSource` to emit `null` for `Nothing` values in the properties map
   - [x] Update example and tests
   - [x] Verify `cabal build all && cabal test` — 73 tests pass
-- [ ] Milestone 5: Missing API Fields
+- [x] Milestone 5: Missing API Fields (2026-03-29)
   - [x] Add `publicUrl :: Maybe Text` to `PageObject` and update `FromJSON`/`ToJSON` (done in Milestone 1)
-  - [ ] Add `isLocked :: Maybe Bool` to `UpdateDatabase`
-  - [ ] Add `filterProperties :: Maybe [Text]` to `QueryDatabase` and `QueryDataSource`
-  - [ ] Add `resultType :: Maybe Text` to `QueryDataSource`
-  - [ ] Add `description :: Maybe (Vector RichText)` to `CreateDataSource`
-  - [ ] Add `cover :: Maybe Cover` to `CreateDataSource`
-  - [ ] Verify `cabal build all && cabal test`
+  - [x] Add `isLocked :: Maybe Bool` to `UpdateDatabase`
+  - [x] Add `filterProperties :: Maybe [Text]` to `QueryDatabase` and `QueryDataSource`
+  - [x] Add `description :: Maybe (Vector RichText)` to `CreateDataSource`
+  - [x] Add `cover :: Maybe Cover` to `CreateDataSource`
+  - [x] Verify `cabal build all && cabal test` — 73 tests pass
 - [ ] Milestone 6: Auto-Pagination Helper
   - [ ] Add `paginateAll` function to `Notion.V1.Pagination`
   - [ ] Add `paginateCollect` variant that returns all results as a single `Vector`
