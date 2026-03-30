@@ -3,6 +3,7 @@ module Main where
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.IORef (modifyIORef', newIORef, readIORef)
 import Data.Map qualified as Map
 import Data.Scientific (Scientific)
 import Data.Text qualified as Text
@@ -21,6 +22,7 @@ import Notion.V1.Databases qualified as Databases
 import Notion.V1.Error (NotionError (..))
 import Notion.V1.Filter qualified as F
 import Notion.V1.ListOf (ListOf (..))
+import Notion.V1.ListOf qualified as ListOf
 import Notion.V1.Pages
   ( ContentUpdate (..),
     CreatePage (..),
@@ -35,6 +37,7 @@ import Notion.V1.Pages
     mkCreatePage,
     mkUpdatePage,
   )
+import Notion.V1.Pagination (PaginationResult (..), paginateCollect)
 import Notion.V1.Properties qualified as Props
 import Notion.V1.PropertyValue qualified as PV
 import Notion.V1.RichText (Annotations (..), Date (..), RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
@@ -390,7 +393,8 @@ jsonSerializationTests =
       testCase "Filter: formula string contains" testFilterFormula,
       testCase "Sort: property ascending" testSortProperty,
       testCase "Sort: timestamp descending" testSortTimestamp,
-      testCase "UpdateDataSource nullable property deletion" testSerializeNullablePropertyDeletion
+      testCase "UpdateDataSource nullable property deletion" testSerializeNullablePropertyDeletion,
+      testCase "paginateAll collects all pages" testPaginateAll
     ]
 
 testSerializeAppendNoPosition :: Assertion
@@ -1142,6 +1146,46 @@ testSortTimestamp = do
       assertEqual "timestamp" (Just (Aeson.String "created_time")) (KeyMap.lookup "timestamp" o)
       assertEqual "direction" (Just (Aeson.String "descending")) (KeyMap.lookup "direction" o)
     _ -> assertFailure "Expected JSON object"
+
+testPaginateAll :: Assertion
+testPaginateAll = do
+  -- Mock a 3-page response sequence
+  callCount <- newIORef (0 :: Int)
+  let mockFetch cursor = do
+        modifyIORef' callCount (+ 1)
+        case cursor of
+          Nothing ->
+            pure $
+              ListOf.List
+                { results = Vector.fromList [1 :: Int, 2, 3],
+                  nextCursor = Just "cursor-1",
+                  hasMore = True,
+                  type_ = Nothing,
+                  object = Nothing
+                }
+          Just "cursor-1" ->
+            pure $
+              ListOf.List
+                { results = Vector.fromList [4, 5],
+                  nextCursor = Just "cursor-2",
+                  hasMore = True,
+                  type_ = Nothing,
+                  object = Nothing
+                }
+          _ ->
+            pure $
+              ListOf.List
+                { results = Vector.fromList [6],
+                  nextCursor = Nothing,
+                  hasMore = False,
+                  type_ = Nothing,
+                  object = Nothing
+                }
+  PaginationResult {allResults, totalPages} <- paginateCollect mockFetch
+  assertEqual "all results" (Vector.fromList [1, 2, 3, 4, 5, 6]) allResults
+  assertEqual "total pages" 3 totalPages
+  calls <- readIORef callCount
+  assertEqual "fetch called 3 times" 3 calls
 
 testSerializeNullablePropertyDeletion :: Assertion
 testSerializeNullablePropertyDeletion = do

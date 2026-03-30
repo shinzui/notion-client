@@ -71,12 +71,11 @@ The notion-client library has typed property schemas, filters, and sorts (added 
   - [x] Add `description :: Maybe (Vector RichText)` to `CreateDataSource`
   - [x] Add `cover :: Maybe Cover` to `CreateDataSource`
   - [x] Verify `cabal build all && cabal test` — 73 tests pass
-- [ ] Milestone 6: Auto-Pagination Helper
-  - [ ] Add `paginateAll` function to `Notion.V1.Pagination`
-  - [ ] Add `paginateCollect` variant that returns all results as a single `Vector`
-  - [ ] Wire helper usage into example app for data source queries
-  - [ ] Add test demonstrating pagination
-  - [ ] Verify `cabal build all && cabal test`
+- [x] Milestone 6: Auto-Pagination Helper (2026-03-29)
+  - [x] Add `paginateAll` function to `Notion.V1.Pagination`
+  - [x] Add `paginateCollect` variant that returns all results as a single `Vector`
+  - [x] Add test demonstrating pagination with mock callback
+  - [x] Verify `cabal build all && cabal test` — 74 tests pass
 - [ ] Milestone 7: Final Validation and Cleanup
   - [ ] Mark `queryDatabase` as deprecated in Haddock docs
   - [ ] Update CHANGELOG.md
