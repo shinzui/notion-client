@@ -43,22 +43,25 @@ main = do
     print page
 ```
 
-### Creating a page
+### Creating a page with typed properties
 
 ```haskell
 import Notion.V1
 import Notion.V1.Common (Parent(..))
 import Notion.V1.Pages
+import Notion.V1.PropertyValue qualified as PV
 import Data.Map qualified as Map
-import Data.Aeson (toJSON)
+import Data.Vector qualified as Vector
 
 createNewPage :: Methods -> IO PageObject
 createNewPage Methods{createPage} = do
     let pageProperties = Map.fromList
-            [ ("title", PropertyValue
-                { type_ = Title
-                , value = Just $ toJSON [-- rich text objects --]
-                })
+            [ ("title", PV.titleValue (Vector.singleton titleRichText))
+            , ("Status", PV.selectValue "In Progress")
+            , ("Priority", PV.selectValue "High")
+            , ("Due", PV.dateValue "2024-06-01" Nothing)
+            , ("Score", PV.numberValue 42)
+            , ("Done", PV.checkboxValue False)
             ]
 
         newPage = mkCreatePage
@@ -66,6 +69,18 @@ createNewPage Methods{createPage} = do
             pageProperties
 
     createPage newPage
+```
+
+### Reading typed properties
+
+```haskell
+import Notion.V1.PropertyValue
+
+readPageStatus :: PageObject -> Maybe Text
+readPageStatus page =
+    case Map.lookup "Status" (properties page) of
+        Just (SelectValue _ (Just opt)) -> Just (name opt)
+        _ -> Nothing
 ```
 
 ### Creating a page with markdown
@@ -104,6 +119,32 @@ editPage Methods{updatePageMarkdown} pageId =
                 ]
             , allowDeletingContent = Nothing
             }
+```
+
+### Error handling
+
+```haskell
+import Control.Exception (catch)
+import Notion.V1.Error (NotionError(..))
+
+safeRetrieve :: Methods -> PageID -> IO ()
+safeRetrieve Methods{retrievePage} pageId =
+    retrievePage pageId `catch` \(e :: NotionError) ->
+        putStrLn $ "Notion error: " <> code e <> " - " <> message e
+```
+
+### Auto-pagination
+
+```haskell
+import Notion.V1.Pagination (paginateAll)
+import Notion.V1.DataSources (QueryDataSource(..))
+
+allPages <- paginateAll $ \cursor ->
+    queryDataSource methods dsId QueryDataSource
+        { filter = Nothing, sorts = Nothing
+        , startCursor = cursor, pageSize = Just 100
+        , inTrash = Nothing, filterProperties = Nothing
+        }
 ```
 
 ## API Coverage

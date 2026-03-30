@@ -1,5 +1,26 @@
 # Changelog for notion-client
 
+## 0.5.0.0 (2026-03-29)
+
+### Breaking Changes
+* Replace untyped `PropertyValue`/`PropertyItem`/`PropertyValueType` with a proper `PropertyValue` sum type (23 variants) in new `Notion.V1.PropertyValue` module
+* Remove `SelectOption` from `Notion.V1.Pages` — use `SelectOptionValue` from `Notion.V1.PropertyValue` instead
+* `PageObject.properties` is now `Map Text PropertyValue` instead of `Map Text PropertyItem`
+* `CreatePage.properties` and `UpdatePage.properties` are now `Map Text PropertyValue`
+* `UpdateDataSource.properties` changes from `Maybe (Map Text PropertySchema)` to `Maybe (Map Text (Maybe PropertySchema))` to support property deletion via `null`
+* `QueryDatabase` and `QueryDataSource` gain a `filterProperties` field
+* `UpdateDatabase` gains an `isLocked` field
+* `CreateDataSource` gains `description` and `cover` fields
+
+### New Features
+* **Typed Property Values**: New `Notion.V1.PropertyValue` module with `PropertyValue` sum type for reading page properties via pattern matching, and smart constructors (`titleValue`, `selectValue`, `numberValue`, `checkboxValue`, `dateValue`, `statusValue`, `relationValue`, `peopleValue`, `filesValue`, etc.) for writes
+* **Page Property Item Endpoint**: Add `retrievePageProperty` method (`GET /v1/pages/{page_id}/properties/{property_id}`) with `PropertyItemResponse` type handling both single and paginated results
+* **Typed Error Handling**: `NotionError` now has an `Exception` instance. The client automatically parses Notion API errors into typed `NotionError` exceptions. Add `parseNotionError` helper and `ToJSON` instance
+* **Property Schema Deletion**: Set properties to `Nothing` in `UpdateDataSource` to delete them from the schema (emits `null` in JSON)
+* **Auto-Pagination**: New `paginateAll` and `paginateCollect` functions in `Notion.V1.Pagination` that follow cursors automatically
+* Add `publicUrl :: Maybe Text` to `PageObject`
+* Mark `queryDatabase` as deprecated in favor of `queryDataSource`
+
 ## 0.4.0.0 (2026-03-29)
 
 ### Breaking Changes

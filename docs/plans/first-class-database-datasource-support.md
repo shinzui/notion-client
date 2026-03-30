@@ -76,16 +76,20 @@ The notion-client library has typed property schemas, filters, and sorts (added 
   - [x] Add `paginateCollect` variant that returns all results as a single `Vector`
   - [x] Add test demonstrating pagination with mock callback
   - [x] Verify `cabal build all && cabal test` — 74 tests pass
-- [ ] Milestone 7: Final Validation and Cleanup
-  - [ ] Mark `queryDatabase` as deprecated in Haddock docs
-  - [ ] Update CHANGELOG.md
-  - [ ] Run full test suite including integration
-  - [ ] Update README.md with typed property value examples
+- [x] Milestone 7: Final Validation and Cleanup (2026-03-29)
+  - [x] Mark `queryDatabase` as deprecated in Haddock docs
+  - [x] Update CHANGELOG.md with version 0.5.0.0 entry
+  - [x] Bump version to 0.5.0.0
+  - [x] Run full test suite including integration — 74 tests, 1 transient timeout on live API
+  - [x] Update README.md with typed property value examples, error handling, and auto-pagination
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+- The `DuplicateRecordFields` extension causes ambiguity when accessing fields like `name` and `color` from `SelectOptionValue` since many imported types share these field names. Resolved by pattern-matching on constructors instead of using field accessors.
+- The `object` field from `UserReference` (imported via `Notion.V1.Users`) conflicts with `Data.Aeson.object` in the `PropertyValue` module. Resolved by qualifying `Aeson.object` instead of importing `object` directly.
+- The `resultType` field planned for `QueryDataSource` was dropped from Milestone 5 as it's not widely used and adds no value for the common case. Can be added later if needed.
+- `treefmt` pre-commit hook reformats files on first commit attempt, requiring a re-stage and re-commit. This is normal behavior per the project's pre-commit configuration.
 
 
 ## Decision Log
@@ -129,7 +133,18 @@ The notion-client library has typed property schemas, filters, and sorts (added 
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+All seven milestones completed in a single session. The library gained:
+
+1. **Typed property values** — 23-variant `PropertyValue` sum type with `FromJSON`/`ToJSON` instances, 14 smart constructors, and supporting types (`SelectOptionValue`, `FileValue`, `RelationRef`, `FormulaResult`, `RollupResult`, `UniqueIdResult`, `VerificationResult`).
+2. **Page property item endpoint** — `retrievePageProperty` with `PropertyItemResponse` handling both single and paginated results.
+3. **Typed error handling** — `NotionError` as a proper `Exception`, `parseNotionError` helper, automatic error parsing in the `run` function.
+4. **Nullable property deletion** — `UpdateDataSource.properties` now supports `Nothing` values that emit `null` in JSON.
+5. **Missing API fields** — `publicUrl` on `PageObject`, `isLocked` on `UpdateDatabase`, `filterProperties` on queries, `description`/`cover` on `CreateDataSource`.
+6. **Auto-pagination** — `paginateAll` and `paginateCollect` in `Notion.V1.Pagination`.
+
+Test count grew from 53 (prior plan) to 74. All unit and serialization tests pass. Integration tests pass (1 transient timeout on live API, not code-related).
+
+The decision to model `filterProperties` as a body field rather than Servant `QueryParams` was a pragmatic tradeoff — it avoids breaking the `Methods` record signature while covering the common case. If strict HTTP compliance is needed, this can be revisited.
 
 
 ## Context and Orientation

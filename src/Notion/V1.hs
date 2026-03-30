@@ -153,6 +153,7 @@ data Methods = Methods
     createDatabase :: CreateDatabase -> IO DatabaseObject,
     retrieveDatabase :: DatabaseID -> IO DatabaseObject,
     updateDatabase :: DatabaseID -> UpdateDatabase -> IO DatabaseObject,
+    -- | @Deprecated: Use 'queryDataSource' instead.@
     queryDatabase :: DatabaseID -> QueryDatabase -> IO (ListOf PageObject),
     -- \* Data Sources
     retrieveDataSource :: DataSourceID -> IO DataSourceObject,
