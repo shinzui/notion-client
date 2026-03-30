@@ -18,6 +18,7 @@ import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?))
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
+import Notion.V1.Filter (Filter, Sort)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Pages (PageObject)
 import Notion.V1.Properties (PropertySchema)
@@ -140,8 +141,8 @@ instance ToJSON UpdateDatabase where
 
 -- | Query database request
 data QueryDatabase = QueryDatabase
-  { filter :: Maybe Value,
-    sorts :: Maybe [Value],
+  { filter :: Maybe Filter,
+    sorts :: Maybe [Sort],
     startCursor :: Maybe Text,
     pageSize :: Maybe Natural
   }

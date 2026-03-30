@@ -17,6 +17,7 @@ import Notion.V1.DataSources (DataSourceObject (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.Databases qualified as Databases
+import Notion.V1.Filter qualified as F
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages
   ( ContentUpdate (..),
@@ -352,7 +353,15 @@ jsonSerializationTests =
       testCase "PropertySchema relation dual round-trip" testPropertySchemaRelationRoundTrip,
       testCase "PropertySchema status round-trip" testPropertySchemaStatusRoundTrip,
       testCase "NumberFormat round-trip" testNumberFormatRoundTrip,
-      testCase "RollupFunction round-trip" testRollupFunctionRoundTrip
+      testCase "RollupFunction round-trip" testRollupFunctionRoundTrip,
+      testCase "Filter: property title contains" testFilterPropertyTitle,
+      testCase "Filter: compound And" testFilterCompoundAnd,
+      testCase "Filter: timestamp created_time" testFilterTimestamp,
+      testCase "Filter: number greater_than" testFilterNumber,
+      testCase "Filter: date next_week" testFilterDateRelative,
+      testCase "Filter: formula string contains" testFilterFormula,
+      testCase "Sort: property ascending" testSortProperty,
+      testCase "Sort: timestamp descending" testSortTimestamp
     ]
 
 testSerializeAppendNoPosition :: Assertion
@@ -999,6 +1008,111 @@ testViewLifecycle methods@Methods {createView, retrieveView, updateView, listVie
   deleted <- deleteView viewId
   let ViewObject {id = deletedViewId} = deleted
   assertEqual "Deleted view ID should match" viewId deletedViewId
+
+-- =====================================================================
+-- Filter and Sort Tests
+-- =====================================================================
+
+testFilterPropertyTitle :: Assertion
+testFilterPropertyTitle = do
+  let f = F.PropertyFilter "Name" (F.TitleCondition (F.TextContains "test"))
+      json = Aeson.toJSON f
+  case json of
+    Aeson.Object o -> do
+      assertEqual "property" (Just (Aeson.String "Name")) (KeyMap.lookup "property" o)
+      case KeyMap.lookup "title" o of
+        Just (Aeson.Object t) ->
+          assertEqual "contains" (Just (Aeson.String "test")) (KeyMap.lookup "contains" t)
+        _ -> assertFailure "Expected title object"
+    _ -> assertFailure "Expected JSON object"
+
+testFilterCompoundAnd :: Assertion
+testFilterCompoundAnd = do
+  let f =
+        F.And
+          [ F.PropertyFilter "Status" (F.SelectCondition (F.SelectEquals "Done")),
+            F.PropertyFilter "Priority" (F.SelectCondition (F.SelectEquals "High"))
+          ]
+      json = Aeson.toJSON f
+  case json of
+    Aeson.Object o ->
+      case KeyMap.lookup "and" o of
+        Just (Aeson.Array arr) -> assertEqual "and array length" 2 (Vector.length arr)
+        _ -> assertFailure "Expected and array"
+    _ -> assertFailure "Expected JSON object"
+
+testFilterTimestamp :: Assertion
+testFilterTimestamp = do
+  let f = F.TimestampFilter F.FilterCreatedTime (F.DateAfter "2024-01-01")
+      json = Aeson.toJSON f
+  case json of
+    Aeson.Object o -> do
+      assertEqual "timestamp" (Just (Aeson.String "created_time")) (KeyMap.lookup "timestamp" o)
+      case KeyMap.lookup "created_time" o of
+        Just (Aeson.Object t) ->
+          assertEqual "after" (Just (Aeson.String "2024-01-01")) (KeyMap.lookup "after" t)
+        _ -> assertFailure "Expected created_time object"
+    _ -> assertFailure "Expected JSON object"
+
+testFilterNumber :: Assertion
+testFilterNumber = do
+  let f = F.PropertyFilter "Score" (F.NumberCondition (F.NumGreaterThan 90))
+      json = Aeson.toJSON f
+  case json of
+    Aeson.Object o -> do
+      assertEqual "property" (Just (Aeson.String "Score")) (KeyMap.lookup "property" o)
+      case KeyMap.lookup "number" o of
+        Just (Aeson.Object n) ->
+          assertEqual "greater_than" (Just (Aeson.Number 90)) (KeyMap.lookup "greater_than" n)
+        _ -> assertFailure "Expected number object"
+    _ -> assertFailure "Expected JSON object"
+
+testFilterDateRelative :: Assertion
+testFilterDateRelative = do
+  let f = F.PropertyFilter "Due" (F.DateCondition F.DateNextWeek)
+      json = Aeson.toJSON f
+  case json of
+    Aeson.Object o ->
+      case KeyMap.lookup "date" o of
+        Just (Aeson.Object d) ->
+          assertEqual "next_week" (Just (Aeson.object [])) (KeyMap.lookup "next_week" d)
+        _ -> assertFailure "Expected date object"
+    _ -> assertFailure "Expected JSON object"
+
+testFilterFormula :: Assertion
+testFilterFormula = do
+  let f = F.PropertyFilter "Computed" (F.FormulaCondition (F.FormulaString (F.TextContains "yes")))
+      json = Aeson.toJSON f
+  case json of
+    Aeson.Object o ->
+      case KeyMap.lookup "formula" o of
+        Just (Aeson.Object fm) ->
+          case KeyMap.lookup "string" fm of
+            Just (Aeson.Object s) ->
+              assertEqual "contains" (Just (Aeson.String "yes")) (KeyMap.lookup "contains" s)
+            _ -> assertFailure "Expected string object inside formula"
+        _ -> assertFailure "Expected formula object"
+    _ -> assertFailure "Expected JSON object"
+
+testSortProperty :: Assertion
+testSortProperty = do
+  let s = F.PropertySort "Name" F.Ascending
+      json = Aeson.toJSON s
+  case json of
+    Aeson.Object o -> do
+      assertEqual "property" (Just (Aeson.String "Name")) (KeyMap.lookup "property" o)
+      assertEqual "direction" (Just (Aeson.String "ascending")) (KeyMap.lookup "direction" o)
+    _ -> assertFailure "Expected JSON object"
+
+testSortTimestamp :: Assertion
+testSortTimestamp = do
+  let s = F.TimestampSort F.FilterCreatedTime F.Descending
+      json = Aeson.toJSON s
+  case json of
+    Aeson.Object o -> do
+      assertEqual "timestamp" (Just (Aeson.String "created_time")) (KeyMap.lookup "timestamp" o)
+      assertEqual "direction" (Just (Aeson.String "descending")) (KeyMap.lookup "direction" o)
+    _ -> assertFailure "Expected JSON object"
 
 -- =====================================================================
 -- Property Schema Tests

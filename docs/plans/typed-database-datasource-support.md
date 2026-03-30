@@ -37,23 +37,24 @@ The library's existing CRUD endpoints for databases and data sources remain unch
   - [x] Expose `Notion.V1.Properties` in cabal file (2026-03-29)
   - [x] Add JSON round-trip tests for property schema types (7 tests) (2026-03-29)
   - [x] Verify `cabal build all` succeeds — all 45 tests pass (2026-03-29)
-- [ ] Milestone 2: Typed Query Filters
-  - [ ] Create `src/Notion/V1/Filter.hs` with `Filter` sum type (compound + property + timestamp)
-  - [ ] Add `TextFilter`, `NumberFilter`, `CheckboxFilter`, `SelectFilter`, `MultiSelectFilter`, `DateFilter`, `PeopleFilter`, `FilesFilter`, `RelationFilter`, `StatusFilter`, `UniqueIdFilter`, `VerificationFilter`, `FormulaFilter`, `RollupFilter` types
-  - [ ] Add `ToJSON` instances for all filter types (filters are write-only; the API does not return filters in responses)
-  - [ ] Replace `filter :: Maybe Value` in `QueryDatabase` with `Maybe Filter`
-  - [ ] Replace `filter :: Maybe Value` in `QueryDataSource` with `Maybe Filter`
-  - [ ] Expose `Notion.V1.Filter` in cabal file
-  - [ ] Add JSON serialization tests for filter types
-  - [ ] Verify `cabal build all` succeeds
-- [ ] Milestone 3: Typed Query Sorts
-  - [ ] Add `Sort` sum type (`PropertySort` and `TimestampSort`) and `SortDirection` enum to `Notion.V1.Filter` (or a dedicated module if needed)
-  - [ ] Add `TimestampType` enum (`CreatedTime` / `LastEditedTime`)
-  - [ ] Add `ToJSON` instances for sort types
-  - [ ] Replace `sorts :: Maybe [Value]` in `QueryDatabase` with `Maybe [Sort]`
-  - [ ] Replace `sorts :: Maybe [Value]` in `QueryDataSource` with `Maybe [Sort]`
-  - [ ] Add JSON serialization tests for sort types
-  - [ ] Verify `cabal build all` succeeds
+- [x] Milestone 2: Typed Query Filters (2026-03-29)
+  - [x] Create `src/Notion/V1/Filter.hs` with `Filter` sum type (compound + property + timestamp) (2026-03-29)
+  - [x] Add all 14 condition types: `TextCondition`, `NumberCondition`, `CheckboxCondition`, `SelectCondition`, `MultiSelectCondition`, `DateCondition`, `PeopleCondition`, `FilesCondition`, `RelationCondition`, `StatusCondition`, `UniqueIdCondition`, `VerificationCondition`, `FormulaCondition`, `RollupCondition` (2026-03-29)
+  - [x] Add `ToJSON` instances for all filter types (2026-03-29)
+  - [x] Replace `filter :: Maybe Value` in `QueryDatabase` with `Maybe Filter` (2026-03-29)
+  - [x] Replace `filter :: Maybe Value` in `QueryDataSource` with `Maybe Filter` (2026-03-29)
+  - [x] Expose `Notion.V1.Filter` in cabal file (2026-03-29)
+  - [x] Add `scientific` dependency to cabal file (2026-03-29)
+  - [x] Add 6 JSON serialization tests for filter types (2026-03-29)
+  - [x] Verify `cabal build all` succeeds (2026-03-29)
+- [x] Milestone 3: Typed Query Sorts (2026-03-29)
+  - [x] Add `Sort` sum type (`PropertySort` and `TimestampSort`) and `SortDirection` enum to `Notion.V1.Filter` (2026-03-29)
+  - [x] Add `TimestampType` enum (`FilterCreatedTime` / `FilterLastEditedTime`) (2026-03-29)
+  - [x] Add `ToJSON` instances for sort types (2026-03-29)
+  - [x] Replace `sorts :: Maybe [Value]` in `QueryDatabase` with `Maybe [Sort]` (2026-03-29)
+  - [x] Replace `sorts :: Maybe [Value]` in `QueryDataSource` with `Maybe [Sort]` (2026-03-29)
+  - [x] Add 2 JSON serialization tests for sort types (2026-03-29)
+  - [x] Verify `cabal build all` succeeds — all 53 tests pass (2026-03-29)
 - [ ] Milestone 4: Update Example App and Validation
   - [ ] Update `notion-client-example/DatabaseDemo.hs` to use typed property schemas, filters, and sorts instead of raw `Aeson.Value`
   - [ ] Add E2E tests that exercise typed filters and sorts against live API
