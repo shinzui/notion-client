@@ -18,6 +18,7 @@ import Notion.V1.DataSources (DataSourceObject (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.Databases qualified as Databases
+import Notion.V1.Error (NotionError (..))
 import Notion.V1.Filter qualified as F
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages
@@ -243,6 +244,7 @@ jsonParsingTests =
     [ testCase "Parse BlockObject with in_trash" testParseBlockObject,
       testCase "Parse BlockObject with legacy archived field" testParseBlockObjectLegacy,
       testCase "Parse PageObject with in_trash" testParsePageObject,
+      testCase "Parse NotionError from JSON" testParseNotionError,
       testCase "Parse DatabaseObject with in_trash" testParseDatabaseObject,
       testCase "Parse DataSourceObject with in_trash" testParseDataSourceObject
     ]
@@ -333,6 +335,20 @@ testParseDataSourceObject = do
     Left err -> assertFailure $ "Failed to parse DataSourceObject: " <> err
     Right ds -> do
       assertEqual "inTrash should be Just False" (Just False) (Notion.V1.DataSources.inTrash ds)
+
+testParseNotionError :: Assertion
+testParseNotionError = do
+  let json =
+        "{\"object\":\"error\",\"status\":400,\"code\":\"validation_error\""
+          <> ",\"message\":\"The provided page ID is not a valid UUID.\""
+          <> ",\"details\":null}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse NotionError: " <> err
+    Right notionErr -> do
+      let NotionError {status = errStatus, code = errCode, message = errMessage} = notionErr
+      assertEqual "status" 400 errStatus
+      assertEqual "code" "validation_error" errCode
+      assertEqual "message" "The provided page ID is not a valid UUID." errMessage
 
 -- =====================================================================
 -- JSON Serialization Tests (unit tests, no API token needed)

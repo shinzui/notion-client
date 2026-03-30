@@ -49,6 +49,7 @@ import Notion.V1.DataSources (DataSourceID, DataSourceObject)
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (CreateDatabase, DatabaseID, DatabaseObject, QueryDatabase, UpdateDatabase)
 import Notion.V1.Databases qualified as Databases
+import Notion.V1.Error (parseNotionError)
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
 import Notion.V1.Pages qualified as Pages
@@ -132,7 +133,9 @@ makeMethods clientEnv token = Methods {..}
     run clientM = do
       result <- Client.runClientM clientM clientEnv
       case result of
-        Left exception -> Exception.throwIO exception
+        Left err -> case parseNotionError err of
+          Just notionErr -> Exception.throwIO notionErr
+          Nothing -> Exception.throwIO err
         Right a -> return a
 
     -- Keep the ListOf structure

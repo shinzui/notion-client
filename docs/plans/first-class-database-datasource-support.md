@@ -52,13 +52,13 @@ The notion-client library has typed property schemas, filters, and sorts (added 
   - [x] Add `GET /v1/pages/{page_id}/properties/{property_id}` to Pages API type
   - [x] Wire `retrievePageProperty` into `Methods` record
   - [x] Verify `cabal build all && cabal test` — 71 tests pass
-- [ ] Milestone 3: Typed Error Handling
-  - [ ] Add `Exception` instance to `NotionError`
-  - [ ] Add `parseNotionError :: Client.ClientError -> Maybe NotionError` helper
-  - [ ] Update `run` in `makeMethods` to parse response body into `NotionError` on failure
-  - [ ] Add `ToJSON` instance for `NotionError` (for completeness)
-  - [ ] Add test that verifies `NotionError` parses from a sample error JSON
-  - [ ] Verify `cabal build all && cabal test`
+- [x] Milestone 3: Typed Error Handling (2026-03-29)
+  - [x] Add `Exception` instance to `NotionError`
+  - [x] Add `parseNotionError :: Client.ClientError -> Maybe NotionError` helper
+  - [x] Update `run` in `makeMethods` to parse response body into `NotionError` on failure
+  - [x] Add `ToJSON` instance for `NotionError` (for completeness)
+  - [x] Add test that verifies `NotionError` parses from a sample error JSON
+  - [x] Verify `cabal build all && cabal test` — 72 tests pass
 - [ ] Milestone 4: Property Schema Deletion and Nullable Properties
   - [ ] Change `UpdateDataSource.properties` from `Maybe (Map Text PropertySchema)` to `Maybe (Map Text (Maybe PropertySchema))`
   - [ ] Update `ToJSON` for `UpdateDataSource` to emit `null` for `Nothing` values in the properties map
