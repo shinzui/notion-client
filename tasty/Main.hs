@@ -4,6 +4,7 @@ import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Map qualified as Map
+import Data.Scientific (Scientific)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1
@@ -25,8 +26,6 @@ import Notion.V1.Pages
     MovePage (..),
     PageMarkdown (..),
     PageObject (..),
-    PropertyValue (..),
-    PropertyValueType (..),
     ReplaceContentRequest (..),
     Template (..),
     UpdateContentRequest (..),
@@ -36,7 +35,8 @@ import Notion.V1.Pages
     mkUpdatePage,
   )
 import Notion.V1.Properties qualified as Props
-import Notion.V1.RichText (Annotations (..), RichTextContent (..), TextContent (..), defaultAnnotations)
+import Notion.V1.PropertyValue qualified as PV
+import Notion.V1.RichText (Annotations (..), Date (..), RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Notion.V1.RichText qualified as RT
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), dataSourceFilter, pageFilter, parseSearchResults)
 import Notion.V1.Users (UserObject (..))
@@ -152,6 +152,7 @@ tests = do
       "Notion Client Tests"
       [ jsonParsingTests,
         jsonSerializationTests,
+        propertyValueTests,
         basicIntegration,
         markdownE2E,
         pageE2E,
@@ -188,11 +189,22 @@ mkHeadingBlock t level =
           (Key.fromText headingType, Aeson.object [("rich_text", mkRichTextValue t)])
         ]
 
+-- | Helper to create a plain RichText from a string
+mkPlainRichText :: Text.Text -> RichText
+mkPlainRichText t =
+  RichText
+    { plainText = t,
+      href = Nothing,
+      annotations = defaultAnnotations,
+      type_ = "text",
+      content = TextContentWrapper (TextContent {content = t, link = Nothing})
+    }
+
 -- | Helper to create a simple test page under a parent page
 createTestPage :: Methods -> Text.Text -> Text.Text -> IO PageObject
 createTestPage Methods {createPage} parentPageId title = do
-  let titleProp = Aeson.object [("title", mkRichTextValue title)]
-      props = Map.fromList [("title", PropertyValue {type_ = Title, value = Just titleProp})]
+  let titleRt = mkPlainRichText title
+      props = Map.fromList [("title", PV.titleValue (Vector.singleton titleRt))]
       req = mkCreatePage (PageParent {pageId = UUID parentPageId}) props
   createPage req
 
@@ -924,8 +936,8 @@ testCreateMarkdownPageInDatabase methods@Methods {createPage, retrievePageMarkdo
   dsId <- getFirstDataSourceId methods dbIdText
 
   -- Create a page in the database's data source
-  let titleProp = Aeson.object [("title", mkRichTextValue "Database Markdown E2E")]
-      props = Map.fromList [("title", PropertyValue {type_ = Title, value = Just titleProp})]
+  let titleRt = mkPlainRichText "Database Markdown E2E"
+      props = Map.fromList [("title", PV.titleValue (Vector.singleton titleRt))]
       req = mkCreatePage (DataSourceParent {dataSourceId = dsId}) props
   page <- createPage req
   let PageObject {id = pageId} = page
@@ -1113,6 +1125,227 @@ testSortTimestamp = do
       assertEqual "timestamp" (Just (Aeson.String "created_time")) (KeyMap.lookup "timestamp" o)
       assertEqual "direction" (Just (Aeson.String "descending")) (KeyMap.lookup "direction" o)
     _ -> assertFailure "Expected JSON object"
+
+-- =====================================================================
+-- Property Value Tests
+-- =====================================================================
+
+propertyValueTests :: TestTree
+propertyValueTests =
+  testGroup
+    "Property Value"
+    [ testCase "TitleValue FromJSON" testParseTitleValue,
+      testCase "SelectValue FromJSON" testParseSelectValue,
+      testCase "NumberValue FromJSON" testParseNumberValue,
+      testCase "CheckboxValue FromJSON" testParseCheckboxValue,
+      testCase "DateValue FromJSON" testParseDateValue,
+      testCase "RelationValue FromJSON" testParseRelationValue,
+      testCase "StatusValue FromJSON" testParseStatusValue,
+      testCase "MultiSelectValue FromJSON" testParseMultiSelectValue,
+      testCase "UrlValue FromJSON" testParseUrlValue,
+      testCase "FormulaValue FromJSON" testParseFormulaValue,
+      testCase "TitleValue ToJSON" testSerializeTitleValue,
+      testCase "SelectValue ToJSON" testSerializeSelectValue,
+      testCase "NumberValue ToJSON" testSerializeNumberValue,
+      testCase "CheckboxValue ToJSON" testSerializeCheckboxValue,
+      testCase "DateValue ToJSON" testSerializeDateValue,
+      testCase "StatusValue ToJSON" testSerializeStatusValue,
+      testCase "Smart constructor: selectValue" testSmartSelectValue,
+      testCase "Smart constructor: titleValue" testSmartTitleValue
+    ]
+
+testParseTitleValue :: Assertion
+testParseTitleValue = do
+  let json =
+        "{\"id\":\"title\",\"type\":\"title\",\"title\":[{\"type\":\"text\",\"plain_text\":\"Hello\",\"annotations\":{\"bold\":false,\"italic\":false,\"strikethrough\":false,\"underline\":false,\"code\":false,\"color\":\"default\"},\"text\":{\"content\":\"Hello\",\"link\":null}}]}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse TitleValue: " <> err
+    Right (PV.TitleValue pid rts) -> do
+      assertEqual "property id" "title" pid
+      assertEqual "rich text count" 1 (Vector.length rts)
+    Right other -> assertFailure $ "Expected TitleValue, got: " <> show other
+
+testParseSelectValue :: Assertion
+testParseSelectValue = do
+  let json =
+        "{\"id\":\"abc\",\"type\":\"select\",\"select\":{\"id\":\"opt-1\",\"name\":\"Done\",\"color\":\"green\"}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse SelectValue: " <> err
+    Right (PV.SelectValue pid (Just (PV.SelectOptionValue _ optName optColor))) -> do
+      assertEqual "property id" "abc" pid
+      assertEqual "option name" "Done" optName
+      assertEqual "option color" (Just "green") optColor
+    Right other -> assertFailure $ "Expected SelectValue, got: " <> show other
+
+testParseNumberValue :: Assertion
+testParseNumberValue = do
+  let json = "{\"id\":\"num\",\"type\":\"number\",\"number\":42}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse NumberValue: " <> err
+    Right (PV.NumberValue pid (Just n)) -> do
+      assertEqual "property id" "num" pid
+      assertEqual "number value" (42 :: Scientific) n
+    Right other -> assertFailure $ "Expected NumberValue, got: " <> show other
+
+testParseCheckboxValue :: Assertion
+testParseCheckboxValue = do
+  let json = "{\"id\":\"chk\",\"type\":\"checkbox\",\"checkbox\":true}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse CheckboxValue: " <> err
+    Right (PV.CheckboxValue pid v) -> do
+      assertEqual "property id" "chk" pid
+      assertEqual "checkbox value" True v
+    Right other -> assertFailure $ "Expected CheckboxValue, got: " <> show other
+
+testParseDateValue :: Assertion
+testParseDateValue = do
+  let json = "{\"id\":\"dt\",\"type\":\"date\",\"date\":{\"start\":\"2024-01-15\",\"end\":null,\"time_zone\":null}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse DateValue: " <> err
+    Right (PV.DateValue pid (Just d)) -> do
+      assertEqual "property id" "dt" pid
+      assertEqual "start" "2024-01-15" (start (d :: Date))
+    Right other -> assertFailure $ "Expected DateValue, got: " <> show other
+
+testParseRelationValue :: Assertion
+testParseRelationValue = do
+  let json = "{\"id\":\"rel\",\"type\":\"relation\",\"relation\":[{\"id\":\"page-1\"},{\"id\":\"page-2\"}]}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse RelationValue: " <> err
+    Right (PV.RelationValue pid refs) -> do
+      assertEqual "property id" "rel" pid
+      assertEqual "relation count" 2 (Vector.length refs)
+    Right other -> assertFailure $ "Expected RelationValue, got: " <> show other
+
+testParseStatusValue :: Assertion
+testParseStatusValue = do
+  let json = "{\"id\":\"st\",\"type\":\"status\",\"status\":{\"id\":\"opt-1\",\"name\":\"In Progress\",\"color\":\"yellow\"}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse StatusValue: " <> err
+    Right (PV.StatusValue pid (Just (PV.SelectOptionValue _ optName _))) -> do
+      assertEqual "property id" "st" pid
+      assertEqual "status name" "In Progress" optName
+    Right other -> assertFailure $ "Expected StatusValue, got: " <> show other
+
+testParseMultiSelectValue :: Assertion
+testParseMultiSelectValue = do
+  let json = "{\"id\":\"ms\",\"type\":\"multi_select\",\"multi_select\":[{\"id\":\"a\",\"name\":\"Tag1\",\"color\":\"red\"},{\"id\":\"b\",\"name\":\"Tag2\",\"color\":\"blue\"}]}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse MultiSelectValue: " <> err
+    Right (PV.MultiSelectValue pid opts) -> do
+      assertEqual "property id" "ms" pid
+      assertEqual "option count" 2 (Vector.length opts)
+    Right other -> assertFailure $ "Expected MultiSelectValue, got: " <> show other
+
+testParseUrlValue :: Assertion
+testParseUrlValue = do
+  let json = "{\"id\":\"u\",\"type\":\"url\",\"url\":\"https://example.com\"}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse UrlValue: " <> err
+    Right (PV.UrlValue pid (Just u)) -> do
+      assertEqual "property id" "u" pid
+      assertEqual "url" "https://example.com" u
+    Right other -> assertFailure $ "Expected UrlValue, got: " <> show other
+
+testParseFormulaValue :: Assertion
+testParseFormulaValue = do
+  let json = "{\"id\":\"f\",\"type\":\"formula\",\"formula\":{\"type\":\"string\",\"string\":\"hello\"}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse FormulaValue: " <> err
+    Right (PV.FormulaValue pid (PV.FormulaStringResult (Just s))) -> do
+      assertEqual "property id" "f" pid
+      assertEqual "formula string" "hello" s
+    Right other -> assertFailure $ "Expected FormulaValue with string, got: " <> show other
+
+-- Serialization tests
+
+testSerializeTitleValue :: Assertion
+testSerializeTitleValue = do
+  let rt = mkPlainRichText "Hello"
+      pv = PV.titleValue (Vector.singleton rt)
+      json = Aeson.toJSON pv
+  case json of
+    Aeson.Object o -> do
+      assertBool "should have title key" (KeyMap.member "title" o)
+      assertBool "should not have id key" (not $ KeyMap.member "id" o)
+      assertBool "should not have type key" (not $ KeyMap.member "type" o)
+    _ -> assertFailure "Expected JSON object"
+
+testSerializeSelectValue :: Assertion
+testSerializeSelectValue = do
+  let pv = PV.selectValue "Done"
+      json = Aeson.toJSON pv
+  case json of
+    Aeson.Object o -> do
+      assertBool "should have select key" (KeyMap.member "select" o)
+      case KeyMap.lookup "select" o of
+        Just (Aeson.Object sel) ->
+          assertEqual "name" (Just (Aeson.String "Done")) (KeyMap.lookup "name" sel)
+        _ -> assertFailure "Expected select object"
+    _ -> assertFailure "Expected JSON object"
+
+testSerializeNumberValue :: Assertion
+testSerializeNumberValue = do
+  let pv = PV.numberValue 42
+      json = Aeson.toJSON pv
+  case json of
+    Aeson.Object o ->
+      assertEqual "number" (Just (Aeson.Number 42)) (KeyMap.lookup "number" o)
+    _ -> assertFailure "Expected JSON object"
+
+testSerializeCheckboxValue :: Assertion
+testSerializeCheckboxValue = do
+  let pv = PV.checkboxValue True
+      json = Aeson.toJSON pv
+  case json of
+    Aeson.Object o ->
+      assertEqual "checkbox" (Just (Aeson.Bool True)) (KeyMap.lookup "checkbox" o)
+    _ -> assertFailure "Expected JSON object"
+
+testSerializeDateValue :: Assertion
+testSerializeDateValue = do
+  let pv = PV.dateValue "2024-06-01" Nothing
+      json = Aeson.toJSON pv
+  case json of
+    Aeson.Object o -> do
+      assertBool "should have date key" (KeyMap.member "date" o)
+      case KeyMap.lookup "date" o of
+        Just (Aeson.Object d) ->
+          assertEqual "start" (Just (Aeson.String "2024-06-01")) (KeyMap.lookup "start" d)
+        _ -> assertFailure "Expected date object"
+    _ -> assertFailure "Expected JSON object"
+
+testSerializeStatusValue :: Assertion
+testSerializeStatusValue = do
+  let pv = PV.statusValue "In Progress"
+      json = Aeson.toJSON pv
+  case json of
+    Aeson.Object o -> do
+      assertBool "should have status key" (KeyMap.member "status" o)
+      case KeyMap.lookup "status" o of
+        Just (Aeson.Object s) ->
+          assertEqual "name" (Just (Aeson.String "In Progress")) (KeyMap.lookup "name" s)
+        _ -> assertFailure "Expected status object"
+    _ -> assertFailure "Expected JSON object"
+
+testSmartSelectValue :: Assertion
+testSmartSelectValue = do
+  let pv = PV.selectValue "Done"
+  case pv of
+    PV.SelectValue pid (Just (PV.SelectOptionValue _ optName _)) -> do
+      assertEqual "schema id should be empty" "" pid
+      assertEqual "name" "Done" optName
+    _ -> assertFailure "Expected SelectValue"
+
+testSmartTitleValue :: Assertion
+testSmartTitleValue = do
+  let rt = mkPlainRichText "Test"
+      pv = PV.titleValue (Vector.singleton rt)
+  case pv of
+    PV.TitleValue pid rts -> do
+      assertEqual "schema id should be empty" "" pid
+      assertEqual "rich text count" 1 (Vector.length rts)
+    _ -> assertFailure "Expected TitleValue"
 
 -- =====================================================================
 -- Property Schema Tests

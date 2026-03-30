@@ -13,7 +13,6 @@ module MarkdownDemo
 where
 
 import Console (printHeader, printSuccess, runTest)
-import Data.Aeson qualified as Aeson
 import Data.Map (fromList)
 import Data.String (fromString)
 import Data.Text qualified as Text
@@ -21,6 +20,8 @@ import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
 import Notion.V1.Common (Parent (..), UUID (..))
 import Notion.V1.Pages
+import Notion.V1.PropertyValue qualified as PV
+import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Prelude hiding (id)
 
 -- | Run the Markdown API demonstration
@@ -33,8 +34,7 @@ runMarkdownDemo methods pageIdStr = do
   -- ---------------------------------------------------------------
   printHeader (Text.pack "Markdown: Create Page with Markdown")
 
-  let titleProp = mkTitleProp "Markdown Demo Page"
-      props = fromList [("title", PropertyValue {type_ = Title, value = Just titleProp})]
+  let props = fromList [("title", PV.titleValue (Vector.singleton (mkPlainRichText "Markdown Demo Page")))]
 
       -- Use 'markdown' instead of 'children' to set initial content.
       -- This is much simpler than constructing block JSON manually.
@@ -141,7 +141,7 @@ runMarkdownDemo methods pageIdStr = do
   printHeader (Text.pack "Move Page API")
 
   -- Create a target page to move into
-  let targetProps = fromList [("title", PropertyValue {type_ = Title, value = Just (mkTitleProp "Move Target")})]
+  let targetProps = fromList [("title", PV.titleValue (Vector.singleton (mkPlainRichText "Move Target")))]
       targetReq = mkCreatePage (PageParent {pageId = parentPageId}) targetProps
   targetPage <-
     runTest (Text.pack "Creating target parent page") $
@@ -220,10 +220,13 @@ replacementContent =
   \\n\
   \This paragraph will be edited via **update_content** next."
 
--- | Helper to create a title property value
-mkTitleProp :: Text.Text -> Aeson.Value
-mkTitleProp t =
-  let textObj = Aeson.object [("content", Aeson.String t)]
-      textItem = Aeson.object [("text", textObj)]
-      titleArray = Aeson.Array (Vector.singleton textItem)
-   in Aeson.object [("title", titleArray)]
+-- | Helper to create a plain RichText from a string
+mkPlainRichText :: Text.Text -> RichText
+mkPlainRichText t =
+  RichText
+    { plainText = t,
+      href = Nothing,
+      annotations = defaultAnnotations,
+      type_ = "text",
+      content = TextContentWrapper (TextContent {content = t, link = Nothing})
+    }

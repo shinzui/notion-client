@@ -7,8 +7,6 @@ where
 
 import Blocks (createBulletedListItemBlock, createHeadingBlock, createParagraphBlock)
 import Console (printHeader, runTest)
-import Data.Aeson qualified as Aeson
-import Data.Map (fromList)
 import Data.Map qualified as Map
 import Data.String (fromString)
 import Data.Text qualified as Text
@@ -21,8 +19,9 @@ import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.Filter (Sort (..), SortDirection (..))
 import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (Select, Title))
+import Notion.V1.Pages (CreatePage (..), PageObject (..))
 import Notion.V1.Properties (PropertySchema (..), SelectColor (..), SelectOption (..))
+import Notion.V1.PropertyValue qualified as PV
 import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Prelude hiding (id)
 
@@ -140,53 +139,25 @@ runDatabaseDemo methods databaseIdStr = do
   putStrLn "Data source updated with new properties"
 
   -- Create a new page in the database with initial content
-  let -- Step 1: Create title property (required for database pages)
-      -- The "title" key should match your database title field name
-      textObj = Aeson.object [("content", Aeson.String "Test Page from API")]
-      textItem = Aeson.object [("text", textObj)]
-      titleArray = Aeson.Array (Vector.singleton textItem)
-      titleProp = Aeson.object [("title", titleArray)]
+  let -- Create page properties using typed smart constructors
+      titleRichText =
+        Vector.singleton
+          RichText
+            { plainText = "Test Page from API",
+              href = Nothing,
+              annotations = defaultAnnotations,
+              type_ = "text",
+              content = TextContentWrapper (TextContent {content = "Test Page from API", link = Nothing})
+            }
 
-      -- Step 2: Create select property values for Status and Priority
-      -- Select properties need a "select" wrapper with a "name" field
-      statusProp =
-        Aeson.object
-          [ ( "select",
-              Aeson.object [("name", Aeson.String "In Progress")]
-            )
-          ]
-      priorityProp =
-        Aeson.object
-          [ ( "select",
-              Aeson.object [("name", Aeson.String "High")]
-            )
-          ]
-
-      -- Step 3: Create page properties map with all properties
-      -- Add the title and the new Status/Priority properties
       pageProperties =
-        fromList
-          [ ( "title", -- This must match your database's title field name
-              PropertyValue
-                { type_ = Title,
-                  value = Just titleProp
-                }
-            ),
-            ( "Status", -- Set the Status property
-              PropertyValue
-                { type_ = Select,
-                  value = Just statusProp
-                }
-            ),
-            ( "Priority", -- Set the Priority property
-              PropertyValue
-                { type_ = Select,
-                  value = Just priorityProp
-                }
-            )
+        Map.fromList
+          [ ("title", PV.titleValue titleRichText),
+            ("Status", PV.selectValue "In Progress"),
+            ("Priority", PV.selectValue "High")
           ]
 
-      -- Step 4: Create initial blocks for the page (optional)
+      -- Create initial blocks for the page (optional)
       -- Pages can be created with content already in them
       initialBlocks =
         Vector.fromList

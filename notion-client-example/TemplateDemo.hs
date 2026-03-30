@@ -11,7 +11,6 @@ module TemplateDemo
 where
 
 import Console (printHeader, runTest)
-import Data.Aeson qualified as Aeson
 import Data.Map (fromList)
 import Data.String (fromString)
 import Data.Text qualified as Text
@@ -20,7 +19,9 @@ import Notion.V1 (Methods (..))
 import Notion.V1.Common (Parent (..))
 import Notion.V1.DataSources (ListTemplatesResponse (..), TemplateRef (..))
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
-import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (..), Template (..), UpdatePage (..), mkCreatePage, mkUpdatePage)
+import Notion.V1.Pages (CreatePage (..), PageObject (..), Template (..), UpdatePage (..))
+import Notion.V1.PropertyValue qualified as PV
+import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Prelude hiding (id)
 
 -- | Run the Template API demonstration
@@ -72,12 +73,7 @@ runTemplateDemo methods databaseIdStr = do
 
   if hasDefault
     then do
-      let titleProp =
-            let textObj = Aeson.object [("content", Aeson.String "Template Demo Page")]
-                textItem = Aeson.object [("text", textObj)]
-                titleArray = Aeson.Array (Vector.singleton textItem)
-             in Aeson.object [("title", titleArray)]
-          props = fromList [("title", PropertyValue {type_ = Title, value = Just titleProp})]
+      let props = fromList [("title", PV.titleValue (Vector.singleton (mkPlainRichText "Template Demo Page")))]
 
           -- Create a page with the default template.
           -- The template parameter tells the API to apply the data source's
@@ -126,3 +122,14 @@ runTemplateDemo methods databaseIdStr = do
       putStrLn $ "\nTo create a page with a specific template:"
       putStrLn $ "  Use: TemplateById " <> show firstTmplId <> " (Just \"America/New_York\")"
       putStrLn $ "  Template name: " <> Text.unpack firstTmplName
+
+-- | Helper to create a plain RichText from a string
+mkPlainRichText :: Text.Text -> RichText
+mkPlainRichText t =
+  RichText
+    { plainText = t,
+      href = Nothing,
+      annotations = defaultAnnotations,
+      type_ = "text",
+      content = TextContentWrapper (TextContent {content = t, link = Nothing})
+    }

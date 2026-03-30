@@ -69,6 +69,7 @@ library
     Notion.V1.Pages
     Notion.V1.Pagination
     Notion.V1.Properties
+    Notion.V1.PropertyValue
     Notion.V1.RichText
     Notion.V1.Search
     Notion.V1.Users
@@ -103,6 +104,7 @@ test-suite tasty
     , http-client
     , http-client-tls
     , notion-client
+    , scientific
     , servant-client
     , tasty
     , tasty-hunit
@@ -137,6 +139,7 @@ executable notion-client-example
     , base
     , containers
     , notion-client
+    , scientific
     , text
     , unordered-containers
     , vector
