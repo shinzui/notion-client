@@ -57,6 +57,7 @@ library
 
   exposed-modules:
     Notion.V1
+    Notion.V1.BlockContent
     Notion.V1.Blocks
     Notion.V1.Comments
     Notion.V1.Common
@@ -118,6 +119,7 @@ executable notion-client-example
   hs-source-dirs:     notion-client-example
   main-is:            Main.hs
   other-modules:
+    BlockDemo
     Blocks
     Console
     CustomEmojiDemo

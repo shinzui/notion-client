@@ -28,6 +28,7 @@
 -- Note: Your integration must have access to the specified database and page.
 module Main where
 
+import BlockDemo (runBlockDemo)
 import Console (logError, printHeader, runTest)
 import Control.Monad (when)
 import CustomEmojiDemo (runCustomEmojiDemo)
@@ -79,8 +80,9 @@ main = do
     Just pageIdStr -> do
       runPageDemo methods pageIdStr
       runMarkdownDemo methods pageIdStr
+      runBlockDemo methods pageIdStr
     Nothing ->
-      putStrLn "Skipping page/markdown tests (set NOTION_TEST_PAGE_ID to enable)"
+      putStrLn "Skipping page/markdown/block tests (set NOTION_TEST_PAGE_ID to enable)"
 
   -- Optional Database tests
   case databaseIdEnv of

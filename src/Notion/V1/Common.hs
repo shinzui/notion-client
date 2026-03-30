@@ -132,7 +132,7 @@ data Icon
     NativeIcon {iconName :: Text, iconColor :: Maybe Text}
   | -- | Custom emoji icon specified by ID
     CustomEmojiIcon {customEmojiId :: UUID}
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON Icon where
   parseJSON = \case
@@ -158,7 +158,7 @@ instance ToJSON Icon where
 data Cover
   = FileCover {file :: File}
   | ExternalCover {external :: ExternalFile}
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON Cover where
   parseJSON = \case
@@ -179,19 +179,30 @@ data File = File
   { url :: Text,
     expiryTime :: Maybe POSIXTime
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON File where
-  parseJSON = genericParseJSON aesonOptions
+  parseJSON = \case
+    Object o -> do
+      url <- o .: "url"
+      mExpiry <- o .:? "expiry_time"
+      expiryTime <- case mExpiry of
+        Nothing -> pure Nothing
+        Just str -> Just <$> parseISO8601 str
+      pure File {..}
+    _ -> fail "Expected object for File"
 
 instance ToJSON File where
-  toJSON = genericToJSON aesonOptions
+  toJSON File {..} =
+    object $
+      ["url" .= url]
+        <> maybe [] (\t -> ["expiry_time" .= posixToISO8601 t]) expiryTime
 
 -- | External file object
 newtype ExternalFile = ExternalFile
   { url :: Text
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON ExternalFile where
   parseJSON = genericParseJSON aesonOptions

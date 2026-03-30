@@ -7,14 +7,14 @@ where
 
 import Console (printHeader, runTest)
 import Control.Monad (when)
-import Data.Aeson qualified as Aeson
 import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
+import Notion.V1.BlockContent (BlockContent, CodeLanguage (..), calloutBlock, codeBlock, mkRichText, quoteBlock)
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
-import Notion.V1.Common (Parent (..))
+import Notion.V1.Common (Icon (..), Parent (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Prelude hiding (id)
@@ -93,57 +93,17 @@ runPageDemo methods pageIdStr = do
     putStrLn $ "Block has " <> show (Vector.length blockCommentResults) <> " comments"
 
   -- Add new blocks to the existing page
-  let codeBlock =
-        Aeson.object
-          [ ("type", Aeson.String "code"),
-            ( "code",
-              Aeson.object
-                [ ( "rich_text",
-                    Aeson.Array
-                      ( Vector.singleton $
-                          Aeson.object
-                            [ ("text", Aeson.object [("content", Aeson.String "const example = () => {\n  console.log('Hello from Notion API');\n};")])
-                            ]
-                      )
-                  ),
-                  ("language", Aeson.String "javascript")
-                ]
-            )
-          ]
-      quoteBlock =
-        Aeson.object
-          [ ("type", Aeson.String "quote"),
-            ( "quote",
-              Aeson.object
-                [ ( "rich_text",
-                    Aeson.Array
-                      ( Vector.singleton $
-                          Aeson.object
-                            [ ("text", Aeson.object [("content", Aeson.String "This is a quote block added via the API")])
-                            ]
-                      )
-                  )
-                ]
-            )
-          ]
-      calloutBlock =
-        Aeson.object
-          [ ("type", Aeson.String "callout"),
-            ( "callout",
-              Aeson.object
-                [ ( "rich_text",
-                    Aeson.Array
-                      ( Vector.singleton $
-                          Aeson.object
-                            [ ("text", Aeson.object [("content", Aeson.String "This is a callout block with an emoji")])
-                            ]
-                      )
-                  ),
-                  ("icon", Aeson.object [("emoji", Aeson.String "🔥")])
-                ]
-            )
-          ]
-      specializedBlocks = Vector.fromList [codeBlock, quoteBlock, calloutBlock]
+  let codeBlockVal =
+        codeBlock
+          (mkRichText "const example = () => {\n  console.log('Hello from Notion API');\n};")
+          JavaScript
+      quoteBlockVal =
+        quoteBlock (mkRichText "This is a quote block added via the API")
+      calloutBlockVal =
+        calloutBlock
+          (mkRichText "This is a callout block with an emoji")
+          (Just (EmojiIcon "🔥"))
+      specializedBlocks = Vector.fromList [codeBlockVal, quoteBlockVal, calloutBlockVal]
       appendRequest = Blocks.AppendBlockChildren {children = specializedBlocks, position = Nothing}
 
   -- Append blocks to the existing page

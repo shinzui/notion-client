@@ -37,6 +37,7 @@ import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Notion.Prelude
+import Notion.V1.BlockContent (BlockContent)
 import Notion.V1.Blocks (Position)
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
@@ -136,7 +137,7 @@ instance ToJSON Template where
 data CreatePage = CreatePage
   { parent :: Parent,
     properties :: PageProperties,
-    children :: Maybe (Vector Value),
+    children :: Maybe (Vector BlockContent),
     markdown :: Maybe Text,
     icon :: Maybe Icon,
     cover :: Maybe Cover,

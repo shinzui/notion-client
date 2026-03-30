@@ -203,7 +203,7 @@ data Methods = Methods
       IO PageObject,
     -- \* Blocks
     retrieveBlock :: BlockID -> IO BlockObject,
-    updateBlock :: BlockID -> Blocks.BlockContent -> IO BlockObject,
+    updateBlock :: BlockID -> Blocks.BlockUpdate -> IO BlockObject,
     listBlockChildren ::
       ParentID ->
       Maybe Natural ->

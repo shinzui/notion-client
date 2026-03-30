@@ -3,9 +3,12 @@ module Notion.V1.Blocks
   ( -- * Main types
     BlockID,
     BlockObject (..),
-    BlockContent (..),
+    BlockUpdate (..),
     AppendBlockChildren (..),
     Position (..),
+
+    -- * Re-exported from BlockContent
+    module Notion.V1.BlockContent,
 
     -- * Servant
     API,
@@ -17,6 +20,7 @@ import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Notion.Prelude
+import Notion.V1.BlockContent
 import Notion.V1.Common (BlockID, ObjectType (..), Parent, UUID (..))
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Users (UserReference)
@@ -33,7 +37,7 @@ data BlockObject = BlockObject
     hasChildren :: Bool,
     inTrash :: Bool,
     type_ :: Text,
-    content :: Value,
+    content :: BlockContent,
     object :: ObjectType
   }
   deriving stock (Generic, Show)
@@ -52,8 +56,8 @@ instance FromJSON BlockObject where
       hasChildren <- o .: "has_children"
       inTrash <- (o .: "in_trash") <|> (o .: "is_archived") <|> (o .: "archived") <|> pure False
       type_ <- o .: "type"
-      -- Content is stored under a field named after the block type (e.g., "heading_1", "paragraph")
-      content <- o .: Key.fromText type_
+      contentVal <- o .: Key.fromText type_
+      content <- parseBlockContent type_ contentVal
       object <- o .: "object"
       return BlockObject {..}
     _ -> fail "Expected object for BlockObject"
@@ -70,18 +74,9 @@ instance ToJSON BlockObject where
         "has_children" .= hasChildren,
         "in_trash" .= inTrash,
         "type" .= type_,
-        Key.fromText type_ .= content,
+        Key.fromText type_ .= snd (blockContentFields content),
         "object" .= object
       ]
-
--- | Block content for update
-newtype BlockContent = BlockContent
-  { content :: Value
-  }
-  deriving stock (Generic, Show)
-
-instance ToJSON BlockContent where
-  toJSON = genericToJSON aesonOptions
 
 -- | Block insertion position for the Append Block Children endpoint.
 --
@@ -115,7 +110,7 @@ instance ToJSON Position where
 
 -- | Append children to a block
 data AppendBlockChildren = AppendBlockChildren
-  { children :: Vector Value,
+  { children :: Vector BlockContent,
     position :: Maybe Position
   }
   deriving stock (Generic, Show)
@@ -132,7 +127,7 @@ type API =
     :> ( Capture "block_id" BlockID
            :> Get '[JSON] BlockObject
            :<|> Capture "block_id" BlockID
-           :> ReqBody '[JSON] BlockContent
+           :> ReqBody '[JSON] BlockUpdate
            :> Patch '[JSON] BlockObject
            :<|> Capture "block_id" BlockID
            :> "children"

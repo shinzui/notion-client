@@ -26,7 +26,7 @@ data RichText = RichText
     type_ :: Text,
     content :: RichTextContent
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON RichText where
   parseJSON = \case
@@ -61,7 +61,7 @@ data TextContent = TextContent
   { content :: Text,
     link :: Maybe Link
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON TextContent where
   parseJSON = genericParseJSON aesonOptions
@@ -83,7 +83,7 @@ data MentionContent
   | DatabaseMention {database :: UUID}
   | DateMention {date :: Date}
   | LinkPreviewMention {url :: Text}
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON MentionContent where
   parseJSON = \case
@@ -130,7 +130,7 @@ instance ToJSON MentionContent where
 newtype EquationContent = EquationContent
   { expression :: Text
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON EquationContent where
   parseJSON = genericParseJSON aesonOptions
@@ -143,7 +143,7 @@ data RichTextContent
   = TextContentWrapper TextContent
   | MentionContentWrapper MentionContent
   | EquationContentWrapper EquationContent
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 -- | Text annotations
 data Annotations = Annotations
@@ -154,7 +154,7 @@ data Annotations = Annotations
     code :: Bool,
     color :: Color
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON Annotations where
   parseJSON = genericParseJSON aesonOptions
@@ -178,7 +178,7 @@ defaultAnnotations =
 newtype Link = Link
   { url :: Text
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON Link where
   parseJSON = genericParseJSON aesonOptions
@@ -192,7 +192,7 @@ data Date = Date
     end :: Maybe Text,
     timeZone :: Maybe TimeZone
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON Date where
   parseJSON = genericParseJSON aesonOptions
@@ -204,4 +204,4 @@ instance ToJSON Date where
 newtype TimeZone = TimeZone
   { text :: Text
   }
-  deriving newtype (FromJSON, IsString, Show, ToJSON)
+  deriving newtype (Eq, FromJSON, IsString, Show, ToJSON)

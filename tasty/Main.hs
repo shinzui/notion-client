@@ -9,11 +9,12 @@ import Data.Scientific (Scientific)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1
+import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), blockContentType, bookmarkBlock, bulletedListItemBlock, codeBlock, headingBlock, imageBlock, mkRichText, paragraphBlock, textBlock)
 import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (..))
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
 import Notion.V1.Comments qualified as Comments
-import Notion.V1.Common (Icon (..), Parent (..), UUID (..))
+import Notion.V1.Common (Color (..), ExternalFile (..), Icon (..), Parent (..), UUID (..))
 import Notion.V1.CustomEmojis (CustomEmoji (..))
 import Notion.V1.DataSources (DataSourceObject (..))
 import Notion.V1.DataSources qualified as DataSources
@@ -170,28 +171,13 @@ mkMethods token = do
   clientEnv <- getClientEnv "https://api.notion.com/v1"
   pure $ makeMethods clientEnv (Text.pack token)
 
--- | Helper to make a rich text array from a plain string
-mkRichTextValue :: Text.Text -> Aeson.Value
-mkRichTextValue t =
-  Aeson.Array . Vector.singleton $
-    Aeson.object [("text", Aeson.object [("content", Aeson.String t)])]
+-- | Helper to make a paragraph block
+mkParagraphBlock :: Text.Text -> BlockContent
+mkParagraphBlock = textBlock
 
--- | Helper to make a paragraph block JSON value
-mkParagraphBlock :: Text.Text -> Aeson.Value
-mkParagraphBlock t =
-  Aeson.object
-    [ ("type", Aeson.String "paragraph"),
-      ("paragraph", Aeson.object [("rich_text", mkRichTextValue t)])
-    ]
-
--- | Helper to make a heading block JSON value
-mkHeadingBlock :: Text.Text -> Int -> Aeson.Value
-mkHeadingBlock t level =
-  let headingType = "heading_" <> Text.pack (show level)
-   in Aeson.object
-        [ ("type", Aeson.String headingType),
-          (Key.fromText headingType, Aeson.object [("rich_text", mkRichTextValue t)])
-        ]
+-- | Helper to make a heading block
+mkHeadingBlock :: Text.Text -> Int -> BlockContent
+mkHeadingBlock t level = headingBlock level (mkRichText t)
 
 -- | Helper to create a plain RichText from a string
 mkPlainRichText :: Text.Text -> RichText
@@ -249,7 +235,16 @@ jsonParsingTests =
       testCase "Parse PageObject with in_trash" testParsePageObject,
       testCase "Parse NotionError from JSON" testParseNotionError,
       testCase "Parse DatabaseObject with in_trash" testParseDatabaseObject,
-      testCase "Parse DataSourceObject with in_trash" testParseDataSourceObject
+      testCase "Parse DataSourceObject with in_trash" testParseDataSourceObject,
+      testCase "BlockContent round-trip: paragraph" testBlockContentParagraph,
+      testCase "BlockContent round-trip: heading with is_toggleable" testBlockContentHeading,
+      testCase "BlockContent round-trip: code block" testBlockContentCode,
+      testCase "BlockContent round-trip: image (external)" testBlockContentImage,
+      testCase "BlockContent round-trip: divider" testBlockContentDivider,
+      testCase "BlockContent round-trip: table" testBlockContentTable,
+      testCase "BlockContent round-trip: bookmark" testBlockContentBookmark,
+      testCase "BlockContent round-trip: unknown block" testBlockContentUnknown,
+      testCase "BlockUpdate omits type key" testBlockUpdateSerialization
     ]
 
 testParseBlockObject :: Assertion
@@ -269,6 +264,9 @@ testParseBlockObject = do
     Right block -> do
       assertEqual "inTrash should be False" False (Notion.V1.Blocks.inTrash block)
       assertEqual "type should be paragraph" "paragraph" (Notion.V1.Blocks.type_ block)
+      case Blocks.content block of
+        ParagraphBlock {richText} -> assertEqual "rich_text should be empty" Vector.empty richText
+        other -> assertFailure $ "Expected ParagraphBlock, got: " <> show other
 
 testParseBlockObjectLegacy :: Assertion
 testParseBlockObjectLegacy = do
@@ -352,6 +350,51 @@ testParseNotionError = do
       assertEqual "status" 400 errStatus
       assertEqual "code" "validation_error" errCode
       assertEqual "message" "The provided page ID is not a valid UUID." errMessage
+
+-- =====================================================================
+-- BlockContent Round-trip Tests
+-- =====================================================================
+
+-- | Helper: encode then decode, verify equality.
+roundTrip :: BlockContent -> Assertion
+roundTrip original =
+  case Aeson.fromJSON (Aeson.toJSON original) of
+    Aeson.Error err -> assertFailure $ "Round-trip failed: " <> err
+    Aeson.Success parsed -> assertEqual "round-trip" original parsed
+
+testBlockContentParagraph :: Assertion
+testBlockContentParagraph = roundTrip $ paragraphBlock (mkRichText "Hello world")
+
+testBlockContentHeading :: Assertion
+testBlockContentHeading = roundTrip $ Heading1Block (mkRichText "Title") Default True
+
+testBlockContentCode :: Assertion
+testBlockContentCode = roundTrip $ codeBlock (mkRichText "main = pure ()") Haskell
+
+testBlockContentImage :: Assertion
+testBlockContentImage = roundTrip $ imageBlock (ExternalSource (ExternalFile "https://example.com/img.png"))
+
+testBlockContentDivider :: Assertion
+testBlockContentDivider = roundTrip DividerBlock
+
+testBlockContentTable :: Assertion
+testBlockContentTable = roundTrip $ TableBlock 3 True False
+
+testBlockContentBookmark :: Assertion
+testBlockContentBookmark = roundTrip $ bookmarkBlock "https://haskell.org"
+
+testBlockContentUnknown :: Assertion
+testBlockContentUnknown = roundTrip $ UnknownBlock "custom_widget" (Aeson.object [("data", Aeson.String "test")])
+
+testBlockUpdateSerialization :: Assertion
+testBlockUpdateSerialization = do
+  let update = Blocks.BlockUpdate (paragraphBlock (mkRichText "Updated"))
+      json = Aeson.toJSON update
+  case json of
+    Aeson.Object o -> do
+      assertBool "should have 'paragraph' key" (KeyMap.member "paragraph" o)
+      assertBool "should NOT have 'type' key" (not $ KeyMap.member "type" o)
+    _ -> assertFailure "Expected object from BlockUpdate ToJSON"
 
 -- =====================================================================
 -- JSON Serialization Tests (unit tests, no API token needed)
@@ -806,14 +849,8 @@ testPageBlockLifecycle methods@Methods {createPage, appendBlockChildren, listBlo
           [ mkHeadingBlock "Test Heading" 1,
             mkParagraphBlock "First paragraph content.",
             mkParagraphBlock "Second paragraph content.",
-            Aeson.object
-              [ ("type", Aeson.String "bulleted_list_item"),
-                ("bulleted_list_item", Aeson.object [("rich_text", mkRichTextValue "List item one")])
-              ],
-            Aeson.object
-              [ ("type", Aeson.String "bulleted_list_item"),
-                ("bulleted_list_item", Aeson.object [("rich_text", mkRichTextValue "List item two")])
-              ]
+            bulletedListItemBlock (mkRichText "List item one"),
+            bulletedListItemBlock (mkRichText "List item two")
           ]
       appendReq = AppendBlockChildren {children = blocks, position = Nothing}
   appendResult <- appendBlockChildren pageId appendReq
