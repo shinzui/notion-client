@@ -211,52 +211,380 @@ runBlockDemo methods pageIdStr = do
       _ -> putStrLn $ prefix <> Text.unpack (Blocks.type_ block)
 
   -- -----------------------------------------------------------------------
-  -- Section 6: Nested blocks (children)
+  -- Section 6: Nested blocks — text-like parents
   -- -----------------------------------------------------------------------
-  printHeader (Text.pack "Nested Blocks (Children)")
+  printHeader (Text.pack "Nested Blocks — Text Parents")
 
-  let nestedBlocks =
+  let textParentBlocks =
         Vector.fromList
           [ headingBlock 2 (mkRichText "Nested Block Examples"),
-            -- Toggle with two paragraph children
-            toggleBlock (mkRichText "Click to expand this toggle")
+            -- 1. Toggle with paragraph children (most common use case)
+            toggleBlock (mkRichText "Toggle with children")
               `withChildren` Vector.fromList
-                [ textBlock "First nested paragraph inside the toggle.",
-                  textBlock "Second nested paragraph inside the toggle."
+                [ textBlock "First child inside toggle.",
+                  textBlock "Second child inside toggle."
                 ],
-            -- Bulleted list with nested sub-items
-            bulletedListItemBlock (mkRichText "Parent list item")
+            -- 2. Paragraph with children
+            paragraphBlock (mkRichText "Paragraph with nested content")
               `withChildren` Vector.fromList
-                [ bulletedListItemBlock (mkRichText "Sub-item one"),
-                  bulletedListItemBlock (mkRichText "Sub-item two")
+                [ textBlock "Child of paragraph."
                 ],
-            -- Column layout with two columns
+            -- 3. Bulleted list with nested sub-items
+            bulletedListItemBlock (mkRichText "Parent bullet")
+              `withChildren` Vector.fromList
+                [ bulletedListItemBlock (mkRichText "Sub-bullet A"),
+                  bulletedListItemBlock (mkRichText "Sub-bullet B")
+                ],
+            -- 4. Numbered list with nested sub-items
+            numberedListItemBlock (mkRichText "Parent numbered item")
+              `withChildren` Vector.fromList
+                [ numberedListItemBlock (mkRichText "Sub-item 1"),
+                  numberedListItemBlock (mkRichText "Sub-item 2")
+                ],
+            -- 5. To-do with children
+            toDoBlock (mkRichText "Task with sub-tasks") False
+              `withChildren` Vector.fromList
+                [ toDoBlock (mkRichText "Sub-task A") True,
+                  toDoBlock (mkRichText "Sub-task B") False
+                ],
+            -- 6. Quote with children
+            quoteBlock (mkRichText "Quote with attribution")
+              `withChildren` Vector.fromList
+                [ textBlock "— Source of the quote"
+                ],
+            -- 7. Callout with children
+            calloutBlock (mkRichText "Important notice") (Just (EmojiIcon "⚠️"))
+              `withChildren` Vector.fromList
+                [ textBlock "Additional details inside the callout.",
+                  bulletedListItemBlock (mkRichText "Action item one"),
+                  bulletedListItemBlock (mkRichText "Action item two")
+                ],
+            dividerBlock
+          ]
+      appendReq5 = AppendBlockChildren {children = textParentBlocks, position = Nothing}
+
+  result5 <-
+    runTest (Text.pack "Appending text-parent nested blocks") $
+      appendBlockChildren methods testPageId appendReq5
+  let result5List = Vector.toList (results result5)
+  putStrLn $ "Appended " <> show (length result5List) <> " blocks"
+
+  -- Verify has_children on each parent block
+  putStrLn "\nVerifying has_children on returned blocks:"
+  let parentIndices = [1, 2, 3, 4, 5, 6, 7] :: [Int] -- indices of blocks with children (0 = heading)
+  mapM_
+    ( \i -> do
+        let b = result5List !! i
+        putStrLn $
+          "  "
+            <> Text.unpack (Blocks.type_ b)
+            <> ": has_children="
+            <> show (Blocks.hasChildren b)
+    )
+    parentIndices
+
+  -- Fetch children of the toggle and verify count
+  let toggleObj = result5List !! 1
+  toggleKids <-
+    runTest (Text.pack "Fetching toggle children") $
+      listBlockChildren methods (Blocks.id toggleObj) Nothing Nothing
+  putStrLn $ "Toggle child count: " <> show (Vector.length $ results toggleKids)
+
+  -- Fetch children of the callout and verify types
+  let calloutObj = result5List !! 7
+  calloutKids <-
+    runTest (Text.pack "Fetching callout children") $
+      listBlockChildren methods (Blocks.id calloutObj) Nothing Nothing
+  putStrLn "Callout children:"
+  Vector.forM_ (results calloutKids) $ \kid ->
+    putStrLn $ "  - " <> Text.unpack (Blocks.type_ kid)
+
+  -- -----------------------------------------------------------------------
+  -- Section 7: Nested blocks — toggleable headings
+  -- -----------------------------------------------------------------------
+  printHeader (Text.pack "Nested Blocks — Toggleable Headings")
+
+  let headingBlocks =
+        Vector.fromList
+          [ -- Toggleable heading 1 with children
+            Heading1Block
+              { richText = mkRichText "Toggleable H1 with content",
+                color = Default,
+                isToggleable = True,
+                children =
+                  Vector.fromList
+                    [ textBlock "Content revealed when H1 is expanded.",
+                      codeBlock (mkRichText "putStrLn \"inside heading\"") Haskell
+                    ]
+              },
+            -- Toggleable heading 2
+            Heading2Block
+              { richText = mkRichText "Toggleable H2",
+                color = Default,
+                isToggleable = True,
+                children = Vector.singleton (textBlock "H2 nested content.")
+              },
+            -- Toggleable heading 3
+            Heading3Block
+              { richText = mkRichText "Toggleable H3",
+                color = Default,
+                isToggleable = True,
+                children = Vector.singleton (textBlock "H3 nested content.")
+              },
+            -- Non-toggleable heading (no children) for comparison
+            headingBlock 2 (mkRichText "Normal H2 (not toggleable, no children)"),
+            dividerBlock
+          ]
+      appendReq6 = AppendBlockChildren {children = headingBlocks, position = Nothing}
+
+  result6 <-
+    runTest (Text.pack "Appending toggleable headings") $
+      appendBlockChildren methods testPageId appendReq6
+  let result6List = Vector.toList (results result6)
+  putStrLn "Toggleable heading results:"
+  mapM_
+    ( \i -> do
+        let b = result6List !! i
+        putStrLn $
+          "  "
+            <> Text.unpack (Blocks.type_ b)
+            <> ": has_children="
+            <> show (Blocks.hasChildren b)
+    )
+    [0, 1, 2, 3 :: Int]
+
+  -- Fetch children of togglable H1
+  let h1Obj = result6List !! 0
+  h1Kids <-
+    runTest (Text.pack "Fetching toggleable H1 children") $
+      listBlockChildren methods (Blocks.id h1Obj) Nothing Nothing
+  putStrLn $ "H1 child count: " <> show (Vector.length $ results h1Kids)
+  Vector.forM_ (results h1Kids) $ \kid ->
+    putStrLn $ "  - " <> Text.unpack (Blocks.type_ kid)
+
+  -- -----------------------------------------------------------------------
+  -- Section 8: Nested blocks — structural (columns, tables)
+  -- -----------------------------------------------------------------------
+  printHeader (Text.pack "Nested Blocks — Columns and Tables")
+
+  let structuralBlocks =
+        Vector.fromList
+          [ headingBlock 2 (mkRichText "Column Layout"),
+            -- Column list with 3 columns, each containing multiple blocks
             ColumnListBlock
               { children =
                   Vector.fromList
                     [ ColumnBlock
-                        { children = Vector.singleton (textBlock "Left column content")
+                        { children =
+                            Vector.fromList
+                              [ headingBlock 3 (mkRichText "Column A"),
+                                textBlock "Content in column A."
+                              ]
                         },
                       ColumnBlock
-                        { children = Vector.singleton (textBlock "Right column content")
+                        { children =
+                            Vector.fromList
+                              [ headingBlock 3 (mkRichText "Column B"),
+                                textBlock "Content in column B."
+                              ]
+                        },
+                      ColumnBlock
+                        { children =
+                            Vector.fromList
+                              [ headingBlock 3 (mkRichText "Column C"),
+                                textBlock "Content in column C."
+                              ]
+                        }
+                    ]
+              },
+            headingBlock 2 (mkRichText "Table with Row Children"),
+            -- Table with inline table_row children
+            TableBlock
+              { tableWidth = 3,
+                hasColumnHeader = True,
+                hasRowHeader = False,
+                children =
+                  Vector.fromList
+                    [ TableRowBlock
+                        { cells =
+                            Vector.fromList
+                              [ mkRichText "Name",
+                                mkRichText "Language",
+                                mkRichText "Year"
+                              ]
+                        },
+                      TableRowBlock
+                        { cells =
+                            Vector.fromList
+                              [ mkRichText "GHC",
+                                mkRichText "Haskell",
+                                mkRichText "1992"
+                              ]
+                        },
+                      TableRowBlock
+                        { cells =
+                            Vector.fromList
+                              [ mkRichText "Cabal",
+                                mkRichText "Haskell",
+                                mkRichText "2004"
+                              ]
                         }
                     ]
               },
             dividerBlock
           ]
-      appendReq5 = AppendBlockChildren {children = nestedBlocks, position = Nothing}
+      appendReq7 = AppendBlockChildren {children = structuralBlocks, position = Nothing}
 
-  result5 <-
-    runTest (Text.pack "Appending nested blocks") $
-      appendBlockChildren methods testPageId appendReq5
-  putStrLn $ "Appended " <> show (Vector.length $ results result5) <> " nested blocks"
+  result7 <-
+    runTest (Text.pack "Appending columns and table") $
+      appendBlockChildren methods testPageId appendReq7
+  let result7List = Vector.toList (results result7)
 
-  -- Verify has_children on the toggle
-  let toggleResult = (Vector.toList (results result5)) !! 1
-  putStrLn $ "Toggle has_children: " <> show (Blocks.hasChildren toggleResult)
+  -- Verify column_list has children
+  let columnListObj = result7List !! 1
+  putStrLn $ "column_list has_children: " <> show (Blocks.hasChildren columnListObj)
+
+  -- Fetch columns
+  columnKids <-
+    runTest (Text.pack "Fetching column_list children") $
+      listBlockChildren methods (Blocks.id columnListObj) Nothing Nothing
+  putStrLn $ "Number of columns: " <> show (Vector.length $ results columnKids)
+
+  -- Fetch content of first column
+  let firstCol = Vector.head (results columnKids)
+  colContent <-
+    runTest (Text.pack "Fetching first column content") $
+      listBlockChildren methods (Blocks.id firstCol) Nothing Nothing
+  putStrLn "First column content:"
+  Vector.forM_ (results colContent) $ \kid ->
+    putStrLn $ "  - " <> Text.unpack (Blocks.type_ kid)
+
+  -- Verify table has children (rows)
+  let tableObj = result7List !! 3
+  putStrLn $ "\ntable has_children: " <> show (Blocks.hasChildren tableObj)
+
+  tableKids <-
+    runTest (Text.pack "Fetching table rows") $
+      listBlockChildren methods (Blocks.id tableObj) Nothing Nothing
+  putStrLn $ "Table row count: " <> show (Vector.length $ results tableKids)
 
   -- -----------------------------------------------------------------------
-  -- Section 7: Position-based insertion
+  -- Section 9: Nested blocks — synced block and two-level nesting
+  -- -----------------------------------------------------------------------
+  printHeader (Text.pack "Nested Blocks — Synced Block & Two-Level Nesting")
+
+  let advancedBlocks =
+        Vector.fromList
+          [ headingBlock 2 (mkRichText "Synced Block with Children"),
+            -- Original synced block with children
+            SyncedBlockContent
+              { syncedFrom = SyncedOriginal,
+                children =
+                  Vector.fromList
+                    [ textBlock "Content inside the synced block.",
+                      bulletedListItemBlock (mkRichText "Synced list item")
+                    ]
+              },
+            headingBlock 2 (mkRichText "Two-Level Nesting"),
+            -- Toggle containing a quote containing a paragraph (2 levels deep)
+            toggleBlock (mkRichText "Outer toggle (level 1)")
+              `withChildren` Vector.fromList
+                [ quoteBlock (mkRichText "Inner quote (level 2)")
+                    `withChildren` Vector.fromList
+                      [ textBlock "Deepest content (grandchild)."
+                      ],
+                  textBlock "Also inside the toggle."
+                ],
+            -- Bulleted list with nested numbered sub-items
+            bulletedListItemBlock (mkRichText "Mixed nesting: bullet parent")
+              `withChildren` Vector.fromList
+                [ numberedListItemBlock (mkRichText "Numbered sub-item 1"),
+                  numberedListItemBlock (mkRichText "Numbered sub-item 2"),
+                  toDoBlock (mkRichText "To-do sub-item") False
+                ],
+            dividerBlock
+          ]
+      appendReq8 = AppendBlockChildren {children = advancedBlocks, position = Nothing}
+
+  result8 <-
+    runTest (Text.pack "Appending synced block and two-level nesting") $
+      appendBlockChildren methods testPageId appendReq8
+  let result8List = Vector.toList (results result8)
+
+  -- Verify synced block
+  let syncedObj = result8List !! 1
+  putStrLn $ "synced_block has_children: " <> show (Blocks.hasChildren syncedObj)
+  syncedKids <-
+    runTest (Text.pack "Fetching synced_block children") $
+      listBlockChildren methods (Blocks.id syncedObj) Nothing Nothing
+  putStrLn $ "Synced block child count: " <> show (Vector.length $ results syncedKids)
+  Vector.forM_ (results syncedKids) $ \kid ->
+    putStrLn $ "  - " <> Text.unpack (Blocks.type_ kid)
+
+  -- Verify two-level nesting: outer toggle → inner quote → grandchild paragraph
+  let outerToggle = result8List !! 3
+  putStrLn $ "\nOuter toggle has_children: " <> show (Blocks.hasChildren outerToggle)
+  outerKids <-
+    runTest (Text.pack "Fetching outer toggle children") $
+      listBlockChildren methods (Blocks.id outerToggle) Nothing Nothing
+  putStrLn $ "Outer toggle child count: " <> show (Vector.length $ results outerKids)
+
+  -- The first child should be the quote, which itself has children
+  let innerQuote = Vector.head (results outerKids)
+  putStrLn $ "Inner quote has_children: " <> show (Blocks.hasChildren innerQuote)
+  grandKids <-
+    runTest (Text.pack "Fetching grandchildren (quote's children)") $
+      listBlockChildren methods (Blocks.id innerQuote) Nothing Nothing
+  putStrLn $ "Grandchild count: " <> show (Vector.length $ results grandKids)
+  Vector.forM_ (results grandKids) $ \kid ->
+    putStrLn $ "  - " <> Text.unpack (Blocks.type_ kid)
+
+  -- Verify mixed nesting bullet
+  let mixedBullet = result8List !! 4
+  mixedKids <-
+    runTest (Text.pack "Fetching mixed-nesting bullet children") $
+      listBlockChildren methods (Blocks.id mixedBullet) Nothing Nothing
+  putStrLn $ "\nMixed bullet child count: " <> show (Vector.length $ results mixedKids)
+  Vector.forM_ (results mixedKids) $ \kid ->
+    putStrLn $ "  - " <> Text.unpack (Blocks.type_ kid)
+
+  -- -----------------------------------------------------------------------
+  -- Section 10: withChildren combinator showcase
+  -- -----------------------------------------------------------------------
+  printHeader (Text.pack "withChildren Combinator Showcase")
+
+  let combinatorBlocks =
+        Vector.fromList
+          [ headingBlock 2 (mkRichText "withChildren Combinator"),
+            -- withChildren on various block types
+            paragraphBlock (mkRichText "Paragraph via withChildren")
+              `withChildren` Vector.singleton (textBlock "Nested under paragraph."),
+            calloutBlock (mkRichText "Callout via withChildren") (Just (EmojiIcon "📌"))
+              `withChildren` Vector.fromList
+                [ textBlock "Step 1: Read the docs.",
+                  textBlock "Step 2: Write the code.",
+                  textBlock "Step 3: Ship it."
+                ],
+            -- withChildren on a block that doesn't support children (no-op)
+            -- codeBlock and dividerBlock are unchanged by withChildren
+            codeBlock (mkRichText "-- withChildren is a no-op on code blocks") Haskell
+              `withChildren` Vector.singleton (textBlock "This child is silently dropped."),
+            dividerBlock
+          ]
+      appendReq9 = AppendBlockChildren {children = combinatorBlocks, position = Nothing}
+
+  result9 <-
+    runTest (Text.pack "Appending withChildren showcase") $
+      appendBlockChildren methods testPageId appendReq9
+  let result9List = Vector.toList (results result9)
+
+  putStrLn "withChildren results:"
+  putStrLn $ "  paragraph has_children: " <> show (Blocks.hasChildren (result9List !! 1))
+  putStrLn $ "  callout has_children: " <> show (Blocks.hasChildren (result9List !! 2))
+  putStrLn $ "  code has_children: " <> show (Blocks.hasChildren (result9List !! 3)) <> " (expected False)"
+
+  -- -----------------------------------------------------------------------
+  -- Section 11: Position-based insertion
   -- -----------------------------------------------------------------------
   printHeader (Text.pack "Position-based Insertion")
 
