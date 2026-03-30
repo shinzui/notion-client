@@ -20,6 +20,7 @@ import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Pages (PageObject)
+import Notion.V1.Properties (PropertySchema)
 import Notion.V1.RichText (RichText)
 import Notion.V1.Users (UserReference)
 import Prelude hiding (id)
@@ -50,7 +51,7 @@ data DatabaseObject = DatabaseObject
     lastEditedBy :: Maybe UserReference,
     title :: Vector RichText,
     description :: Maybe (Vector RichText),
-    properties :: Maybe Value,
+    properties :: Maybe (Map Text PropertySchema),
     icon :: Maybe Icon,
     cover :: Maybe Cover,
     url :: Text,
@@ -93,7 +94,7 @@ instance FromJSON DatabaseObject where
 -- | Initial data source configuration for database creation.
 -- Contains the property schema for the database's first data source.
 newtype InitialDataSource = InitialDataSource
-  { properties :: Value
+  { properties :: Map Text PropertySchema
   }
   deriving stock (Generic, Show)
 

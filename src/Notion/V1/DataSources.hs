@@ -25,6 +25,7 @@ import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType, Parent, UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Pages (PageObject)
+import Notion.V1.Properties (PropertySchema)
 import Notion.V1.RichText (RichText)
 import Notion.V1.Users (UserReference)
 import Prelude hiding (id)
@@ -41,7 +42,7 @@ data DataSourceObject = DataSourceObject
     lastEditedBy :: UserReference,
     title :: Vector RichText,
     description :: Vector RichText,
-    properties :: Value,
+    properties :: Map Text PropertySchema,
     url :: Text,
     parent :: Parent,
     databaseParent :: Maybe Parent,
@@ -82,7 +83,7 @@ instance FromJSON DataSourceObject where
 -- | Create data source request
 data CreateDataSource = CreateDataSource
   { parent :: Parent,
-    properties :: Value,
+    properties :: Map Text PropertySchema,
     title :: Maybe (Vector RichText),
     icon :: Maybe Icon
   }
@@ -95,7 +96,7 @@ instance ToJSON CreateDataSource where
 data UpdateDataSource = UpdateDataSource
   { title :: Maybe (Vector RichText),
     icon :: Maybe Icon,
-    properties :: Maybe Value,
+    properties :: Maybe (Map Text PropertySchema),
     inTrash :: Maybe Bool,
     parent :: Maybe Parent
   }

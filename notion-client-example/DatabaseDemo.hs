@@ -9,6 +9,7 @@ import Blocks (createBulletedListItemBlock, createHeadingBlock, createParagraphB
 import Console (printHeader, runTest)
 import Data.Aeson qualified as Aeson
 import Data.Map (fromList)
+import Data.Map qualified as Map
 import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
@@ -20,6 +21,7 @@ import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (Select, Title))
+import Notion.V1.Properties (PropertySchema (..), SelectColor (..), SelectOption (..))
 import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Prelude hiding (id)
 
@@ -77,19 +79,9 @@ runDatabaseDemo methods databaseIdStr = do
   printHeader (Text.pack "Creating Data Source")
 
   let newDsProperties =
-        Aeson.object
-          [ ( "Name",
-              Aeson.object
-                [ ("type", Aeson.String "title"),
-                  ("title", Aeson.object [])
-                ]
-            ),
-            ( "Description",
-              Aeson.object
-                [ ("type", Aeson.String "rich_text"),
-                  ("rich_text", Aeson.object [])
-                ]
-            )
+        Map.fromList
+          [ ("Name", TitleSchema {schemaId = "", schemaName = "Name"}),
+            ("Description", RichTextSchema {schemaId = "", schemaName = "Description"})
           ]
 
       createDsRequest =
@@ -111,43 +103,22 @@ runDatabaseDemo methods databaseIdStr = do
   -- Update data source schema: add properties
   printHeader (Text.pack "Updating Data Source Schema")
 
-  let -- Define Status and Priority select properties with options
+  let statusOptions =
+        Vector.fromList
+          [ SelectOption {id = Nothing, name = "Not Started", color = Just Red},
+            SelectOption {id = Nothing, name = "In Progress", color = Just Yellow},
+            SelectOption {id = Nothing, name = "Done", color = Just Green}
+          ]
+      priorityOptions =
+        Vector.fromList
+          [ SelectOption {id = Nothing, name = "High", color = Just Red},
+            SelectOption {id = Nothing, name = "Medium", color = Just Yellow},
+            SelectOption {id = Nothing, name = "Low", color = Just Gray}
+          ]
       combinedProperties =
-        Aeson.object
-          [ ( "Status",
-              Aeson.object
-                [ ("type", Aeson.String "select"),
-                  ( "select",
-                    Aeson.object
-                      [ ( "options",
-                          Aeson.Array $
-                            Vector.fromList
-                              [ Aeson.object [("name", Aeson.String "Not Started"), ("color", Aeson.String "red")],
-                                Aeson.object [("name", Aeson.String "In Progress"), ("color", Aeson.String "yellow")],
-                                Aeson.object [("name", Aeson.String "Done"), ("color", Aeson.String "green")]
-                              ]
-                        )
-                      ]
-                  )
-                ]
-            ),
-            ( "Priority",
-              Aeson.object
-                [ ("type", Aeson.String "select"),
-                  ( "select",
-                    Aeson.object
-                      [ ( "options",
-                          Aeson.Array $
-                            Vector.fromList
-                              [ Aeson.object [("name", Aeson.String "High"), ("color", Aeson.String "red")],
-                                Aeson.object [("name", Aeson.String "Medium"), ("color", Aeson.String "yellow")],
-                                Aeson.object [("name", Aeson.String "Low"), ("color", Aeson.String "gray")]
-                              ]
-                        )
-                      ]
-                  )
-                ]
-            )
+        Map.fromList
+          [ ("Status", SelectSchema {schemaId = "", schemaName = "Status", selectOptions = statusOptions}),
+            ("Priority", SelectSchema {schemaId = "", schemaName = "Priority", selectOptions = priorityOptions})
           ]
 
       updateDsRequest =

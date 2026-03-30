@@ -34,6 +34,7 @@ import Notion.V1.Pages
     mkCreatePage,
     mkUpdatePage,
   )
+import Notion.V1.Properties qualified as Props
 import Notion.V1.RichText (Annotations (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Notion.V1.RichText qualified as RT
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), dataSourceFilter, pageFilter, parseSearchResults)
@@ -344,7 +345,14 @@ jsonSerializationTests =
       testCase "CreateView serialization" testSerializeCreateView,
       testCase "UpdateView omits Nothing fields" testSerializeUpdateView,
       testCase "CreatePage with markdown field" testSerializeCreatePageMarkdown,
-      testCase "UpdatePage with template and eraseContent" testSerializeUpdatePageTemplate
+      testCase "UpdatePage with template and eraseContent" testSerializeUpdatePageTemplate,
+      testCase "PropertySchema select round-trip" testPropertySchemaSelectRoundTrip,
+      testCase "PropertySchema number round-trip" testPropertySchemaNumberRoundTrip,
+      testCase "PropertySchema formula round-trip" testPropertySchemaFormulaRoundTrip,
+      testCase "PropertySchema relation dual round-trip" testPropertySchemaRelationRoundTrip,
+      testCase "PropertySchema status round-trip" testPropertySchemaStatusRoundTrip,
+      testCase "NumberFormat round-trip" testNumberFormatRoundTrip,
+      testCase "RollupFunction round-trip" testRollupFunctionRoundTrip
     ]
 
 testSerializeAppendNoPosition :: Assertion
@@ -991,6 +999,108 @@ testViewLifecycle methods@Methods {createView, retrieveView, updateView, listVie
   deleted <- deleteView viewId
   let ViewObject {id = deletedViewId} = deleted
   assertEqual "Deleted view ID should match" viewId deletedViewId
+
+-- =====================================================================
+-- Property Schema Tests
+-- =====================================================================
+
+testPropertySchemaSelectRoundTrip :: Assertion
+testPropertySchemaSelectRoundTrip = do
+  let opts =
+        Vector.fromList
+          [ Props.SelectOption {id = Just "opt-1", name = "Done", color = Just Props.Green},
+            Props.SelectOption {id = Just "opt-2", name = "Todo", color = Just Props.Red}
+          ]
+      schema = Props.SelectSchema {schemaId = "abc", schemaName = "Status", selectOptions = opts}
+      json = Aeson.toJSON schema
+  case Aeson.fromJSON json of
+    Aeson.Success decoded -> assertEqual "round-trip" schema decoded
+    Aeson.Error err -> assertFailure $ "Failed to decode: " <> err
+
+testPropertySchemaNumberRoundTrip :: Assertion
+testPropertySchemaNumberRoundTrip = do
+  let schema = Props.NumberSchema {schemaId = "n1", schemaName = "Price", numberFormat = Props.Dollar}
+      json = Aeson.toJSON schema
+  case Aeson.fromJSON json of
+    Aeson.Success decoded -> assertEqual "round-trip" schema decoded
+    Aeson.Error err -> assertFailure $ "Failed to decode: " <> err
+
+testPropertySchemaFormulaRoundTrip :: Assertion
+testPropertySchemaFormulaRoundTrip = do
+  let schema = Props.FormulaSchema {schemaId = "f1", schemaName = "Total", formulaExpression = "prop(\"Price\") * 2"}
+      json = Aeson.toJSON schema
+  case Aeson.fromJSON json of
+    Aeson.Success decoded -> assertEqual "round-trip" schema decoded
+    Aeson.Error err -> assertFailure $ "Failed to decode: " <> err
+
+testPropertySchemaRelationRoundTrip :: Assertion
+testPropertySchemaRelationRoundTrip = do
+  let relType = Props.DualProperty {syncedPropertyId = "sp1", syncedPropertyName = "Related"}
+      schema = Props.RelationSchema {schemaId = "r1", schemaName = "Tasks", relationDataSourceId = UUID "ds-123", relationType = relType}
+      json = Aeson.toJSON schema
+  case Aeson.fromJSON json of
+    Aeson.Success decoded -> assertEqual "round-trip" schema decoded
+    Aeson.Error err -> assertFailure $ "Failed to decode: " <> err
+
+testPropertySchemaStatusRoundTrip :: Assertion
+testPropertySchemaStatusRoundTrip = do
+  let opts =
+        Vector.fromList
+          [ Props.SelectOption {id = Just "s1", name = "Not Started", color = Just Props.Gray},
+            Props.SelectOption {id = Just "s2", name = "Done", color = Just Props.Green}
+          ]
+      grps =
+        Vector.fromList
+          [ Props.StatusGroup {id = Just "g1", name = "To-do", color = Just Props.Gray, optionIds = Vector.fromList ["s1"]},
+            Props.StatusGroup {id = Just "g2", name = "Complete", color = Just Props.Green, optionIds = Vector.fromList ["s2"]}
+          ]
+      schema = Props.StatusSchema {schemaId = "st1", schemaName = "Status", statusOptions = opts, statusGroups = grps}
+      json = Aeson.toJSON schema
+  case Aeson.fromJSON json of
+    Aeson.Success decoded -> assertEqual "round-trip" schema decoded
+    Aeson.Error err -> assertFailure $ "Failed to decode: " <> err
+
+testNumberFormatRoundTrip :: Assertion
+testNumberFormatRoundTrip = do
+  let formats =
+        [ Props.NumberPlain,
+          Props.Dollar,
+          Props.Euro,
+          Props.Percent,
+          Props.NumberWithCommas,
+          Props.Yen,
+          Props.PhilippinePeso,
+          Props.SingaporeDollar
+        ]
+  mapM_
+    ( \fmt -> do
+        let json = Aeson.toJSON fmt
+        case Aeson.fromJSON json of
+          Aeson.Success decoded -> assertEqual ("round-trip for " <> show fmt) fmt decoded
+          Aeson.Error err -> assertFailure $ "Failed to decode " <> show fmt <> ": " <> err
+    )
+    formats
+
+testRollupFunctionRoundTrip :: Assertion
+testRollupFunctionRoundTrip = do
+  let fns =
+        [ Props.CountAll,
+          Props.Sum,
+          Props.Average,
+          Props.ShowOriginal,
+          Props.Checked,
+          Props.DateRange,
+          Props.ShowUnique,
+          Props.NotEmpty
+        ]
+  mapM_
+    ( \fn -> do
+        let json = Aeson.toJSON fn
+        case Aeson.fromJSON json of
+          Aeson.Success decoded -> assertEqual ("round-trip for " <> show fn) fn decoded
+          Aeson.Error err -> assertFailure $ "Failed to decode " <> show fn <> ": " <> err
+    )
+    fns
 
 -- =====================================================================
 -- Helpers

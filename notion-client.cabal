@@ -66,6 +66,7 @@ library
     Notion.V1.ListOf
     Notion.V1.Pages
     Notion.V1.Pagination
+    Notion.V1.Properties
     Notion.V1.RichText
     Notion.V1.Search
     Notion.V1.Users
