@@ -59,11 +59,11 @@ The notion-client library has typed property schemas, filters, and sorts (added 
   - [x] Add `ToJSON` instance for `NotionError` (for completeness)
   - [x] Add test that verifies `NotionError` parses from a sample error JSON
   - [x] Verify `cabal build all && cabal test` — 72 tests pass
-- [ ] Milestone 4: Property Schema Deletion and Nullable Properties
-  - [ ] Change `UpdateDataSource.properties` from `Maybe (Map Text PropertySchema)` to `Maybe (Map Text (Maybe PropertySchema))`
-  - [ ] Update `ToJSON` for `UpdateDataSource` to emit `null` for `Nothing` values in the properties map
-  - [ ] Update example and tests
-  - [ ] Verify `cabal build all && cabal test`
+- [x] Milestone 4: Property Schema Deletion and Nullable Properties (2026-03-29)
+  - [x] Change `UpdateDataSource.properties` from `Maybe (Map Text PropertySchema)` to `Maybe (Map Text (Maybe PropertySchema))`
+  - [x] Update `ToJSON` for `UpdateDataSource` to emit `null` for `Nothing` values in the properties map
+  - [x] Update example and tests
+  - [x] Verify `cabal build all && cabal test` — 73 tests pass
 - [ ] Milestone 5: Missing API Fields
   - [x] Add `publicUrl :: Maybe Text` to `PageObject` and update `FromJSON`/`ToJSON` (done in Milestone 1)
   - [ ] Add `isLocked :: Maybe Bool` to `UpdateDatabase`

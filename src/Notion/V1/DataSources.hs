@@ -20,7 +20,10 @@ module Notion.V1.DataSources
 where
 
 import Control.Applicative ((<|>))
-import Data.Aeson ((.:), (.:?))
+import Data.Aeson ((.:), (.:?), (.=))
+import Data.Aeson qualified as Aeson
+import Data.Aeson.Key qualified as Key
+import Data.Map qualified as Map
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType, Parent, UUID)
 import Notion.V1.Filter (Filter, Sort)
@@ -93,18 +96,35 @@ data CreateDataSource = CreateDataSource
 instance ToJSON CreateDataSource where
   toJSON = genericToJSON aesonOptions
 
--- | Update data source request
+-- | Update data source request.
+--
+-- The @properties@ field uses @Maybe (Maybe PropertySchema)@ to distinguish between:
+--
+-- * @Nothing@ (outer): omit the properties field entirely (don't touch properties)
+-- * @Just (Map ...)@ with @Just schema@: add or update a property
+-- * @Just (Map ...)@ with @Nothing@: delete a property (emits @null@ in JSON)
 data UpdateDataSource = UpdateDataSource
   { title :: Maybe (Vector RichText),
     icon :: Maybe Icon,
-    properties :: Maybe (Map Text PropertySchema),
+    properties :: Maybe (Map Text (Maybe PropertySchema)),
     inTrash :: Maybe Bool,
     parent :: Maybe Parent
   }
   deriving stock (Generic, Show)
 
 instance ToJSON UpdateDataSource where
-  toJSON = genericToJSON aesonOptions
+  toJSON UpdateDataSource {..} =
+    Aeson.object $
+      maybe [] (\t -> ["title" .= t]) title
+        <> maybe [] (\i -> ["icon" .= i]) icon
+        <> maybe [] (\p -> ["properties" .= mapWithNulls p]) properties
+        <> maybe [] (\t -> ["in_trash" .= t]) inTrash
+        <> maybe [] (\p -> ["parent" .= p]) parent
+    where
+      -- Emit Nothing values as JSON null (not omitted)
+      mapWithNulls :: Map Text (Maybe PropertySchema) -> Value
+      mapWithNulls m =
+        Aeson.object $ map (\(k, v) -> Key.fromText k .= v) (Map.toList m)
 
 -- | Query data source request
 data QueryDataSource = QueryDataSource

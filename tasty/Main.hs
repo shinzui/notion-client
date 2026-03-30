@@ -389,7 +389,8 @@ jsonSerializationTests =
       testCase "Filter: date next_week" testFilterDateRelative,
       testCase "Filter: formula string contains" testFilterFormula,
       testCase "Sort: property ascending" testSortProperty,
-      testCase "Sort: timestamp descending" testSortTimestamp
+      testCase "Sort: timestamp descending" testSortTimestamp,
+      testCase "UpdateDataSource nullable property deletion" testSerializeNullablePropertyDeletion
     ]
 
 testSerializeAppendNoPosition :: Assertion
@@ -1140,6 +1141,36 @@ testSortTimestamp = do
     Aeson.Object o -> do
       assertEqual "timestamp" (Just (Aeson.String "created_time")) (KeyMap.lookup "timestamp" o)
       assertEqual "direction" (Just (Aeson.String "descending")) (KeyMap.lookup "direction" o)
+    _ -> assertFailure "Expected JSON object"
+
+testSerializeNullablePropertyDeletion :: Assertion
+testSerializeNullablePropertyDeletion = do
+  let req =
+        DataSources.UpdateDataSource
+          { title = Nothing,
+            icon = Nothing,
+            properties =
+              Just $
+                Map.fromList
+                  [ ("OldColumn", Nothing),
+                    ("NewColumn", Just (Props.TitleSchema {schemaId = "", schemaName = "NewColumn"}))
+                  ],
+            inTrash = Nothing,
+            parent = Nothing
+          }
+      json = Aeson.toJSON req
+  case json of
+    Aeson.Object o -> do
+      assertBool "should have properties key" (KeyMap.member "properties" o)
+      case KeyMap.lookup "properties" o of
+        Just (Aeson.Object props) -> do
+          -- OldColumn should be null (deletion)
+          assertEqual "OldColumn should be null" (Just Aeson.Null) (KeyMap.lookup "OldColumn" props)
+          -- NewColumn should be a schema object
+          case KeyMap.lookup "NewColumn" props of
+            Just (Aeson.Object _) -> pure ()
+            _ -> assertFailure "Expected NewColumn to be an object"
+        _ -> assertFailure "Expected properties object"
     _ -> assertFailure "Expected JSON object"
 
 -- =====================================================================

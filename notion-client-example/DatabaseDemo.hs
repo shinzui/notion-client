@@ -118,8 +118,8 @@ runDatabaseDemo methods databaseIdStr = do
           ]
       combinedProperties =
         Map.fromList
-          [ ("Status", SelectSchema {schemaId = "", schemaName = "Status", selectOptions = statusOptions}),
-            ("Priority", SelectSchema {schemaId = "", schemaName = "Priority", selectOptions = priorityOptions})
+          [ ("Status", Just (SelectSchema {schemaId = "", schemaName = "Status", selectOptions = statusOptions})),
+            ("Priority", Just (SelectSchema {schemaId = "", schemaName = "Priority", selectOptions = priorityOptions}))
           ]
 
       updateDsRequest =
