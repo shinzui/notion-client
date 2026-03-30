@@ -19,6 +19,7 @@ import Notion.V1.Comments (CommentObject (..), CreateComment (..))
 import Notion.V1.Common (Icon (..), Parent (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
+import Notion.V1.Filter (Sort (..), SortDirection (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyValue (..), PropertyValueType (Select, Title))
 import Notion.V1.Properties (PropertySchema (..), SelectColor (..), SelectOption (..))
@@ -61,10 +62,11 @@ runDatabaseDemo methods databaseIdStr = do
   putStrLn $ "  properties: " <> show dsProperties
 
   -- Query the data source directly (preferred over queryDatabase in 2025-09-03)
+  -- Using typed sorts to order by created_time descending
   let dsQueryParams =
         DataSources.QueryDataSource
           { filter = Nothing,
-            sorts = Nothing,
+            sorts = Just [PropertySort "Name" Ascending],
             startCursor = Nothing,
             pageSize = Just 5,
             inTrash = Nothing

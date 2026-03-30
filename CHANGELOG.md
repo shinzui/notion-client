@@ -1,5 +1,19 @@
 # Changelog for notion-client
 
+## 0.4.0.0 (2026-03-29)
+
+### Breaking Changes
+* Replace `properties :: Maybe Value` in `DatabaseObject` with `Maybe (Map Text PropertySchema)`
+* Replace `properties :: Value` in `DataSourceObject` with `Map Text PropertySchema`
+* Replace `properties :: Value` / `Maybe Value` in `CreateDataSource`, `UpdateDataSource`, `InitialDataSource` with typed `PropertySchema`
+* Replace `filter :: Maybe Value` in `QueryDatabase` and `QueryDataSource` with `Maybe Filter`
+* Replace `sorts :: Maybe [Value]` in `QueryDatabase` and `QueryDataSource` with `Maybe [Sort]`
+
+### New Features
+* **Typed Property Schemas**: New `Notion.V1.Properties` module with `PropertySchema` sum type (23 property types), `SelectColor` enum (10 colors), `NumberFormat` enum (39 formats), `RollupFunction` enum (25 functions), `RelationType`, `SelectOption`, `StatusGroup`
+* **Typed Query Filters**: New `Notion.V1.Filter` module with `Filter` DSL — compound `And`/`Or` filters, `PropertyFilter` with 22 condition variants (text, number, checkbox, select, multi-select, date, people, files, relation, status, unique ID, verification, formula, rollup), and `TimestampFilter`
+* **Typed Query Sorts**: `Sort` type with `PropertySort` and `TimestampSort`, `SortDirection` enum
+
 ## 0.3.1.0 (2026-03-29)
 
 ### New Features

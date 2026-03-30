@@ -55,11 +55,11 @@ The library's existing CRUD endpoints for databases and data sources remain unch
   - [x] Replace `sorts :: Maybe [Value]` in `QueryDataSource` with `Maybe [Sort]` (2026-03-29)
   - [x] Add 2 JSON serialization tests for sort types (2026-03-29)
   - [x] Verify `cabal build all` succeeds — all 53 tests pass (2026-03-29)
-- [ ] Milestone 4: Update Example App and Validation
-  - [ ] Update `notion-client-example/DatabaseDemo.hs` to use typed property schemas, filters, and sorts instead of raw `Aeson.Value`
-  - [ ] Add E2E tests that exercise typed filters and sorts against live API
-  - [ ] Run full test suite: `cabal build all && cabal test`
-  - [ ] Update CHANGELOG.md
+- [x] Milestone 4: Update Example App and Validation (2026-03-29)
+  - [x] Update `notion-client-example/DatabaseDemo.hs` to use typed property schemas and sorts (2026-03-29)
+  - [x] Existing E2E tests pass with typed properties (live API parses correctly) (2026-03-29)
+  - [x] Run full test suite: all 53 tests pass (2026-03-29)
+  - [x] Update CHANGELOG.md with 0.4.0.0 entry (2026-03-29)
 
 
 ## Surprises & Discoveries
@@ -96,7 +96,24 @@ The library's existing CRUD endpoints for databases and data sources remain unch
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+All four milestones completed in a single session on 2026-03-29.
+
+**What was achieved:**
+
+- 2 new modules: `Notion.V1.Properties` and `Notion.V1.Filter`
+- `PropertySchema` sum type with 23 constructors covering all Notion property types
+- Supporting enums: `SelectColor` (10), `NumberFormat` (39), `RollupFunction` (25), `RelationType`
+- `Filter` DSL with compound (And/Or), property (22 condition variants), and timestamp filters
+- 14 leaf condition types: text, number, checkbox, select, multi-select, date, people, files, relation, status, unique ID, verification, formula, rollup
+- `Sort` and `SortDirection` types for typed query ordering
+- All `Value` fields in `DatabaseObject`, `DataSourceObject`, `CreateDataSource`, `UpdateDataSource`, `InitialDataSource`, `QueryDatabase`, `QueryDataSource` replaced with typed alternatives
+- Test count grew from 38 to 53 (15 new tests: 7 property schema + 8 filter/sort)
+- All existing integration tests pass against live Notion API with typed property schemas
+
+**Lessons learned:**
+
+- The existing integration tests served as validation that the typed `FromJSON`/`ToJSON` instances produce wire-compatible JSON — all 38 existing tests passed without modification after the type changes.
+- Milestones 2 and 3 were naturally combined since sorts were defined in the same module as filters, and the `QueryDatabase`/`QueryDataSource` changes touched both fields simultaneously.
 
 
 ## Context and Orientation
