@@ -7,6 +7,7 @@ where
 
 import Blocks (createBulletedListItemBlock, createHeadingBlock, createParagraphBlock)
 import Console (printHeader, runTest)
+import Control.Exception qualified as Exception
 import Data.Map qualified as Map
 import Data.String (fromString)
 import Data.Text qualified as Text
@@ -14,12 +15,14 @@ import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
-import Notion.V1.Common (Icon (..), Parent (..))
+import Notion.V1.Common (Icon (..), Parent (..), UUID (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
+import Notion.V1.Error (NotionError (..))
 import Notion.V1.Filter (Sort (..), SortDirection (..))
 import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (CreatePage (..), PageObject (..))
+import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyItemResponse (..))
+import Notion.V1.Pagination (paginateAll)
 import Notion.V1.Properties (PropertySchema (..), SelectColor (..), SelectOption (..))
 import Notion.V1.PropertyValue qualified as PV
 import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
@@ -190,13 +193,87 @@ runDatabaseDemo methods databaseIdStr = do
   let PageObject {id = newPageId, url = newPageUrl} = newPage
   putStrLn $ "New page created. Access at: " <> Text.unpack newPageUrl
 
-  -- Retrieve the new page
+  -- Retrieve the new page and read typed properties
+  printHeader (Text.pack "Typed Property Values")
+
   retrievedPage <-
     runTest (Text.pack "Retrieving newly created page") $
       retrievePage methods newPageId
 
-  let PageObject {url = retrievedPageUrl} = retrievedPage
+  let PageObject {url = retrievedPageUrl, properties = pageProps, publicUrl = pagePubUrl} = retrievedPage
   putStrLn $ "Retrieved page URL: " <> Text.unpack retrievedPageUrl
+  putStrLn $ "Public URL: " <> show pagePubUrl
+
+  -- Pattern-match on typed property values from the retrieved page
+  putStrLn "Reading typed properties:"
+  case Map.lookup "Status" pageProps of
+    Just (PV.SelectValue _pid (Just (PV.SelectOptionValue _ optName optColor))) ->
+      putStrLn $ "  Status: " <> Text.unpack optName <> " (color: " <> show optColor <> ")"
+    Just (PV.SelectValue _pid Nothing) ->
+      putStrLn "  Status: (empty)"
+    _ ->
+      putStrLn "  Status: (not found or unexpected type)"
+
+  case Map.lookup "Priority" pageProps of
+    Just (PV.SelectValue _pid (Just (PV.SelectOptionValue _ optName _))) ->
+      putStrLn $ "  Priority: " <> Text.unpack optName
+    _ ->
+      putStrLn "  Priority: (not found)"
+
+  case Map.lookup "title" pageProps of
+    Just (PV.TitleValue _pid rts) ->
+      putStrLn $ "  Title rich text count: " <> show (Vector.length rts)
+    _ ->
+      putStrLn "  Title: (not found)"
+
+  -- Demonstrate retrievePageProperty endpoint
+  printHeader (Text.pack "Retrieve Page Property Item")
+
+  -- Get the property ID for "Status" from the property value
+  case Map.lookup "Status" pageProps of
+    Just (PV.SelectValue propId _) -> do
+      propItem <-
+        runTest (Text.pack "Retrieving 'Status' property item") $
+          retrievePageProperty methods newPageId propId Nothing Nothing
+      case propItem of
+        SinglePropertyItem pv ->
+          putStrLn $ "  Single property item: " <> show pv
+        PaginatedPropertyItems _list propType ->
+          putStrLn $ "  Paginated property items (type: " <> Text.unpack propType <> ")"
+    _ ->
+      putStrLn "  Skipping (Status property not found)"
+
+  -- Demonstrate auto-pagination with paginateAll
+  printHeader (Text.pack "Auto-Pagination")
+
+  allPages <-
+    runTest (Text.pack "Paginating all data source results") $
+      paginateAll $ \cursor ->
+        queryDataSource methods dsId $
+          DataSources.QueryDataSource
+            { filter = Nothing,
+              sorts = Nothing,
+              startCursor = cursor,
+              pageSize = Just 2, -- small page size to exercise pagination
+              inTrash = Nothing,
+              filterProperties = Nothing
+            }
+  putStrLn $ "Total pages collected via paginateAll: " <> show (Vector.length allPages)
+
+  -- Demonstrate typed error handling
+  printHeader (Text.pack "Typed Error Handling")
+
+  putStr "Requesting invalid page to trigger NotionError... "
+  let badPageId = UUID "00000000-0000-0000-0000-000000000000"
+  result <- Exception.try @NotionError (retrievePage methods badPageId)
+  case result of
+    Left notionErr -> do
+      putStrLn "caught!"
+      putStrLn $ "  code: " <> Text.unpack (code notionErr)
+      putStrLn $ "  message: " <> Text.unpack (message notionErr)
+      putStrLn $ "  status: " <> show (status notionErr)
+    Right _ ->
+      putStrLn "unexpectedly succeeded (page exists?)"
 
   -- Add blocks to the newly created page
   let additionalBlocks =
