@@ -563,6 +563,32 @@ data BlockContent
       { syncedFrom :: SyncedFrom,
         children :: Vector BlockContent
       }
+  | -- | Heading level 4.
+    --
+    -- Children are only accepted by the API when @isToggleable@ is @True@.
+    Heading4Block
+      { richText :: Vector RichText,
+        color :: Color,
+        isToggleable :: Bool,
+        children :: Vector BlockContent
+      }
+  | -- | Tab block (container).
+    TabBlock
+      { children :: Vector BlockContent
+      }
+  | -- | Meeting notes block (read-only).
+    MeetingNotesBlock
+      { meetingTitle :: Text,
+        meetingStatus :: Maybe Text,
+        calendarEvent :: Maybe Value,
+        recording :: Maybe Value,
+        children :: Vector BlockContent
+      }
+  | -- | Template block (deprecated, but still returned by the API).
+    TemplateBlock
+      { richText :: Vector RichText,
+        children :: Vector BlockContent
+      }
   | -- | Unsupported block type returned by the API.
     UnsupportedBlock
   | -- | Fallback for block types not yet modeled.
@@ -708,6 +734,29 @@ blockContentFields = \case
         ["synced_from" .= syncedFrom]
           <> childrenPairs children
     )
+  Heading4Block {..} ->
+    ( "heading_4",
+      object $
+        ["rich_text" .= richText, "color" .= color, "is_toggleable" .= isToggleable]
+          <> childrenPairs children
+    )
+  TabBlock {..} ->
+    ("tab", object $ childrenPairs children)
+  MeetingNotesBlock {..} ->
+    ( "meeting_notes",
+      object $
+        ["title" .= meetingTitle]
+          <> maybe [] (\s -> ["status" .= s]) meetingStatus
+          <> maybe [] (\ce -> ["calendar_event" .= ce]) calendarEvent
+          <> maybe [] (\r -> ["recording" .= r]) recording
+          <> childrenPairs children
+    )
+  TemplateBlock {..} ->
+    ( "template",
+      object $
+        ["rich_text" .= richText]
+          <> childrenPairs children
+    )
   UnsupportedBlock ->
     ("unsupported", object [])
   UnknownBlock typeName val ->
@@ -851,6 +900,26 @@ parseBlockContent typeName val = case typeName of
     syncedFrom <- o .: "synced_from"
     children <- fromMaybe Vector.empty <$> o .:? "children"
     pure SyncedBlockContent {..}
+  "heading_4" -> parseObj $ \o -> do
+    richText <- o .: "rich_text"
+    color <- fromMaybe Default <$> o .:? "color"
+    isToggleable <- fromMaybe False <$> o .:? "is_toggleable"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
+    pure Heading4Block {..}
+  "tab" -> parseObj $ \o -> do
+    children <- fromMaybe Vector.empty <$> o .:? "children"
+    pure TabBlock {..}
+  "meeting_notes" -> parseObj $ \o -> do
+    meetingTitle <- o .: "title"
+    meetingStatus <- o .:? "status"
+    calendarEvent <- o .:? "calendar_event"
+    recording <- o .:? "recording"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
+    pure MeetingNotesBlock {..}
+  "template" -> parseObj $ \o -> do
+    richText <- o .: "rich_text"
+    children <- fromMaybe Vector.empty <$> o .:? "children"
+    pure TemplateBlock {..}
   "unsupported" -> pure UnsupportedBlock
   _ -> pure (UnknownBlock typeName val)
   where
@@ -917,10 +986,11 @@ textBlock = paragraphBlock . mkRichText
 paragraphBlock :: Vector RichText -> BlockContent
 paragraphBlock rt = ParagraphBlock rt Default Nothing Vector.empty
 
--- | Create a heading block at the given level (1, 2, or 3; defaults to 3).
+-- | Create a heading block at the given level (1, 2, 3, or 4; defaults to 3).
 headingBlock :: Int -> Vector RichText -> BlockContent
 headingBlock 1 rt = Heading1Block rt Default False Vector.empty
 headingBlock 2 rt = Heading2Block rt Default False Vector.empty
+headingBlock 4 rt = Heading4Block rt Default False Vector.empty
 headingBlock _ rt = Heading3Block rt Default False Vector.empty
 
 -- | Create a bulleted list item block.
@@ -985,4 +1055,8 @@ withChildren block cs = case block of
   ColumnBlock {} -> block {children = cs}
   TableBlock {} -> block {children = cs}
   SyncedBlockContent {} -> block {children = cs}
+  Heading4Block {} -> block {children = cs}
+  TabBlock {} -> block {children = cs}
+  MeetingNotesBlock {} -> block {children = cs}
+  TemplateBlock {} -> block {children = cs}
   _ -> block
