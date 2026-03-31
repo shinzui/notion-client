@@ -35,6 +35,9 @@ data CommentAttachment = CommentAttachment
 instance FromJSON CommentAttachment where
   parseJSON = genericParseJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
 
+instance ToJSON CommentAttachment where
+  toJSON = genericToJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
+
 -- | Comment display name (custom display name for comments)
 data CommentDisplayName = CommentDisplayName
   { type_ :: Text,
@@ -45,6 +48,9 @@ data CommentDisplayName = CommentDisplayName
 
 instance FromJSON CommentDisplayName where
   parseJSON = genericParseJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
+
+instance ToJSON CommentDisplayName where
+  toJSON = genericToJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
 
 -- | Notion comment object
 data CommentObject = CommentObject
@@ -83,7 +89,9 @@ instance FromJSON CommentObject where
 data CreateComment = CreateComment
   { parent :: Parent,
     richText :: Vector RichText,
-    discussionId :: Maybe UUID
+    discussionId :: Maybe UUID,
+    attachments :: Maybe (Vector CommentAttachment),
+    displayName :: Maybe CommentDisplayName
   }
   deriving stock (Generic, Show)
 

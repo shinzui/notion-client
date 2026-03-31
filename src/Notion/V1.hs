@@ -16,9 +16,9 @@
 --
 --     clientEnv <- getClientEnv "https://api.notion.com/v1"
 --
---     let Methods{ retrievePage } = makeMethods clientEnv (Text.pack token)
+--     let methods = makeMethods clientEnv (Text.pack token)
 --
---     page <- retrievePage "page-id-here"
+--     page <- retrievePage methods "page-id-here"
 --
 --     print page
 -- @
@@ -97,7 +97,7 @@ makeMethods clientEnv token = Methods {..}
                  :<|> queryDataSource
                  :<|> listDataSourceTemplates_
                )
-        :<|> ( retrievePage
+        :<|> ( retrievePageFiltered
                  :<|> createPage
                  :<|> updatePage
                  :<|> retrievePageProperty
@@ -146,6 +146,9 @@ makeMethods clientEnv token = Methods {..}
           Nothing -> Exception.throwIO err
         Right a -> return a
 
+    -- Wrap retrievePageFiltered to provide backward-compatible retrievePage
+    retrievePage pid = retrievePageFiltered pid []
+
     -- Keep the ListOf structure
     listBlockChildren = retrieveBlockChildren_
     listUsers = listUsers_
@@ -185,6 +188,8 @@ data Methods = Methods
     -- \* Pages
     createPage :: CreatePage -> IO PageObject,
     retrievePage :: PageID -> IO PageObject,
+    -- | Retrieve a page, optionally filtering which properties are returned.
+    retrievePageFiltered :: PageID -> [Text] -> IO PageObject,
     updatePage :: PageID -> UpdatePage -> IO PageObject,
     -- | Retrieve a single page property item.
     -- For title, rich_text, relation, and people properties, the response may be paginated.

@@ -208,6 +208,8 @@ trashPage Methods {updatePage} pageId = do
         UpdatePage
           { properties = Map.empty,
             inTrash = Just True,
+            isLocked = Nothing,
+            isArchived = Nothing,
             icon = Nothing,
             cover = Nothing,
             template = Nothing,
@@ -916,6 +918,8 @@ testSerializeUpdatePageTemplate = do
         UpdatePage
           { properties = Map.empty,
             inTrash = Nothing,
+            isLocked = Nothing,
+            isArchived = Nothing,
             icon = Nothing,
             cover = Nothing,
             template = Just (DefaultTemplate (Just "America/Chicago")),
@@ -1132,7 +1136,9 @@ testCommentLifecycle methods@Methods {createComment, listComments, appendBlockCh
         CreateComment
           { parent = PageParent {pageId},
             richText = Vector.singleton (mkTypedRichText "This is a page-level comment from E2E tests."),
-            discussionId = Nothing
+            discussionId = Nothing,
+            attachments = Nothing,
+            displayName = Nothing
           }
   comment1 <- createComment pageComment
   let CommentObject {id = comment1Id} = comment1
@@ -1143,7 +1149,9 @@ testCommentLifecycle methods@Methods {createComment, listComments, appendBlockCh
         CreateComment
           { parent = BlockParent {blockId},
             richText = Vector.singleton (mkTypedRichText "This is a block-level comment from E2E tests."),
-            discussionId = Nothing
+            discussionId = Nothing,
+            attachments = Nothing,
+            displayName = Nothing
           }
   comment2 <- createComment blockComment
   let CommentObject {id = comment2Id} = comment2

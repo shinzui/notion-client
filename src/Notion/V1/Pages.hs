@@ -43,6 +43,7 @@ import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.PropertyValue (PropertyValue)
 import Notion.V1.Users (UserReference)
+import Servant.API (QueryParams)
 
 -- | Page ID
 type PageID = UUID
@@ -173,6 +174,8 @@ mkCreatePage parent properties =
 data UpdatePage = UpdatePage
   { properties :: PageProperties,
     inTrash :: Maybe Bool,
+    isLocked :: Maybe Bool,
+    isArchived :: Maybe Bool,
     icon :: Maybe Icon,
     cover :: Maybe Cover,
     template :: Maybe Template,
@@ -189,6 +192,8 @@ mkUpdatePage properties =
   UpdatePage
     { properties,
       inTrash = Nothing,
+      isLocked = Nothing,
+      isArchived = Nothing,
       icon = Nothing,
       cover = Nothing,
       template = Nothing,
@@ -346,6 +351,7 @@ instance FromJSON PropertyItemResponse where
 type API =
   "pages"
     :> ( Capture "page_id" PageID
+           :> QueryParams "filter_properties" Text
            :> Get '[JSON] PageObject
            :<|> ReqBody '[JSON] CreatePage
            :> Post '[JSON] PageObject
