@@ -1,5 +1,16 @@
 # Changelog for notion-client
 
+## 0.6.0.0 (2026-03-30)
+
+### Breaking Changes
+* Replace untyped `Value` block content with typed `BlockContent` sum type in `Notion.V1.BlockContent` module
+* `AppendBlockChildren` and `CreatePage` now use `[BlockContent]` instead of `[Value]` for children
+* Block types are now statically typed variants (e.g., `Paragraph`, `Heading1`, `BulletedListItem`, `Code`, `Toggle`, `Callout`, etc.) instead of free-form JSON
+
+### New Features
+* **Typed Block Content**: New `Notion.V1.BlockContent` module with `BlockContent` sum type for creating blocks with compile-time safety and smart constructors
+* **Nested Block Children**: `BlockContent` supports recursive `children` for creating nested block hierarchies in a single API call (e.g., toggles containing paragraphs, bulleted lists with sub-items)
+
 ## 0.5.0.0 (2026-03-29)
 
 ### Breaking Changes
