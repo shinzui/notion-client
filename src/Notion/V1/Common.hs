@@ -132,6 +132,8 @@ data Icon
     NativeIcon {iconName :: Text, iconColor :: Maybe Text}
   | -- | Custom emoji icon specified by ID
     CustomEmojiIcon {customEmojiId :: UUID}
+  | -- | File upload icon referenced by upload ID
+    FileUploadIcon {fileUploadId :: UUID}
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON Icon where
@@ -144,6 +146,9 @@ instance FromJSON Icon where
         "external" -> ExternalIcon <$> o .: "external"
         "icon" -> NativeIcon <$> o .: "name" <*> o .:? "color"
         "custom_emoji" -> CustomEmojiIcon <$> o .: "id"
+        "file_upload" -> do
+          uploadObj <- o .: "file_upload"
+          FileUploadIcon <$> uploadObj .: "id"
         _ -> fail $ "Unknown icon type: " <> unpack iconType
     _ -> fail "Expected object for Icon"
 
@@ -153,11 +158,13 @@ instance ToJSON Icon where
   toJSON (ExternalIcon external) = object ["type" .= ("external" :: Text), "external" .= external]
   toJSON (NativeIcon name color) = object $ ["type" .= ("icon" :: Text), "name" .= name] <> maybe [] (\c -> ["color" .= c]) color
   toJSON (CustomEmojiIcon eid) = object ["type" .= ("custom_emoji" :: Text), "id" .= eid]
+  toJSON (FileUploadIcon uid) = object ["type" .= ("file_upload" :: Text), "file_upload" .= object ["id" .= uid]]
 
 -- | Cover object for pages/databases
 data Cover
   = FileCover {file :: File}
   | ExternalCover {external :: ExternalFile}
+  | FileUploadCover {fileUploadId :: UUID}
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON Cover where
@@ -167,12 +174,16 @@ instance FromJSON Cover where
       case coverType of
         "file" -> FileCover <$> o .: "file"
         "external" -> ExternalCover <$> o .: "external"
+        "file_upload" -> do
+          uploadObj <- o .: "file_upload"
+          FileUploadCover <$> uploadObj .: "id"
         _ -> fail $ "Unknown cover type: " <> unpack coverType
     _ -> fail "Expected object for Cover"
 
 instance ToJSON Cover where
   toJSON (FileCover file) = object ["type" .= ("file" :: Text), "file" .= file]
   toJSON (ExternalCover external) = object ["type" .= ("external" :: Text), "external" .= external]
+  toJSON (FileUploadCover uid) = object ["type" .= ("file_upload" :: Text), "file_upload" .= object ["id" .= uid]]
 
 -- | Internal file object
 data File = File

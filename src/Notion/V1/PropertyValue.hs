@@ -38,6 +38,7 @@ module Notion.V1.PropertyValue
     statusValue,
     peopleValue,
     filesValue,
+    fileUploadFilesValue,
   )
 where
 
@@ -176,6 +177,7 @@ instance ToJSON SelectOptionValue where
 data FileValue
   = InternalFileValue {name :: Text, file :: File}
   | ExternalFileValue {name :: Text, external :: ExternalFile}
+  | FileUploadFileValue {name :: Text, fileUploadId :: UUID}
   deriving stock (Show)
 
 instance FromJSON FileValue where
@@ -186,6 +188,10 @@ instance FromJSON FileValue where
       case fileType of
         "file" -> InternalFileValue n <$> o .: "file"
         "external" -> ExternalFileValue n <$> o .: "external"
+        "file_upload" -> do
+          uploadObj <- o .: "file_upload"
+          uploadId <- uploadObj .: "id"
+          pure (FileUploadFileValue n uploadId)
         other -> fail $ "Unknown file value type: " <> unpack other
     _ -> fail "Expected object for FileValue"
 
@@ -194,6 +200,12 @@ instance ToJSON FileValue where
     Aeson.object ["type" .= ("file" :: Text), "name" .= n, "file" .= f]
   toJSON (ExternalFileValue n e) =
     Aeson.object ["type" .= ("external" :: Text), "name" .= n, "external" .= e]
+  toJSON (FileUploadFileValue n uid) =
+    Aeson.object
+      [ "type" .= ("file_upload" :: Text),
+        "name" .= n,
+        "file_upload" .= Aeson.object ["id" .= uid]
+      ]
 
 -- | A relation reference (just a page ID).
 newtype RelationRef = RelationRef {id :: UUID}
@@ -351,3 +363,7 @@ peopleValue ids = PeopleValue "" (Vector.fromList (map (\i -> UserReference i "u
 -- | Create a files property value from a list of external URLs.
 filesValue :: [Text] -> PropertyValue
 filesValue urls = FilesValue "" (Vector.fromList (map (\u -> ExternalFileValue "" (ExternalFile u)) urls))
+
+-- | Create a files property value from a list of file upload references.
+fileUploadFilesValue :: [(Text, UUID)] -> PropertyValue
+fileUploadFilesValue pairs = FilesValue "" (Vector.fromList (map (\(n, uid) -> FileUploadFileValue n uid) pairs))

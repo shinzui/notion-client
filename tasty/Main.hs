@@ -14,13 +14,14 @@ import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (.
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject (..), CreateComment (..))
 import Notion.V1.Comments qualified as Comments
-import Notion.V1.Common (Color (..), ExternalFile (..), Icon (..), Parent (..), UUID (..))
+import Notion.V1.Common (Color (..), Cover (..), ExternalFile (..), Icon (..), Parent (..), UUID (..))
 import Notion.V1.CustomEmojis (CustomEmoji (..))
 import Notion.V1.DataSources (DataSourceObject (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.Databases qualified as Databases
 import Notion.V1.Error (NotionError (..))
+import Notion.V1.FileUploads qualified as FU
 import Notion.V1.Filter qualified as F
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.ListOf qualified as ListOf
@@ -49,6 +50,7 @@ import Notion.V1.Views (CreateView (..), QueryView (..), UpdateView (..), ViewOb
 import System.Environment qualified as Environment
 import Test.Tasty
 import Test.Tasty.HUnit
+import Web.HttpApiData (toQueryParam)
 
 main :: IO ()
 main = do
@@ -158,6 +160,7 @@ tests = do
       [ jsonParsingTests,
         jsonSerializationTests,
         propertyValueTests,
+        fileUploadTests,
         basicIntegration,
         markdownE2E,
         pageE2E,
@@ -1807,6 +1810,174 @@ testRollupFunctionRoundTrip = do
           Aeson.Error err -> assertFailure $ "Failed to decode " <> show fn <> ": " <> err
     )
     fns
+
+-- =====================================================================
+-- File Upload Tests
+-- =====================================================================
+
+fileUploadTests :: TestTree
+fileUploadTests =
+  testGroup
+    "File Uploads"
+    [ testCase "FileUploadObject JSON round-trip (pending)" testFileUploadObjectPending,
+      testCase "FileUploadObject JSON parse (uploaded with expiry)" testFileUploadObjectUploaded,
+      testCase "CreateFileUpload single-part serialization" testCreateSinglePart,
+      testCase "CreateFileUpload multi-part serialization" testCreateMultiPart,
+      testCase "CreateFileUpload external URL serialization" testCreateExternalUrl,
+      testCase "FileUploadStatus ToHttpApiData" testFileUploadStatusQueryParam,
+      testCase "FileValue file_upload round-trip" testFileValueFileUpload,
+      testCase "Icon file_upload round-trip" testIconFileUpload,
+      testCase "Cover file_upload round-trip" testCoverFileUpload
+    ]
+
+testFileUploadObjectPending :: Assertion
+testFileUploadObjectPending = do
+  let json =
+        "{\"id\":\"fu-123\",\"object\":\"file_upload\",\"status\":\"pending\""
+          <> ",\"created_time\":\"2026-03-31T10:00:00.000+00:00\""
+          <> ",\"last_edited_time\":\"2026-03-31T10:00:00.000+00:00\""
+          <> ",\"created_by\":{\"id\":\"user-1\",\"type\":\"person\"}"
+          <> ",\"in_trash\":false}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse FileUploadObject: " <> err
+    Right (obj :: FU.FileUploadObject) -> do
+      let FU.FileUploadObject {id = objId, object = objObject, status = objStatus, filename = objFilename} = obj
+      assertEqual "status" FU.Pending objStatus
+      assertEqual "object" "file_upload" objObject
+      assertEqual "filename" Nothing objFilename
+      -- Round-trip: re-encode and re-decode
+      case Aeson.fromJSON (Aeson.toJSON obj) of
+        Aeson.Error err2 -> assertFailure $ "Round-trip failed: " <> err2
+        Aeson.Success (obj2 :: FU.FileUploadObject) -> do
+          let FU.FileUploadObject {id = objId2, status = objStatus2} = obj2
+          assertEqual "round-trip status" objStatus objStatus2
+          assertEqual "round-trip id" objId objId2
+
+testFileUploadObjectUploaded :: Assertion
+testFileUploadObjectUploaded = do
+  let json =
+        "{\"id\":\"fu-456\",\"object\":\"file_upload\",\"status\":\"uploaded\""
+          <> ",\"filename\":\"photo.png\",\"content_type\":\"image/png\",\"content_length\":12345"
+          <> ",\"created_time\":\"2026-03-31T10:00:00.000+00:00\""
+          <> ",\"last_edited_time\":\"2026-03-31T10:05:00.000+00:00\""
+          <> ",\"created_by\":{\"id\":\"user-1\",\"type\":\"bot\"}"
+          <> ",\"in_trash\":false"
+          <> ",\"expiry_time\":\"2026-03-31T11:00:00.000+00:00\""
+          <> ",\"number_of_parts\":{\"total\":1,\"sent\":1}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse FileUploadObject: " <> err
+    Right (obj :: FU.FileUploadObject) -> do
+      let FU.FileUploadObject
+            { status = objStatus,
+              filename = objFilename,
+              contentType = objContentType,
+              contentLength = objContentLength,
+              expiryTime = objExpiryTime,
+              numberOfParts = objNumberOfParts
+            } = obj
+      assertEqual "status" FU.Uploaded objStatus
+      assertEqual "filename" (Just "photo.png") objFilename
+      assertEqual "content_type" (Just "image/png") objContentType
+      assertEqual "content_length" (Just 12345) objContentLength
+      assertBool "expiry_time should be Just" (objExpiryTime /= Nothing)
+      case objNumberOfParts of
+        Just np -> do
+          assertEqual "total parts" 1 (FU.total np)
+          assertEqual "sent parts" 1 (FU.sent np)
+        Nothing -> assertFailure "Expected number_of_parts"
+
+testCreateSinglePart :: Assertion
+testCreateSinglePart = do
+  let req = FU.mkSinglePartUpload (Just "test.txt")
+      json = Aeson.toJSON req
+  case json of
+    Aeson.Object o -> do
+      assertBool "should not have mode key (Nothing is omitted)" (not $ KeyMap.member "mode" o)
+      assertEqual "filename" (Just (Aeson.String "test.txt")) (KeyMap.lookup "filename" o)
+    _ -> assertFailure "Expected JSON object"
+
+testCreateMultiPart :: Assertion
+testCreateMultiPart = do
+  let req = FU.mkMultiPartUpload "big.zip" 5 (Just "application/zip")
+      json = Aeson.toJSON req
+  case json of
+    Aeson.Object o -> do
+      assertEqual "mode" (Just (Aeson.String "multi_part")) (KeyMap.lookup "mode" o)
+      assertEqual "filename" (Just (Aeson.String "big.zip")) (KeyMap.lookup "filename" o)
+      assertEqual "number_of_parts" (Just (Aeson.Number 5)) (KeyMap.lookup "number_of_parts" o)
+      assertEqual "content_type" (Just (Aeson.String "application/zip")) (KeyMap.lookup "content_type" o)
+    _ -> assertFailure "Expected JSON object"
+
+testCreateExternalUrl :: Assertion
+testCreateExternalUrl = do
+  let req = FU.mkExternalUrlUpload "https://example.com/file.pdf" Nothing
+      json = Aeson.toJSON req
+  case json of
+    Aeson.Object o -> do
+      assertEqual "mode" (Just (Aeson.String "external_url")) (KeyMap.lookup "mode" o)
+      assertEqual "external_url" (Just (Aeson.String "https://example.com/file.pdf")) (KeyMap.lookup "external_url" o)
+      assertBool "should not have filename" (not $ KeyMap.member "filename" o)
+    _ -> assertFailure "Expected JSON object"
+
+testFileUploadStatusQueryParam :: Assertion
+testFileUploadStatusQueryParam = do
+  assertEqual "Pending" "pending" (toQueryParam FU.Pending)
+  assertEqual "Uploaded" "uploaded" (toQueryParam FU.Uploaded)
+  assertEqual "Expired" "expired" (toQueryParam FU.Expired)
+  assertEqual "Failed" "failed" (toQueryParam FU.Failed)
+
+testFileValueFileUpload :: Assertion
+testFileValueFileUpload = do
+  let json =
+        "{\"type\":\"file_upload\",\"name\":\"photo.png\",\"file_upload\":{\"id\":\"fu-789\"}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse FileValue: " <> err
+    Right (PV.FileUploadFileValue n uid) -> do
+      assertEqual "name" "photo.png" n
+      assertEqual "fileUploadId" (UUID "fu-789") uid
+    Right other -> assertFailure $ "Expected FileUploadFileValue, got: " <> show other
+  -- Round-trip
+  let val = PV.FileUploadFileValue "doc.pdf" (UUID "fu-abc")
+  case Aeson.fromJSON (Aeson.toJSON val) of
+    Aeson.Error err -> assertFailure $ "Round-trip failed: " <> err
+    Aeson.Success (PV.FileUploadFileValue n2 uid2) -> do
+      assertEqual "name rt" "doc.pdf" n2
+      assertEqual "id rt" (UUID "fu-abc") uid2
+    Aeson.Success other -> assertFailure $ "Expected FileUploadFileValue, got: " <> show other
+
+testIconFileUpload :: Assertion
+testIconFileUpload = do
+  let json =
+        "{\"type\":\"file_upload\",\"file_upload\":{\"id\":\"fu-icon\"}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse Icon: " <> err
+    Right (FileUploadIcon uid) ->
+      assertEqual "fileUploadId" (UUID "fu-icon") uid
+    Right other -> assertFailure $ "Expected FileUploadIcon, got: " <> show other
+  -- Round-trip
+  let icon = FileUploadIcon (UUID "fu-icon-2")
+  case Aeson.fromJSON (Aeson.toJSON icon) of
+    Aeson.Error err -> assertFailure $ "Round-trip failed: " <> err
+    Aeson.Success (FileUploadIcon uid2) ->
+      assertEqual "id rt" (UUID "fu-icon-2") uid2
+    Aeson.Success other -> assertFailure $ "Expected FileUploadIcon, got: " <> show other
+
+testCoverFileUpload :: Assertion
+testCoverFileUpload = do
+  let json =
+        "{\"type\":\"file_upload\",\"file_upload\":{\"id\":\"fu-cover\"}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse Cover: " <> err
+    Right (FileUploadCover uid) ->
+      assertEqual "fileUploadId" (UUID "fu-cover") uid
+    Right other -> assertFailure $ "Expected FileUploadCover, got: " <> show other
+  -- Round-trip
+  let cover = FileUploadCover (UUID "fu-cover-2")
+  case Aeson.fromJSON (Aeson.toJSON cover) of
+    Aeson.Error err -> assertFailure $ "Round-trip failed: " <> err
+    Aeson.Success (FileUploadCover uid2) ->
+      assertEqual "id rt" (UUID "fu-cover-2") uid2
+    Aeson.Success other -> assertFailure $ "Expected FileUploadCover, got: " <> show other
 
 -- =====================================================================
 -- Helpers

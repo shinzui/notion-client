@@ -50,6 +50,8 @@ import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (CreateDatabase, DatabaseID, DatabaseObject, QueryDatabase, UpdateDatabase)
 import Notion.V1.Databases qualified as Databases
 import Notion.V1.Error (parseNotionError)
+import Notion.V1.FileUploads (FileUploadID, FileUploadObject, FileUploadStatus)
+import Notion.V1.FileUploads qualified as FileUploads
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
 import Notion.V1.Pages qualified as Pages
@@ -61,7 +63,7 @@ import Notion.V1.Views (ViewObject)
 import Notion.V1.Views qualified as Views
 import Servant.Client (ClientEnv)
 import Servant.Client qualified as Client
-import Servant.Multipart.Client ()
+import Servant.Multipart.Client (genBoundary)
 
 -- | Convenient utility to get a `ClientEnv` for the most common use case
 getClientEnv ::
@@ -125,6 +127,12 @@ makeMethods clientEnv token = Methods {..}
                  :<|> queryView
                )
         :<|> listCustomEmojis_
+        :<|> ( createFileUpload
+                 :<|> retrieveFileUpload
+                 :<|> sendFileUploadContent_
+                 :<|> completeFileUpload
+                 :<|> listFileUploads_
+               )
       ) = Client.hoistClient @API Proxy run (Client.client @API Proxy) authorization notionVersion
 
     authorization = "Bearer " <> token
@@ -146,6 +154,10 @@ makeMethods clientEnv token = Methods {..}
     listDataSourceTemplates = listDataSourceTemplates_
     listViews = listViews_
     listCustomEmojis = listCustomEmojis_
+    listFileUploads = listFileUploads_
+    sendFileUploadContent fid upload = do
+      boundary <- genBoundary
+      sendFileUploadContent_ fid (boundary, upload)
 
 -- | API methods
 data Methods = Methods
@@ -260,7 +272,20 @@ data Methods = Methods
       -- \^ start_cursor
       Maybe Natural ->
       -- \^ page_size
-      IO (ListOf CustomEmoji)
+      IO (ListOf CustomEmoji),
+    -- \* File Uploads
+    createFileUpload :: FileUploads.CreateFileUpload -> IO FileUploadObject,
+    retrieveFileUpload :: FileUploadID -> IO FileUploadObject,
+    sendFileUploadContent :: FileUploadID -> FileUploads.SendFileUpload -> IO FileUploadObject,
+    completeFileUpload :: FileUploadID -> IO FileUploadObject,
+    listFileUploads ::
+      Maybe FileUploadStatus ->
+      -- \^ status filter
+      Maybe Text ->
+      -- \^ start_cursor
+      Maybe Natural ->
+      -- \^ page_size
+      IO (ListOf FileUploadObject)
   }
 
 -- | Servant API
@@ -276,4 +301,5 @@ type API =
            :<|> Comments.API
            :<|> Views.API
            :<|> CustomEmojis.API
+           :<|> FileUploads.API
        )

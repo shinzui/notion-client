@@ -36,6 +36,7 @@ import Data.Maybe (isNothing)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import DatabaseDemo (runDatabaseDemo)
+import FileUploadDemo (runFileUploadDemo)
 import MarkdownDemo (runMarkdownDemo)
 import Notion.V1 (Methods (..), getClientEnv, makeMethods)
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), SearchSort (..), SearchSortDirection (..), dataSourceFilter, pageFilter, parseSearchResults)
@@ -74,6 +75,12 @@ main = do
 
   -- Custom Emojis demo (no setup needed)
   runCustomEmojiDemo methods
+
+  -- File upload demo (requires a test file path)
+  filePathEnv <- Environment.lookupEnv "NOTION_TEST_FILE"
+  case filePathEnv of
+    Just filePath -> runFileUploadDemo methods filePath
+    Nothing -> putStrLn "Skipping file upload demo (set NOTION_TEST_FILE to a file path to enable)"
 
   -- Optional Page tests
   case pageIdEnv of

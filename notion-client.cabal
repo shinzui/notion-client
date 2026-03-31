@@ -65,6 +65,7 @@ library
     Notion.V1.Databases
     Notion.V1.DataSources
     Notion.V1.Error
+    Notion.V1.FileUploads
     Notion.V1.Filter
     Notion.V1.ListOf
     Notion.V1.Pages
@@ -102,6 +103,7 @@ test-suite tasty
     , base
     , bytestring
     , containers
+    , http-api-data
     , http-client
     , http-client-tls
     , notion-client
@@ -124,6 +126,7 @@ executable notion-client-example
     Console
     CustomEmojiDemo
     DatabaseDemo
+    FileUploadDemo
     MarkdownDemo
     PageDemo
     TemplateDemo
