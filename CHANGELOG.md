@@ -1,5 +1,15 @@
 # Changelog for notion-client
 
+## 0.6.1.0 (2026-03-31)
+
+### New Features
+* **File Upload API**: New `Notion.V1.FileUploads` module with complete file upload support — create, send (multipart form-data), complete, retrieve, and list endpoints
+* Smart constructors for single-part, multi-part, and external URL upload modes
+* Add `file_upload` variant to `FileValue`, `Icon`, and `Cover` types
+
+### Other Changes
+* Update seihou scaffolding (exec-plan 0.1.2 → 0.1.3)
+
 ## 0.6.0.0 (2026-03-30)
 
 ### Breaking Changes
