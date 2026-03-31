@@ -83,6 +83,8 @@ data MentionContent
   | DatabaseMention {database :: UUID}
   | DateMention {date :: Date}
   | LinkPreviewMention {url :: Text}
+  | TemplateMentionDate {templateMentionDate :: Text}
+  | TemplateMentionUser {templateMentionUser :: Text}
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON MentionContent where
@@ -103,6 +105,13 @@ instance FromJSON MentionContent where
         "link_preview" -> do
           lpObj <- o .: "link_preview"
           LinkPreviewMention <$> parseUrlField lpObj
+        "template_mention" -> do
+          tmObj <- o .: "template_mention"
+          tmType <- tmObj .: "type"
+          case tmType of
+            "template_mention_date" -> TemplateMentionDate <$> tmObj .: "template_mention_date"
+            "template_mention_user" -> TemplateMentionUser <$> tmObj .: "template_mention_user"
+            other2 -> fail $ "Unknown template_mention type: " <> unpack other2
         other -> fail $ "Unknown mention type: " <> unpack other
     _ -> fail "Expected object for MentionContent"
     where
@@ -125,6 +134,16 @@ instance ToJSON MentionContent where
       object ["type" .= ("date" :: Text), "date" .= d]
     LinkPreviewMention u ->
       object ["type" .= ("link_preview" :: Text), "link_preview" .= object ["url" .= u]]
+    TemplateMentionDate d ->
+      object
+        [ "type" .= ("template_mention" :: Text),
+          "template_mention" .= object ["type" .= ("template_mention_date" :: Text), "template_mention_date" .= d]
+        ]
+    TemplateMentionUser u ->
+      object
+        [ "type" .= ("template_mention" :: Text),
+          "template_mention" .= object ["type" .= ("template_mention_user" :: Text), "template_mention_user" .= u]
+        ]
 
 -- | Equation content
 newtype EquationContent = EquationContent
