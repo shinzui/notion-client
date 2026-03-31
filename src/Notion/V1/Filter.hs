@@ -237,6 +237,8 @@ data DateCondition
   | DateNextMonth
   | DateNextYear
   | DateThisWeek
+  | DateThisMonth
+  | DateThisYear
   | DatePastWeek
   | DatePastMonth
   | DatePastYear
@@ -255,6 +257,8 @@ dateConditionToValue = \case
   DateNextMonth -> Aeson.object ["next_month" .= Aeson.object []]
   DateNextYear -> Aeson.object ["next_year" .= Aeson.object []]
   DateThisWeek -> Aeson.object ["this_week" .= Aeson.object []]
+  DateThisMonth -> Aeson.object ["this_month" .= Aeson.object []]
+  DateThisYear -> Aeson.object ["this_year" .= Aeson.object []]
   DatePastWeek -> Aeson.object ["past_week" .= Aeson.object []]
   DatePastMonth -> Aeson.object ["past_month" .= Aeson.object []]
   DatePastYear -> Aeson.object ["past_year" .= Aeson.object []]

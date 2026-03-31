@@ -253,6 +253,9 @@ data RollupFunction
   | Count
   | Empty
   | NotEmpty
+  | CountPerGroup
+  | PercentPerGroup
+  | Unique
   deriving stock (Eq, Show, Generic)
 
 instance FromJSON RollupFunction where
@@ -282,6 +285,9 @@ instance FromJSON RollupFunction where
     "count" -> pure Count
     "empty" -> pure Empty
     "not_empty" -> pure NotEmpty
+    "count_per_group" -> pure CountPerGroup
+    "percent_per_group" -> pure PercentPerGroup
+    "unique" -> pure Unique
     other -> fail $ "Unknown RollupFunction: " <> unpack other
 
 instance ToJSON RollupFunction where
@@ -310,6 +316,9 @@ instance ToJSON RollupFunction where
   toJSON Count = Aeson.String "count"
   toJSON Empty = Aeson.String "empty"
   toJSON NotEmpty = Aeson.String "not_empty"
+  toJSON CountPerGroup = Aeson.String "count_per_group"
+  toJSON PercentPerGroup = Aeson.String "percent_per_group"
+  toJSON Unique = Aeson.String "unique"
 
 -- | Relation property type configuration.
 data RelationType
