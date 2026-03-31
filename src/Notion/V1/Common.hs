@@ -46,7 +46,7 @@ instance ToJSON ObjectType where
 -- | Parent object that can be a database, data source, page, block, or workspace
 data Parent
   = DatabaseParent {databaseId :: UUID}
-  | DataSourceParent {dataSourceId :: UUID}
+  | DataSourceParent {dataSourceId :: UUID, parentDatabaseId :: Maybe UUID}
   | PageParent {pageId :: UUID}
   | BlockParent {blockId :: UUID}
   | WorkspaceParent {workspace :: Bool}
@@ -65,8 +65,8 @@ instance FromJSON Parent where
       parseByType = \case
         "database" -> fmap DatabaseParent . (.: "database_id")
         "database_id" -> fmap DatabaseParent . (.: "database_id")
-        "data_source" -> fmap DataSourceParent . (.: "data_source_id")
-        "data_source_id" -> fmap DataSourceParent . (.: "data_source_id")
+        "data_source" -> \o -> DataSourceParent <$> o .: "data_source_id" <*> o .:? "database_id"
+        "data_source_id" -> \o -> DataSourceParent <$> o .: "data_source_id" <*> o .:? "database_id"
         "page" -> fmap PageParent . (.: "page_id")
         "page_id" -> fmap PageParent . (.: "page_id")
         "block" -> fmap BlockParent . (.: "block_id")
@@ -77,7 +77,7 @@ instance FromJSON Parent where
       parseByKey :: Object -> Parser Parent
       parseByKey o =
         asum
-          [ DataSourceParent <$> o .: "data_source_id",
+          [ DataSourceParent <$> o .: "data_source_id" <*> o .:? "database_id",
             DatabaseParent <$> o .: "database_id",
             PageParent <$> o .: "page_id",
             BlockParent <$> o .: "block_id",
@@ -86,7 +86,10 @@ instance FromJSON Parent where
 
 instance ToJSON Parent where
   toJSON (DatabaseParent dbId) = object ["type" .= ("database_id" :: Text), "database_id" .= dbId]
-  toJSON (DataSourceParent dsId) = object ["type" .= ("data_source_id" :: Text), "data_source_id" .= dsId]
+  toJSON (DataSourceParent dsId mDbId) =
+    object $
+      ["type" .= ("data_source_id" :: Text), "data_source_id" .= dsId]
+        <> maybe [] (\dbId -> ["database_id" .= dbId]) mDbId
   toJSON (PageParent pId) = object ["type" .= ("page_id" :: Text), "page_id" .= pId]
   toJSON (BlockParent bId) = object ["type" .= ("block_id" :: Text), "block_id" .= bId]
   toJSON (WorkspaceParent ws) = object ["type" .= ("workspace" :: Text), "workspace" .= ws]

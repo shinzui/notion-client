@@ -58,6 +58,8 @@ data PageObject = PageObject
     icon :: Maybe Icon,
     parent :: Parent,
     inTrash :: Bool,
+    isLocked :: Maybe Bool,
+    isArchived :: Maybe Bool,
     properties :: Map Text PropertyValue,
     url :: Text,
     publicUrl :: Maybe Text,
@@ -79,6 +81,8 @@ instance FromJSON PageObject where
       icon <- o .:? "icon"
       parent <- o .: "parent"
       inTrash <- (o .: "in_trash") <|> (o .: "is_archived") <|> (o .: "archived") <|> pure False
+      isLocked <- o .:? "is_locked"
+      isArchived <- o .:? "is_archived"
       properties <- o .: "properties"
       url <- o .: "url"
       publicUrl <- o .:? "public_url"
@@ -102,6 +106,8 @@ instance ToJSON PageObject where
         "url" .= url,
         "object" .= object
       ]
+        <> maybe [] (\v -> ["is_locked" .= v]) isLocked
+        <> maybe [] (\v -> ["is_archived" .= v]) isArchived
         <> maybe [] (\pu -> ["public_url" .= pu]) publicUrl
 
 -- | Template configuration for page creation and updates.

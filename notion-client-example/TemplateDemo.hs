@@ -81,7 +81,7 @@ runTemplateDemo methods databaseIdStr = do
           -- template variables resolve.
           createReq =
             CreatePage
-              { parent = DataSourceParent {dataSourceId = dsId},
+              { parent = DataSourceParent {dataSourceId = dsId, parentDatabaseId = Nothing},
                 properties = props,
                 children = Nothing,
                 markdown = Nothing,

@@ -533,7 +533,8 @@ data BlockContent
       }
   | -- | Single column within a column list.
     ColumnBlock
-      { children :: Vector BlockContent
+      { widthRatio :: Maybe Double,
+        children :: Vector BlockContent
       }
   | -- | Table block.
     --
@@ -715,7 +716,11 @@ blockContentFields = \case
   ColumnListBlock {..} ->
     ("column_list", object $ childrenPairs children)
   ColumnBlock {..} ->
-    ("column", object $ childrenPairs children)
+    ( "column",
+      object $
+        maybe [] (\r -> ["width_ratio" .= r]) widthRatio
+          <> childrenPairs children
+    )
   TableBlock {..} ->
     ( "table",
       object $
@@ -879,6 +884,7 @@ parseBlockContent typeName val = case typeName of
     children <- fromMaybe Vector.empty <$> o .:? "children"
     pure ColumnListBlock {..}
   "column" -> parseObj $ \o -> do
+    widthRatio <- o .:? "width_ratio"
     children <- fromMaybe Vector.empty <$> o .:? "children"
     pure ColumnBlock {..}
   "table" -> parseObj $ \o -> do

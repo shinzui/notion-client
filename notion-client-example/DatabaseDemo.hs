@@ -175,7 +175,7 @@ runDatabaseDemo methods databaseIdStr = do
       -- In API version 2025-09-03, pages are created under a data source
       createPageRequest =
         CreatePage
-          { parent = DataSourceParent {dataSourceId = dsId}, -- Specify parent data source
+          { parent = DataSourceParent {dataSourceId = dsId, parentDatabaseId = Nothing}, -- Specify parent data source
             properties = pageProperties, -- Required page properties
             children = Just initialBlocks, -- Optional initial content
             markdown = Nothing, -- Could use markdown instead of children

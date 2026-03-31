@@ -426,8 +426,8 @@ testBlockContentNestedColumnList =
     ColumnListBlock
       { children =
           Vector.fromList
-            [ ColumnBlock {children = Vector.singleton (textBlock "Column 1 content")},
-              ColumnBlock {children = Vector.singleton (textBlock "Column 2 content")}
+            [ ColumnBlock {widthRatio = Nothing, children = Vector.singleton (textBlock "Column 1 content")},
+              ColumnBlock {widthRatio = Nothing, children = Vector.singleton (textBlock "Column 2 content")}
             ]
       }
 
@@ -1230,7 +1230,7 @@ testCreateMarkdownPageInDatabase methods@Methods {createPage, retrievePageMarkdo
   -- Create a page in the database's data source
   let titleRt = mkPlainRichText "Database Markdown E2E"
       props = Map.fromList [("title", PV.titleValue (Vector.singleton titleRt))]
-      req = mkCreatePage (DataSourceParent {dataSourceId = dsId}) props
+      req = mkCreatePage (DataSourceParent {dataSourceId = dsId, parentDatabaseId = Nothing}) props
   page <- createPage req
   let PageObject {id = pageId} = page
 

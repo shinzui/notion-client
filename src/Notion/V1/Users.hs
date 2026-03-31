@@ -8,6 +8,7 @@ module Notion.V1.Users
     UserType (..),
     PersonUser (..),
     BotUser (..),
+    WorkspaceLimits (..),
     UserReference (..),
 
     -- * Servant
@@ -56,10 +57,21 @@ newtype PersonUser = PersonUser
 instance FromJSON PersonUser where
   parseJSON = genericParseJSON aesonOptions
 
+-- | Workspace limits for bot users.
+data WorkspaceLimits = WorkspaceLimits
+  { maxFileUploadSizeInBytes :: Maybe Natural
+  }
+  deriving stock (Generic, Show)
+
+instance FromJSON WorkspaceLimits where
+  parseJSON = genericParseJSON aesonOptions
+
 -- | Bot user
 data BotUser = BotUser
   { owner :: Maybe UserOwner,
-    workspaceName :: Maybe Text
+    workspaceName :: Maybe Text,
+    workspaceId :: Maybe Text,
+    workspaceLimits :: Maybe WorkspaceLimits
   }
   deriving stock (Generic, Show)
 
