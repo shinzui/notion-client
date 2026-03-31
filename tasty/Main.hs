@@ -12,7 +12,7 @@ import Notion.V1
 import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), SyncedFrom (..), blockContentType, bookmarkBlock, bulletedListItemBlock, calloutBlock, codeBlock, dividerBlock, headingBlock, imageBlock, mkRichText, numberedListItemBlock, paragraphBlock, quoteBlock, textBlock, toDoBlock, toggleBlock, withChildren)
 import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (..))
 import Notion.V1.Blocks qualified as Blocks
-import Notion.V1.Comments (CommentObject (..), CreateComment (..))
+import Notion.V1.Comments (CommentAttachment (..), CommentDisplayName (..), CommentObject (..), CreateComment (..))
 import Notion.V1.Comments qualified as Comments
 import Notion.V1.Common (Color (..), Cover (..), ExternalFile (..), Icon (..), Parent (..), UUID (..))
 import Notion.V1.CustomEmojis (CustomEmoji (..))
@@ -42,10 +42,10 @@ import Notion.V1.Pages
 import Notion.V1.Pagination (PaginationResult (..), paginateCollect)
 import Notion.V1.Properties qualified as Props
 import Notion.V1.PropertyValue qualified as PV
-import Notion.V1.RichText (Annotations (..), Date (..), RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
+import Notion.V1.RichText (Annotations (..), Date (..), MentionContent (..), RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Notion.V1.RichText qualified as RT
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), dataSourceFilter, pageFilter, parseSearchResults)
-import Notion.V1.Users (UserObject (..))
+import Notion.V1.Users (BotUser (..), UserObject (..), WorkspaceLimits (..))
 import Notion.V1.Views (CreateView (..), QueryView (..), UpdateView (..), ViewObject (..), ViewType (..))
 import System.Environment qualified as Environment
 import Test.Tasty
@@ -267,7 +267,17 @@ jsonParsingTests =
       testCase "BlockContent: blocks with children include children key" testBlockContentHasChildrenKey,
       testCase "BlockUpdate with nested children" testBlockUpdateWithChildren,
       testCase "BlockContent: parse from raw JSON with children" testParseBlockContentWithChildren,
-      testCase "BlockUpdate omits type key" testBlockUpdateSerialization
+      testCase "BlockUpdate omits type key" testBlockUpdateSerialization,
+      testCase "BlockContent round-trip: heading_4" testBlockContentHeading4,
+      testCase "BlockContent round-trip: tab" testBlockContentTab,
+      testCase "BlockContent parse: meeting_notes" testBlockContentMeetingNotes,
+      testCase "BlockContent round-trip: template" testBlockContentTemplate,
+      testCase "RichText parse: template_mention_date" testTemplateMentionDate,
+      testCase "RichText round-trip: template_mention_user" testTemplateMentionUser,
+      testCase "PageObject parse: isLocked and isArchived" testPageObjectLockedArchived,
+      testCase "Parent parse: DataSourceParent with databaseId" testDataSourceParentWithDbId,
+      testCase "BlockContent round-trip: column with widthRatio" testColumnWidthRatio,
+      testCase "BotUser parse: workspaceId and workspaceLimits" testBotUserFields
     ]
 
 testParseBlockObject :: Assertion
@@ -660,7 +670,11 @@ jsonSerializationTests =
       testCase "Sort: property ascending" testSortProperty,
       testCase "Sort: timestamp descending" testSortTimestamp,
       testCase "UpdateDataSource nullable property deletion" testSerializeNullablePropertyDeletion,
-      testCase "paginateAll collects all pages" testPaginateAll
+      testCase "paginateAll collects all pages" testPaginateAll,
+      testCase "CreateComment with attachments and displayName" testSerializeCreateComment,
+      testCase "UpdatePage with isLocked and isArchived" testSerializeUpdatePageLockArchive,
+      testCase "RollupFunction round-trip: new variants" testRollupFunctionNewVariants,
+      testCase "DateCondition: this_month and this_year" testDateConditionThisMonthYear
     ]
 
 testSerializeAppendNoPosition :: Assertion
@@ -1494,6 +1508,184 @@ testSerializeNullablePropertyDeletion = do
             Just (Aeson.Object _) -> pure ()
             _ -> assertFailure "Expected NewColumn to be an object"
         _ -> assertFailure "Expected properties object"
+    _ -> assertFailure "Expected JSON object"
+
+-- =====================================================================
+-- New type tests (Milestone 6)
+-- =====================================================================
+
+testBlockContentHeading4 :: Assertion
+testBlockContentHeading4 = roundTrip $ Heading4Block (mkRichText "H4 Title") Default False Vector.empty
+
+testBlockContentTab :: Assertion
+testBlockContentTab = roundTrip $ TabBlock {children = Vector.singleton (textBlock "Tab content")}
+
+testBlockContentMeetingNotes :: Assertion
+testBlockContentMeetingNotes = do
+  let json =
+        "{\"type\":\"meeting_notes\",\"meeting_notes\":"
+          <> "{\"title\":\"Weekly Sync\",\"status\":\"scheduled\","
+          <> "\"calendar_event\":null,\"recording\":null}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse meeting_notes: " <> err
+    Right (MeetingNotesBlock {meetingTitle}) ->
+      assertEqual "meetingTitle" "Weekly Sync" meetingTitle
+    Right other -> assertFailure $ "Expected MeetingNotesBlock, got: " <> show other
+
+testBlockContentTemplate :: Assertion
+testBlockContentTemplate =
+  roundTrip $
+    TemplateBlock
+      { richText = mkRichText "Template text",
+        children = Vector.singleton (textBlock "Template child")
+      }
+
+testTemplateMentionDate :: Assertion
+testTemplateMentionDate = do
+  let json =
+        "{\"type\":\"mention\",\"mention\":"
+          <> "{\"type\":\"template_mention\",\"template_mention\":"
+          <> "{\"type\":\"template_mention_date\",\"template_mention_date\":\"today\"}}"
+          <> ",\"plain_text\":\"@today\",\"annotations\":"
+          <> "{\"bold\":false,\"italic\":false,\"strikethrough\":false,"
+          <> "\"underline\":false,\"code\":false,\"color\":\"default\"}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse template_mention: " <> err
+    Right RichText {content = MentionContentWrapper (TemplateMentionDate d)} ->
+      assertEqual "template_mention_date" "today" d
+    Right other -> assertFailure $ "Expected TemplateMentionDate, got: " <> show other
+
+testTemplateMentionUser :: Assertion
+testTemplateMentionUser = do
+  let mc = TemplateMentionUser "me"
+      json = Aeson.toJSON mc
+  case Aeson.fromJSON json of
+    Aeson.Success decoded -> assertEqual "round-trip" mc decoded
+    Aeson.Error err -> assertFailure $ "Round-trip failed: " <> err
+
+testPageObjectLockedArchived :: Assertion
+testPageObjectLockedArchived = do
+  let json =
+        "{\"object\":\"page\",\"id\":\"page-1\""
+          <> ",\"created_time\":\"2025-10-01T12:00:00.000+00:00\""
+          <> ",\"last_edited_time\":\"2025-10-01T12:30:00.000+00:00\""
+          <> ",\"created_by\":{\"object\":\"user\",\"id\":\"u-1\"}"
+          <> ",\"last_edited_by\":{\"object\":\"user\",\"id\":\"u-2\"}"
+          <> ",\"parent\":{\"type\":\"page_id\",\"page_id\":\"parent-1\"}"
+          <> ",\"in_trash\":false"
+          <> ",\"is_locked\":true"
+          <> ",\"is_archived\":false"
+          <> ",\"properties\":{}"
+          <> ",\"url\":\"https://notion.so/page-1\"}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse PageObject: " <> err
+    Right (page :: PageObject) -> do
+      let PageObject {isLocked = locked, isArchived = archived} = page
+      assertEqual "isLocked" (Just True) locked
+      assertEqual "isArchived" (Just False) archived
+
+testDataSourceParentWithDbId :: Assertion
+testDataSourceParentWithDbId = do
+  let json =
+        "{\"type\":\"data_source_id\",\"data_source_id\":\"ds-1\",\"database_id\":\"db-1\"}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse DataSourceParent: " <> err
+    Right (DataSourceParent dsId dbId) -> do
+      assertEqual "dataSourceId" (UUID "ds-1") dsId
+      assertEqual "parentDatabaseId" (Just (UUID "db-1")) dbId
+    Right other -> assertFailure $ "Expected DataSourceParent, got: " <> show other
+
+testColumnWidthRatio :: Assertion
+testColumnWidthRatio =
+  roundTrip $
+    ColumnBlock
+      { widthRatio = Just 0.5,
+        children = Vector.singleton (textBlock "Half width")
+      }
+
+testBotUserFields :: Assertion
+testBotUserFields = do
+  let json =
+        "{\"owner\":{\"type\":\"workspace\",\"workspace\":true}"
+          <> ",\"workspace_name\":\"My Workspace\""
+          <> ",\"workspace_id\":\"ws-123\""
+          <> ",\"workspace_limits\":{\"max_file_upload_size_in_bytes\":5242880}}"
+  case Aeson.eitherDecode json of
+    Left err -> assertFailure $ "Failed to parse BotUser: " <> err
+    Right bot -> do
+      assertEqual "workspaceId" (Just "ws-123") (Notion.V1.Users.workspaceId bot)
+      case Notion.V1.Users.workspaceLimits bot of
+        Just wl -> assertEqual "maxFileUploadSizeInBytes" (Just 5242880) (maxFileUploadSizeInBytes wl)
+        Nothing -> assertFailure "Expected workspaceLimits to be present"
+
+testSerializeCreateComment :: Assertion
+testSerializeCreateComment = do
+  let req =
+        CreateComment
+          { parent = PageParent {pageId = UUID "p-1"},
+            richText = Vector.singleton (mkPlainRichText "Hello"),
+            discussionId = Nothing,
+            attachments = Just (Vector.singleton CommentAttachment {name = "file.pdf", type_ = "external", external = Just (ExternalFile {url = "https://example.com/file.pdf"}), file = Nothing}),
+            displayName = Just CommentDisplayName {type_ = "user", emoji = Just "🎉", displayName = Just "Bot"}
+          }
+      json = Aeson.toJSON req
+  case json of
+    Aeson.Object o -> do
+      assertBool "should have attachments" (KeyMap.member "attachments" o)
+      assertBool "should have display_name" (KeyMap.member "display_name" o)
+    _ -> assertFailure "Expected JSON object"
+
+testSerializeUpdatePageLockArchive :: Assertion
+testSerializeUpdatePageLockArchive = do
+  let req =
+        UpdatePage
+          { properties = Map.empty,
+            inTrash = Nothing,
+            isLocked = Just True,
+            isArchived = Just False,
+            icon = Nothing,
+            cover = Nothing,
+            template = Nothing,
+            eraseContent = Nothing
+          }
+      json = Aeson.toJSON req
+  case json of
+    Aeson.Object o -> do
+      assertEqual "is_locked" (Just (Aeson.Bool True)) (KeyMap.lookup "is_locked" o)
+      assertEqual "is_archived" (Just (Aeson.Bool False)) (KeyMap.lookup "is_archived" o)
+    _ -> assertFailure "Expected JSON object"
+
+testRollupFunctionNewVariants :: Assertion
+testRollupFunctionNewVariants = do
+  let variants = [Props.CountPerGroup, Props.PercentPerGroup, Props.Unique]
+  mapM_
+    ( \v -> do
+        let json = Aeson.toJSON v
+        case Aeson.fromJSON json of
+          Aeson.Success decoded ->
+            assertEqual ("round-trip for " <> show v) v decoded
+          Aeson.Error err ->
+            assertFailure $ "Failed to decode " <> show v <> ": " <> err
+    )
+    variants
+
+testDateConditionThisMonthYear :: Assertion
+testDateConditionThisMonthYear = do
+  let thisMonth = Aeson.toJSON (F.TimestampFilter F.FilterCreatedTime F.DateThisMonth)
+  case thisMonth of
+    Aeson.Object o ->
+      case KeyMap.lookup "created_time" o of
+        Just (Aeson.Object inner) ->
+          assertBool "should have this_month" (KeyMap.member "this_month" inner)
+        _ -> assertFailure "Expected created_time object"
+    _ -> assertFailure "Expected JSON object"
+  let thisYear = Aeson.toJSON (F.TimestampFilter F.FilterLastEditedTime F.DateThisYear)
+  case thisYear of
+    Aeson.Object o ->
+      case KeyMap.lookup "last_edited_time" o of
+        Just (Aeson.Object inner) ->
+          assertBool "should have this_year" (KeyMap.member "this_year" inner)
+        _ -> assertFailure "Expected last_edited_time object"
     _ -> assertFailure "Expected JSON object"
 
 -- =====================================================================
