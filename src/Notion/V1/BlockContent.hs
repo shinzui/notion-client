@@ -964,8 +964,18 @@ newtype BlockUpdate = BlockUpdate BlockContent
 
 instance ToJSON BlockUpdate where
   toJSON (BlockUpdate bc) =
-    let (typeName, inner) = blockContentFields bc
+    let bc' = stripReadOnlyFields bc
+        (typeName, inner) = blockContentFields bc'
      in object [Key.fromText typeName .= inner]
+
+-- | Clear fields that the Notion API rejects on PATCH @\/blocks\/:id@.
+--
+-- Both @list_start_index@ and @list_format@ are read-only — the API returns
+-- them in GET responses but rejects them on PATCH (and POST).
+stripReadOnlyFields :: BlockContent -> BlockContent
+stripReadOnlyFields bc = case bc of
+  NumberedListItemBlock {} -> bc {listStartIndex = Nothing, listFormat = Nothing}
+  _ -> bc
 
 -- ---------------------------------------------------------------------------
 -- Smart constructors
