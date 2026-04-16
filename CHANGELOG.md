@@ -1,5 +1,10 @@
 # Changelog for notion-client
 
+## 0.7.0.1 (2026-04-16)
+
+### Bug Fixes
+* Fix `FromJSON`/`ToJSON` for native icons to use the nested `{"type":"icon","icon":{"name":..., "color":...}}` shape returned by GET endpoints — previously crashed with `key "name" not found` on pages/databases carrying built-in pictogram icons
+
 ## 0.7.0.0 (2026-04-16)
 
 ### Breaking Changes
