@@ -12,7 +12,9 @@ module Notion.V1.Comments
   )
 where
 
-import Data.Aeson ((.:), (.:?))
+import Data.Aeson ((.:), (.:?), (.=))
+import Data.Aeson qualified as Aeson
+import Data.Maybe (catMaybes)
 import Notion.Prelude
 import Notion.V1.Common (BlockID, ExternalFile, File, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
@@ -24,33 +26,69 @@ import Prelude hiding (id)
 type CommentID = UUID
 
 -- | Comment attachment (files attached to comments)
+--
+-- Unifies the two shapes returned/accepted by the Notion API:
+--
+-- * Read responses (@GET \/v1\/comments@) contain @category@ + @file@.
+-- * Write requests (@POST \/v1\/comments@) contain @name@ + @type@ + @external@\/@file@.
 data CommentAttachment = CommentAttachment
-  { name :: Text,
-    type_ :: Text,
+  { name :: Maybe Text,
+    type_ :: Maybe Text,
+    category :: Maybe Text,
     external :: Maybe ExternalFile,
     file :: Maybe File
   }
   deriving stock (Generic, Show)
 
 instance FromJSON CommentAttachment where
-  parseJSON = genericParseJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
+  parseJSON = Aeson.withObject "CommentAttachment" $ \o ->
+    CommentAttachment
+      <$> o .:? "name"
+      <*> o .:? "type"
+      <*> o .:? "category"
+      <*> o .:? "external"
+      <*> o .:? "file"
 
 instance ToJSON CommentAttachment where
-  toJSON = genericToJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
+  toJSON CommentAttachment {..} =
+    Aeson.object $
+      catMaybes
+        [ ("name" .=) <$> name,
+          ("type" .=) <$> type_,
+          ("category" .=) <$> category,
+          ("external" .=) <$> external,
+          ("file" .=) <$> file
+        ]
 
 -- | Comment display name (custom display name for comments)
+--
+-- Read responses may include @resolved_name@ (the rendered label for a user
+-- mention); write requests only use @display_name@.
 data CommentDisplayName = CommentDisplayName
   { type_ :: Text,
     emoji :: Maybe Text,
-    displayName :: Maybe Text
+    displayName :: Maybe Text,
+    resolvedName :: Maybe Text
   }
   deriving stock (Generic, Show)
 
 instance FromJSON CommentDisplayName where
-  parseJSON = genericParseJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
+  parseJSON = Aeson.withObject "CommentDisplayName" $ \o ->
+    CommentDisplayName
+      <$> o .: "type"
+      <*> o .:? "emoji"
+      <*> o .:? "display_name"
+      <*> o .:? "resolved_name"
 
 instance ToJSON CommentDisplayName where
-  toJSON = genericToJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
+  toJSON CommentDisplayName {..} =
+    Aeson.object $
+      ("type" .= type_)
+        : catMaybes
+          [ ("emoji" .=) <$> emoji,
+            ("display_name" .=) <$> displayName,
+            ("resolved_name" .=) <$> resolvedName
+          ]
 
 -- | Notion comment object
 data CommentObject = CommentObject

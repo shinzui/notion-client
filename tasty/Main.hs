@@ -672,6 +672,8 @@ jsonSerializationTests =
       testCase "UpdateDataSource nullable property deletion" testSerializeNullablePropertyDeletion,
       testCase "paginateAll collects all pages" testPaginateAll,
       testCase "CreateComment with attachments and displayName" testSerializeCreateComment,
+      testCase "CommentAttachment decodes read-side shape" testDeserializeCommentAttachmentReadShape,
+      testCase "CommentDisplayName captures resolved_name" testDeserializeCommentDisplayNameResolvedName,
       testCase "UpdatePage with isLocked and isArchived" testSerializeUpdatePageLockArchive,
       testCase "RollupFunction round-trip: new variants" testRollupFunctionNewVariants,
       testCase "DateCondition: this_month and this_year" testDateConditionThisMonthYear
@@ -1625,8 +1627,25 @@ testSerializeCreateComment = do
           { parent = PageParent {pageId = UUID "p-1"},
             richText = Vector.singleton (mkPlainRichText "Hello"),
             discussionId = Nothing,
-            attachments = Just (Vector.singleton CommentAttachment {name = "file.pdf", type_ = "external", external = Just (ExternalFile {url = "https://example.com/file.pdf"}), file = Nothing}),
-            displayName = Just CommentDisplayName {type_ = "user", emoji = Just "🎉", displayName = Just "Bot"}
+            attachments =
+              Just
+                ( Vector.singleton
+                    CommentAttachment
+                      { name = Just "file.pdf",
+                        type_ = Just "external",
+                        category = Nothing,
+                        external = Just (ExternalFile {url = "https://example.com/file.pdf"}),
+                        file = Nothing
+                      }
+                ),
+            displayName =
+              Just
+                CommentDisplayName
+                  { type_ = "user",
+                    emoji = Just "🎉",
+                    displayName = Just "Bot",
+                    resolvedName = Nothing
+                  }
           }
       json = Aeson.toJSON req
   case json of
@@ -1634,6 +1653,32 @@ testSerializeCreateComment = do
       assertBool "should have attachments" (KeyMap.member "attachments" o)
       assertBool "should have display_name" (KeyMap.member "display_name" o)
     _ -> assertFailure "Expected JSON object"
+
+testDeserializeCommentAttachmentReadShape :: Assertion
+testDeserializeCommentAttachmentReadShape = do
+  let json =
+        "{\"category\":\"image\""
+          <> ",\"file\":{\"url\":\"https://example.com/img.png\""
+          <> ",\"expiry_time\":\"2026-04-16T15:53:52.000Z\"}}"
+  case Aeson.eitherDecode json :: Either String CommentAttachment of
+    Left err -> assertFailure $ "Failed to parse CommentAttachment: " <> err
+    Right CommentAttachment {name, type_, category, file} -> do
+      assertEqual "category" (Just "image") category
+      assertEqual "name absent" Nothing name
+      assertEqual "type_ absent" Nothing type_
+      case file of
+        Just _ -> pure ()
+        Nothing -> assertFailure "Expected file to be Just"
+
+testDeserializeCommentDisplayNameResolvedName :: Assertion
+testDeserializeCommentDisplayNameResolvedName = do
+  let json = "{\"type\":\"user\",\"resolved_name\":\"Tanaka Hiroshi\"}"
+  case Aeson.eitherDecode json :: Either String CommentDisplayName of
+    Left err -> assertFailure $ "Failed to parse CommentDisplayName: " <> err
+    Right CommentDisplayName {type_, displayName, resolvedName} -> do
+      assertEqual "type_" "user" type_
+      assertEqual "resolvedName" (Just "Tanaka Hiroshi") resolvedName
+      assertEqual "displayName absent" Nothing displayName
 
 testSerializeUpdatePageLockArchive :: Assertion
 testSerializeUpdatePageLockArchive = do
