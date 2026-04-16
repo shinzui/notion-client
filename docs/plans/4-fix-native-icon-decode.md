@@ -57,14 +57,20 @@ this plan and is **not** part of its scope (it is a one-line `flake.nix` edit pl
 - [x] Milestone 3: Build, test, commit (2026-04-16)
   - [x] 3a. `cabal build all` passes
   - [x] 3b. `cabal test all` passes — all 127 tests green; new `NativeIcon read shape` passes
-  - [ ] 3c. Commit with `ExecPlan: docs/plans/4-fix-native-icon-decode.md` trailer
-  - [ ] 3d. Push the commit to `origin/master` and capture the new short SHA so the
-        `notion-cli` consumer can bump its pin (work outside this plan)
+  - [x] 3c. Commit `294d727` carries the `ExecPlan:` trailer
+  - [x] 3d. Pushed to `origin/master`. Fix commit SHA: `294d727`; current `master` tip
+        is `89f4328` (an unrelated `mori.dhall` cleanup commit landed on top mid-push —
+        see Surprises). Either SHA pins `notion-client-src` correctly downstream.
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+- 2026-04-16: Between `git commit` (which produced fix SHA `294d727`) and `git push`,
+  an unrelated commit `89f4328 chore: migrate mori.dhall to mk-form and add repo-id`
+  appeared on local `master`. Most likely an out-of-band process or hook committed the
+  pre-existing `mori.dhall` modification visible in the initial `git status`. Push then
+  shipped both commits to `origin/master`. Net effect: the fix is in `294d727`, master
+  tip is `89f4328`. No code interaction with the icon fix; logged for traceability.
 
 
 ## Decision Log
@@ -111,7 +117,29 @@ this plan and is **not** part of its scope (it is a one-line `flake.nix` edit pl
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+Completed 2026-04-16. Commit `294d727` on `master` (pushed; `origin/master` tip is
+`89f4328` due to the unrelated mori.dhall commit noted in Surprises).
+
+What landed:
+- `FromJSON Icon` "icon" branch now reads `name`/`color` from the inner `icon` object.
+- `ToJSON Icon` for `NativeIcon` emits the symmetric nested shape.
+- `testNativeIconRoundTrip` updated to assert the nested encode shape.
+- `testNativeIconReadShape` added: decodes the literal payload from the bug report.
+- `cabal test all` reports 127/127 passing in 30.32s, including the new case.
+
+Acceptance check (vs. Validation and Acceptance section):
+1. ✅ Read-shape unit test passes against the literal Notion JSON.
+2. ✅ Round-trip unit test passes with the nested encode shape.
+3. ✅ No regressions; 127 tests green including all other Icon/Cover paths.
+4. ✅ Build is clean — no unused-import or partial-pattern warnings introduced.
+5. ✅ Commit `294d727` carries the `ExecPlan:` trailer.
+6. ✅ Hand-off ready: `294d727` (fix) or `89f4328` (current tip) can be pinned by
+   `notion-cli`'s `flake.nix`.
+
+Lesson confirmed (already in Decision Log): fixture-based decode tests pinned to
+real Notion responses catch read/write shape mismatches that round-trip-only tests
+miss. Same lesson as the `CommentAttachment` fix in `cd729e6`. Future `FromJSON`
+work on this codebase should default to a fixture test alongside any round-trip.
 
 
 ## Context and Orientation
