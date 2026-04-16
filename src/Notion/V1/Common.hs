@@ -147,7 +147,9 @@ instance FromJSON Icon where
         "emoji" -> EmojiIcon <$> o .: "emoji"
         "file" -> FileIcon <$> o .: "file"
         "external" -> ExternalIcon <$> o .: "external"
-        "icon" -> NativeIcon <$> o .: "name" <*> o .:? "color"
+        "icon" -> do
+          inner <- o .: "icon"
+          NativeIcon <$> inner .: "name" <*> inner .:? "color"
         "custom_emoji" -> CustomEmojiIcon <$> o .: "id"
         "file_upload" -> do
           uploadObj <- o .: "file_upload"
@@ -159,7 +161,11 @@ instance ToJSON Icon where
   toJSON (EmojiIcon emoji) = object ["type" .= ("emoji" :: Text), "emoji" .= emoji]
   toJSON (FileIcon file) = object ["type" .= ("file" :: Text), "file" .= file]
   toJSON (ExternalIcon external) = object ["type" .= ("external" :: Text), "external" .= external]
-  toJSON (NativeIcon name color) = object $ ["type" .= ("icon" :: Text), "name" .= name] <> maybe [] (\c -> ["color" .= c]) color
+  toJSON (NativeIcon name color) =
+    object
+      [ "type" .= ("icon" :: Text),
+        "icon" .= object (["name" .= name] <> maybe [] (\c -> ["color" .= c]) color)
+      ]
   toJSON (CustomEmojiIcon eid) = object ["type" .= ("custom_emoji" :: Text), "id" .= eid]
   toJSON (FileUploadIcon uid) = object ["type" .= ("file_upload" :: Text), "file_upload" .= object ["id" .= uid]]
 

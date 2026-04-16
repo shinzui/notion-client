@@ -3,6 +3,7 @@ module Main where
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.ByteString.Lazy.Char8 qualified as L8
 import Data.IORef (modifyIORef', newIORef, readIORef)
 import Data.Map qualified as Map
 import Data.Scientific (Scientific)
@@ -649,6 +650,7 @@ jsonSerializationTests =
       testCase "MovePage serialization" testSerializeMovePage,
       testCase "ViewType round-trip" testViewTypeRoundTrip,
       testCase "NativeIcon round-trip" testNativeIconRoundTrip,
+      testCase "NativeIcon read shape" testNativeIconReadShape,
       testCase "CustomEmojiIcon round-trip" testCustomEmojiIconRoundTrip,
       testCase "CreateView serialization" testSerializeCreateView,
       testCase "UpdateView omits Nothing fields" testSerializeUpdateView,
@@ -812,8 +814,11 @@ testNativeIconRoundTrip = do
   case json of
     Aeson.Object o -> do
       assertEqual "type" (Just (Aeson.String "icon")) (KeyMap.lookup "type" o)
-      assertEqual "name" (Just (Aeson.String "check")) (KeyMap.lookup "name" o)
-      assertEqual "color" (Just (Aeson.String "green")) (KeyMap.lookup "color" o)
+      case KeyMap.lookup "icon" o of
+        Just (Aeson.Object inner) -> do
+          assertEqual "name" (Just (Aeson.String "check")) (KeyMap.lookup "name" inner)
+          assertEqual "color" (Just (Aeson.String "green")) (KeyMap.lookup "color" inner)
+        _ -> assertFailure "Expected nested icon object"
     _ -> assertFailure "Expected JSON object"
   case Aeson.fromJSON json of
     Aeson.Success (NativeIcon n c) -> do
@@ -821,6 +826,17 @@ testNativeIconRoundTrip = do
       assertEqual "color round-trip" (Just "green") c
     Aeson.Success _ -> assertFailure "Expected NativeIcon"
     Aeson.Error err -> assertFailure $ "Decode failed: " <> err
+
+testNativeIconReadShape :: Assertion
+testNativeIconReadShape = do
+  let payload :: L8.ByteString
+      payload = "{\"type\":\"icon\",\"icon\":{\"name\":\"clipping\",\"color\":\"lightgray\"}}"
+  case Aeson.eitherDecode payload of
+    Right (NativeIcon n c) -> do
+      assertEqual "name" "clipping" n
+      assertEqual "color" (Just "lightgray") c
+    Right _ -> assertFailure "Expected NativeIcon"
+    Left err -> assertFailure $ "Decode failed: " <> err
 
 testCustomEmojiIconRoundTrip :: Assertion
 testCustomEmojiIconRoundTrip = do
