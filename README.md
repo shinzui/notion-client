@@ -147,6 +147,51 @@ allPages <- paginateAll $ \cursor ->
         }
 ```
 
+## Usage with effectful
+
+Callers that use the [`effectful`](https://hackage.haskell.org/package/effectful)
+effect system can opt into an `Eff`-typed surface via the companion
+package
+[`notion-client-effectful`](./notion-client-effectful/). Every
+`Notion.V1.Methods` field is re-exposed as a smart constructor of a
+`Notion` effect, and a `runNotion` interpreter dispatches through a
+concrete `Methods` value. `NotionError` responses surface via the
+`Error NotionError` effect rather than as `IO` exceptions.
+
+```haskell
+module Demo where
+
+import Data.Text (Text)
+import Data.Text qualified as Text
+import Effectful (Eff, runEff, (:>))
+import Effectful.Error.Static (Error, runErrorNoCallStack)
+import Notion.V1                    (getClientEnv, makeMethods)
+import Notion.V1.Common             (UUID (..))
+import Notion.V1.Effectful qualified as NE
+import Notion.V1.Error              (NotionError)
+import System.Environment qualified as Env
+
+demo :: (NE.Notion :> es, Error NotionError :> es) => UUID -> Eff es Text
+demo pid = do
+  page <- NE.retrievePage pid
+  pure (Text.pack (show page))
+
+main :: IO ()
+main = do
+  token <- Text.pack <$> Env.getEnv "NOTION_TOKEN"
+  env <- getClientEnv "https://api.notion.com/v1"
+  let methods = makeMethods env token
+  result <-
+    runEff . runErrorNoCallStack @NotionError . NE.runNotion methods $
+      demo (UUID "00000000-0000-0000-0000-000000000000")
+  print result
+```
+
+See [`notion-client-effectful/README.md`](./notion-client-effectful/README.md)
+for the full import pattern (qualifying one of the two `Notion.V1`
+modules is required — every smart constructor shares its name with
+the matching `Methods` record selector).
+
 ## API Coverage
 
 - **Databases**: Create, retrieve, update, and query databases
