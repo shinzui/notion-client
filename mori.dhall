@@ -40,6 +40,13 @@ in  Schema.Project::{ project =
         , description = Some "Test suite for notion-client"
         , visibility = Schema.Visibility.Internal
         }
+      , Schema.Package::{ name = "notion-client-effectful"
+        , type = Schema.PackageType.Library
+        , language = Schema.Language.Haskell
+        , path = Some "notion-client-effectful/"
+        , description = Some
+            "Effectful effect + interpreter for notion-client"
+        }
       ]
     , dependencies = [ "haskell-servant/servant" ]
     , docs =
