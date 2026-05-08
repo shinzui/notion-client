@@ -1,6 +1,14 @@
-# Close All Notion API Coverage Gaps
+---
+id: 2
+slug: close-api-gaps
+title: "Close All Notion API Coverage Gaps"
+kind: exec-plan
+created_at: 2026-03-31T16:03:16Z
+intention: "intention_01kn288bpaeasb8rfvyjkf9k56"
+---
 
-Intention: intention_01kn288bpaeasb8rfvyjkf9k56
+
+# Close All Notion API Coverage Gaps
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.

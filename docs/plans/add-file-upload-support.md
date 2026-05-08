@@ -1,6 +1,13 @@
-# Add file upload support
+---
+slug: add-file-upload-support
+title: "Add file upload support"
+kind: exec-plan
+created_at: 2026-03-31T15:18:38Z
+intention: "intention_01kn25erjxe7crmsja6x666zf7"
+---
 
-Intention: intention_01kn25erjxe7crmsja6x666zf7
+
+# Add file upload support
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.

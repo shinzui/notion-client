@@ -1,6 +1,13 @@
-# Add typed block content to replace untyped Value
+---
+slug: typed-block-content
+title: "Add typed block content to replace untyped Value"
+kind: exec-plan
+created_at: 2026-03-30T16:56:00Z
+intention: "intention_01kmzr1mw7e2aaravasaa15jks"
+---
 
-Intention: intention_01kmzr1mw7e2aaravasaa15jks
+
+# Add typed block content to replace untyped Value
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.

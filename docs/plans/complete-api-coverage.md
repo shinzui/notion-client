@@ -1,6 +1,13 @@
-# Complete Notion API Coverage
+---
+slug: complete-api-coverage
+title: "Complete Notion API Coverage"
+kind: exec-plan
+created_at: 2026-03-29T19:05:18Z
+intention: "intention_01kmx8eeheepnvmesh2nv7m8qm"
+---
 
-Intention: intention_01kmx8eeheepnvmesh2nv7m8qm
+
+# Complete Notion API Coverage
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.

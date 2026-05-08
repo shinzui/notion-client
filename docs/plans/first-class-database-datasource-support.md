@@ -1,6 +1,13 @@
-# First-Class Database and Data Source Support
+---
+slug: first-class-database-datasource-support
+title: "First-Class Database and Data Source Support"
+kind: exec-plan
+created_at: 2026-03-30T04:47:51Z
+intention: "intention_01kmyd8ahae85t3yb4vxejyv8d"
+---
 
-Intention: intention_01kmyd8ahae85t3yb4vxejyv8d
+
+# First-Class Database and Data Source Support
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.

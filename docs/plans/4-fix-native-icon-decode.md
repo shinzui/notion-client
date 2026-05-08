@@ -1,3 +1,12 @@
+---
+id: 4
+slug: fix-native-icon-decode
+title: "Fix Native Icon Decode for Notion API Read Responses"
+kind: exec-plan
+created_at: 2026-04-16T22:36:04Z
+---
+
+
 # Fix Native Icon Decode for Notion API Read Responses
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,

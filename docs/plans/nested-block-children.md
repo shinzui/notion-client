@@ -1,6 +1,13 @@
-# Add recursive children to BlockContent
+---
+slug: nested-block-children
+title: "Add recursive children to BlockContent"
+kind: exec-plan
+created_at: 2026-03-30T18:32:24Z
+intention: "intention_01kmzr1mw7e2aaravasaa15jks"
+---
 
-Intention: intention_01kmzr1mw7e2aaravasaa15jks
+
+# Add recursive children to BlockContent
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.

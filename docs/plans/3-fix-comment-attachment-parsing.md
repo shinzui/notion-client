@@ -1,6 +1,14 @@
-# Fix CommentAttachment Parsing for Notion API Read Responses
+---
+id: 3
+slug: fix-comment-attachment-parsing
+title: "Fix CommentAttachment Parsing for Notion API Read Responses"
+kind: exec-plan
+created_at: 2026-04-16T16:02:23Z
+intention: "intention_01kpbda4x0e3xveey5w3jzbqne"
+---
 
-Intention: intention_01kpbda4x0e3xveey5w3jzbqne
+
+# Fix CommentAttachment Parsing for Notion API Read Responses
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.

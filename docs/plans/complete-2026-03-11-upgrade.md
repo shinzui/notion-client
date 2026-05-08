@@ -1,6 +1,13 @@
-# Complete Notion API 2026-03-11 Upgrade
+---
+slug: complete-2026-03-11-upgrade
+title: "Complete Notion API 2026-03-11 Upgrade"
+kind: exec-plan
+created_at: 2026-03-29T17:13:26Z
+intention: "intention_01kmx8eeheepnvmesh2nv7m8qm"
+---
 
-Intention: intention_01kmx8eeheepnvmesh2nv7m8qm
+
+# Complete Notion API 2026-03-11 Upgrade
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.
