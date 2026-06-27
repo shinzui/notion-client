@@ -1,5 +1,10 @@
 # Changelog for notion-client
 
+## 0.7.0.2 (2026-06-27)
+
+### Bug Fixes
+* Relation property schemas with `single_property` now serialize the required empty `single_property` object, so creating one-directional and self-referential relation columns no longer fails Notion validation with "is not a valid property schema"
+
 ## 0.7.0.1 (2026-04-16)
 
 ### Bug Fixes

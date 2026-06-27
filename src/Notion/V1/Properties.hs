@@ -499,7 +499,12 @@ schemaFields = \case
   FormulaSchema {..} -> (schemaId, schemaName, "formula", object ["expression" .= formulaExpression])
   RelationSchema {..} ->
     let relObj = case relationType of
-          SingleProperty -> object ["data_source_id" .= relationDataSourceId, "type" .= ("single_property" :: Text)]
+          SingleProperty ->
+            object
+              [ "data_source_id" .= relationDataSourceId,
+                "type" .= ("single_property" :: Text),
+                "single_property" .= object []
+              ]
           DualProperty {..} ->
             object
               [ "data_source_id" .= relationDataSourceId,

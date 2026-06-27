@@ -660,6 +660,8 @@ jsonSerializationTests =
       testCase "PropertySchema number round-trip" testPropertySchemaNumberRoundTrip,
       testCase "PropertySchema formula round-trip" testPropertySchemaFormulaRoundTrip,
       testCase "PropertySchema relation dual round-trip" testPropertySchemaRelationRoundTrip,
+      testCase "PropertySchema relation single shape" testPropertySchemaRelationSingleShape,
+      testCase "PropertySchema relation single round-trip" testPropertySchemaRelationSingleRoundTrip,
       testCase "PropertySchema status round-trip" testPropertySchemaStatusRoundTrip,
       testCase "NumberFormat round-trip" testNumberFormatRoundTrip,
       testCase "RollupFunction round-trip" testRollupFunctionRoundTrip,
@@ -2009,6 +2011,43 @@ testPropertySchemaRelationRoundTrip = do
       schema = Props.RelationSchema {schemaId = "r1", schemaName = "Tasks", relationDataSourceId = UUID "ds-123", relationType = relType}
       json = Aeson.toJSON schema
   case Aeson.fromJSON json of
+    Aeson.Success decoded -> assertEqual "round-trip" schema decoded
+    Aeson.Error err -> assertFailure $ "Failed to decode: " <> err
+
+testPropertySchemaRelationSingleShape :: Assertion
+testPropertySchemaRelationSingleShape = do
+  let schema =
+        Props.RelationSchema
+          { schemaId = "r1",
+            schemaName = "Depends On",
+            relationDataSourceId = UUID "ds-123",
+            relationType = Props.SingleProperty
+          }
+      json = Aeson.toJSON schema
+      expected =
+        Aeson.object
+          [ "id" Aeson..= ("r1" :: Text.Text),
+            "name" Aeson..= ("Depends On" :: Text.Text),
+            "type" Aeson..= ("relation" :: Text.Text),
+            "relation"
+              Aeson..= Aeson.object
+                [ "data_source_id" Aeson..= ("ds-123" :: Text.Text),
+                  "type" Aeson..= ("single_property" :: Text.Text),
+                  "single_property" Aeson..= Aeson.object []
+                ]
+          ]
+  assertEqual "single-property relation JSON shape" expected json
+
+testPropertySchemaRelationSingleRoundTrip :: Assertion
+testPropertySchemaRelationSingleRoundTrip = do
+  let schema =
+        Props.RelationSchema
+          { schemaId = "r1",
+            schemaName = "Depends On",
+            relationDataSourceId = UUID "ds-123",
+            relationType = Props.SingleProperty
+          }
+  case Aeson.fromJSON (Aeson.toJSON schema) of
     Aeson.Success decoded -> assertEqual "round-trip" schema decoded
     Aeson.Error err -> assertFailure $ "Failed to decode: " <> err
 
