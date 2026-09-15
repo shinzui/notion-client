@@ -93,7 +93,7 @@ Prior plans in this repository that give useful background (all checked in, all 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 1 | Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK | docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md | None | None | Complete |
-| 2 | Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth | docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md | None | None | In Progress |
+| 2 | Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth | docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md | None | None | Complete |
 | 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | Not Started |
 | 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | Not Started |
 | 5 | Type Data Source, Database, and Search Results and Close Query and Filter Gaps | docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md | EP-1, EP-2 | None | Not Started |
@@ -200,7 +200,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 1. The JS SDK's generated types are the reference for the wire format, and `2026-03-11` is the pinned API version.
 2. Decoders must be tolerant: every closed enum and sum type decoded from a response has an "unknown" fallback constructor carrying the raw value. **Recorded** as [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md) (2026-09-15). The directory uses plain Markdown files named `<N>-<slug>.md`.
-3. The retry policy: which errors, which methods, how `retry-after` is honored.
+3. The retry policy: which errors, which methods, how `retry-after` is honored. **Recorded** as [docs/adr/2-client-runtime-retry-policy-and-typed-errors.md](../adr/2-client-runtime-retry-policy-and-typed-errors.md) (2026-09-15), together with the typed error model and the runtime interfaces for non-Servant requests.
 4. The `notion-client-effectful` lockstep rule.
 5. The deliberate exclusion of unpublished agent routes from the core REST parity effort.
 
@@ -209,10 +209,10 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 - [x] EP-1: Decoder crash fixes (colors, icons, code languages, mentions, parents, users, meeting-notes block, webhooks)
 - [x] EP-1: Encoder fixes (`filter_properties` query parameter, page `position`, custom-emoji icon request, webhook signature case)
-- [ ] EP-2: Configurable client (API version, base URL, timeout) with `makeMethods` preserved (it gains default retries)
-- [ ] EP-2: Retries with back-off and `retry-after`
-- [ ] EP-2: Typed error codes and `request_status` on `ListOf`
-- [ ] EP-2: OAuth token, revoke and introspect with Basic auth; `extractNotionId` helpers
+- [x] EP-2: Configurable client (API version, base URL, timeout) with `makeMethods` preserved (it gains default retries)
+- [x] EP-2: Retries with back-off and `retry-after`
+- [x] EP-2: Typed error codes and `request_status` on `ListOf`
+- [x] EP-2: OAuth token, revoke and introspect with Basic auth; `extractNotionId` helpers
 - [ ] EP-3: Comment retrieve, update and delete, plus create-comment write shapes
 - [ ] EP-3: Async task retrieval and `allow_async` page responses
 - [ ] EP-3: Meeting notes create and query with typed filter grammar
@@ -237,6 +237,8 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - EP-1 (completed 2026-09-15) kept the `Methods` signatures of `queryDataSource`/`queryDatabase` unchanged. Only the Servant `API` types gained `QueryParams "filter_properties" Text`, and `makeMethods` now binds `queryDataSource_`/`queryDatabase_` with two wrapper equations in its `where` block. EP-2 must carry those wrappers into its configurable constructor. EP-5 builds on the new route shape.
 - EP-1 fully typed the meeting-notes payload, as recorded in the Decision Log. The Dependency Graph's older wording ("EP-6 ... meeting notes") is superseded: EP-3 can now reuse `MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent` and `MeetingRecording` from `Notion.V1.BlockContent`.
 - EP-1 added `tasty/WireFormatTests.hs` with a `captureRequest` helper. The helper overrides servant-client's `makeClientRequest` to inspect a built HTTP request without network access, which EP-2, EP-3 and EP-5 can copy for their own encoding tests. The first `other-modules` entry of `test-suite tasty` now exists; later plans append their modules to it.
+- EP-2 (completed 2026-09-15) carried EP-1's `queryDataSource_`/`queryDatabase_` wrappers into `makeMethodsWithEnv` unchanged, as the Dependency Graph required; EP-1's `captureRequest` tests kept passing under the new middleware. EP-2 also added `tasty/FakeNotion.hs`, a scripted `ClientEnv` middleware that records requests and replays canned responses, which EP-3, EP-4 and EP-5 can use for network-free endpoint tests. `ListOf.requestStatus` and `RequestStatus`/`RequestStatusType`/`IncompleteReason` now exist for EP-4 and EP-5, and `APIErrorCode` exists for EP-3's `AsyncTask` error, so EP-3 does not need its `Text` fallback. Every hand-built `ListOf.List` literal must now supply `requestStatus`.
+- EP-2's runtime interfaces for plan 14 landed with the names listed under Integration Points. `Notion.V1` also re-exports `withRetries`, and `Notion.V1.Client` additionally exports `defaultUserAgent`.
 - The first ADR, [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md), records cross-plan decision 2 below (tolerant decoders). Later plans that add fallback constructors should follow it.
 
 

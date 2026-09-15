@@ -9,6 +9,7 @@ import Data.Map qualified as Map
 import Data.Scientific (Scientific)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
+import HelpersTests qualified
 import Notion.V1
 import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), SyncedFrom (..), blockContentType, bookmarkBlock, bulletedListItemBlock, calloutBlock, codeBlock, dividerBlock, headingBlock, imageBlock, mkRichText, numberedListItemBlock, paragraphBlock, quoteBlock, textBlock, toDoBlock, toggleBlock, withChildren)
 import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (..))
@@ -48,6 +49,7 @@ import Notion.V1.RichText qualified as RT
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), dataSourceFilter, pageFilter, parseSearchResults)
 import Notion.V1.Users (BotUser (..), UserObject (..), WorkspaceLimits (..))
 import Notion.V1.Views (CreateView (..), QueryView (..), UpdateView (..), ViewObject (..), ViewType (..))
+import OAuthTests qualified
 import RuntimeTests qualified
 import System.Environment qualified as Environment
 import Test.Tasty
@@ -166,6 +168,8 @@ tests = do
         fileUploadTests,
         WireFormatTests.tests,
         RuntimeTests.tests,
+        OAuthTests.tests,
+        HelpersTests.tests,
         basicIntegration,
         markdownE2E,
         pageE2E,

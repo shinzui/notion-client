@@ -74,7 +74,9 @@ library
     Notion.V1.Error
     Notion.V1.FileUploads
     Notion.V1.Filter
+    Notion.V1.Helpers
     Notion.V1.ListOf
+    Notion.V1.OAuth
     Notion.V1.Pages
     Notion.V1.Pagination
     Notion.V1.Properties
@@ -106,6 +108,8 @@ test-suite tasty
   main-is: Main.hs
   other-modules:
     FakeNotion
+    HelpersTests
+    OAuthTests
     RuntimeTests
     WireFormatTests
 

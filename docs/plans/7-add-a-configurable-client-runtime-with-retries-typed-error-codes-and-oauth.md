@@ -56,9 +56,9 @@ It is visible through new unit tests in the `tasty` suite that run without netwo
 - [x] Milestone 3: Create `src/Notion/V1/Retry.hs` (pure `canRetry`, `parseRetryAfter`, `retryDelay`, `validateRequestPath`). (2026-09-15)
 - [x] Milestone 3: Add `withRetries`, logging and the path guard to the middleware in `src/Notion/V1/Client.hs`. (2026-09-15)
 - [x] Milestone 3: Pure retry tests and fake-server retry tests; `cabal test` green. (2026-09-15)
-- [ ] Milestone 4: Create `src/Notion/V1/OAuth.hs` (types, Servant API, `OAuthMethods`, `makeOAuthMethods`, `makeOAuthMethodsWith`) and `tasty/OAuthTests.hs`.
-- [ ] Milestone 4: Create `src/Notion/V1/Helpers.hs` (`extractNotionId` family) and `tasty/HelpersTests.hs`; add `paginateFoldM`/`paginateForM_` to `src/Notion/V1/Pagination.hs`.
-- [ ] Milestone 4: Update `README.md`, `notion-client-example/DatabaseDemo.hs`, effectful docs, and `CHANGELOG.md`; `cabal build all && cabal test` green.
+- [x] Milestone 4: Create `src/Notion/V1/OAuth.hs` (types, Servant API, `OAuthMethods`, `makeOAuthMethods`, `makeOAuthMethodsWith`) and `tasty/OAuthTests.hs`. (2026-09-15)
+- [x] Milestone 4: Create `src/Notion/V1/Helpers.hs` (`extractNotionId` family) and `tasty/HelpersTests.hs`; add `paginateFoldM`/`paginateForM_` to `src/Notion/V1/Pagination.hs`. (2026-09-15)
+- [x] Milestone 4: Update `README.md`, `notion-client-example/DatabaseDemo.hs`, effectful docs, and `CHANGELOG.md`; `cabal build all && cabal test` green. (2026-09-15)
 
 
 ## Surprises & Discoveries
@@ -132,7 +132,29 @@ It is visible through new unit tests in the `tasty` suite that run without netwo
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+Completed 2026-09-15 in four milestone commits. Every capability listed in Purpose / Big Picture now exists:
+
+- `makeMethodsWith`/`makeMethodsWithEnv` with `ClientConfig`: API version, base URL, timeout, retries, `User-Agent` and logging.
+- The JS SDK's retry policy, implemented as servant middleware and reusable through `withRetries`.
+- Typed errors: `APIErrorCode`, `NotionError` with request ID and response metadata, `UnknownHTTPResponseError`, `RequestTimeoutError` and `InvalidPathParameterError`.
+- `ListOf.requestStatus`.
+- The OAuth token, revoke and introspect endpoints with Basic auth.
+- The `extractNotionId` family of URL helpers, and `paginateFoldM`/`paginateForM_`.
+
+`makeMethods` kept its type, the `Methods` record did not change, and `notion-client-effectful` needed only documentation edits.
+
+Evidence:
+
+- **Test suite.** 45 new network-free tests: 25 in `Runtime`, 7 in `OAuth` and 10 in `Helpers`. With EP-1's tests, the full suite reports `All 198 tests passed`, including the live E2E groups.
+- **Live check** (2026-09-15, real token). `makeMethodsWith defaultClientConfig {logger = Just stderrLogger, logLevel = LogInfo}` logged `request start` and `request success` for `GET /users/me`. A bogus token produced `(Unauthorized,Just "<request id>",401)` after one `request fail` line and no retry lines.
+- **Not done.** The OAuth live check was skipped, because no `NOTION_OAUTH_CLIENT_ID`/`NOTION_OAUTH_CLIENT_SECRET` were available.
+
+Lessons:
+
+- Doing the typed-error work before retries, as the Decision Log chose, kept the retry decision a pure function of `(Method, APIErrorCode)`.
+- The scripted `FakeNotion` middleware made every runtime behavior observable without sockets, including retry counts and log order. EP-3, EP-4 and EP-5 can reuse it for endpoint tests.
+
+Durable context is distilled into [docs/adr/2-client-runtime-retry-policy-and-typed-errors.md](../adr/2-client-runtime-retry-policy-and-typed-errors.md).
 
 
 ## Context and Orientation
@@ -322,7 +344,7 @@ JS-only mechanics this plan deliberately does not port (per the MasterPlan's exc
 
 ### ADRs
 
-This repository has no `docs/adr/` directory; no relevant ADR exists (verified with `ls docs`). The MasterPlan lists "the retry policy" as a future ADR; this plan records the needed facts in its Decision Log for that distillation.
+When this plan was written, the repository had no `docs/adr/` directory. By implementation time, EP-1 had created [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md); `APIErrorCode`'s `UnknownErrorCode` fallback follows it. This plan's retry policy and error model are recorded in [docs/adr/2-client-runtime-retry-policy-and-typed-errors.md](../adr/2-client-runtime-retry-policy-and-typed-errors.md).
 
 
 ## Plan of Work
@@ -1244,3 +1266,6 @@ paginateForM_ :: (Maybe Text -> IO (ListOf a)) -> (a -> IO ()) -> IO ()
 ```
 
 `Methods` and the `notion-client-effectful` `Notion` GADT are unchanged by this plan.
+
+
+Revision 2026-09-15 (implementation): Implemented all four milestones. Progress, Surprises & Discoveries, the Decision Log (three implementation choices) and Outcomes & Retrospective were filled in. The ADR paragraph now cites ADR 1 and the new ADR 2. The interfaces match the plan, with two additions: `defaultUserAgent` is exported, and `Notion.V1` re-exports `withRetries`, as the plan 14 contract requires.

@@ -48,7 +48,11 @@ Other `Servant.Client.ClientError` values — network failures,
 decoding errors — are *not* caught and remain `IO` exceptions.
 This preserves the contract of the underlying `notion-client`
 library and lets callers layer their own `Error ClientError`
-interpretation on top later.
+interpretation on top later. The same applies to
+`UnknownHTTPResponseError`, `RequestTimeoutError` and
+`InvalidPathParameterError` from `Notion.V1.Error`. Retries of
+rate-limited requests happen inside `Methods`, before an error reaches
+`runNotion`.
 
 ## Minimum viable usage
 

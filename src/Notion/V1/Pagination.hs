@@ -7,10 +7,13 @@ module Notion.V1.Pagination
     -- * Auto-pagination
     paginateAll,
     paginateCollect,
+    paginateFoldM,
+    paginateForM_,
     PaginationResult (..),
   )
 where
 
+import Control.Monad (foldM)
 import Data.Vector qualified as Vector
 import Notion.Prelude
 import Notion.V1.ListOf (ListOf (..))
@@ -62,6 +65,22 @@ data PaginationResult a = PaginationResult
 -- @
 paginateAll :: (Maybe Text -> IO (ListOf a)) -> IO (Vector a)
 paginateAll fetch = allResults <$> paginateCollect fetch
+
+-- | Fold over every item of a paginated endpoint, holding one page in memory at
+-- a time. Follows cursors like 'paginateAll'.
+paginateFoldM :: (b -> a -> IO b) -> b -> (Maybe Text -> IO (ListOf a)) -> IO b
+paginateFoldM step initial fetch = go Nothing initial
+  where
+    go cursor acc = do
+      List {results, nextCursor, hasMore} <- fetch cursor
+      acc' <- foldM step acc results
+      case nextCursor of
+        Just nc | hasMore -> go (Just nc) acc'
+        _ -> pure acc'
+
+-- | Run an action for every item of a paginated endpoint.
+paginateForM_ :: (Maybe Text -> IO (ListOf a)) -> (a -> IO ()) -> IO ()
+paginateForM_ fetch action = paginateFoldM (\() a -> action a) () fetch
 
 -- | Like 'paginateAll' but also returns the number of pages fetched.
 paginateCollect :: (Maybe Text -> IO (ListOf a)) -> IO (PaginationResult a)

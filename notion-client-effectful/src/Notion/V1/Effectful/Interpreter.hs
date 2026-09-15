@@ -8,6 +8,10 @@
 -- handling. Other 'Servant.Client.ClientError' values (network
 -- failures, decoding errors) are intentionally /not/ caught: they
 -- remain 'IO' exceptions, preserving the existing 'Notion.V1' contract.
+-- The same holds for 'Notion.V1.Error.UnknownHTTPResponseError',
+-- 'Notion.V1.Error.RequestTimeoutError' and
+-- 'Notion.V1.Error.InvalidPathParameterError'. Retries happen inside the
+-- 'Notion.V1.Methods' value, before an error reaches the interpreter.
 module Notion.V1.Effectful.Interpreter
   ( runNotion,
   )

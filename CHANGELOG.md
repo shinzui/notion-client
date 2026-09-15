@@ -14,6 +14,14 @@
 * `UserOwner` gains an `UnknownOwner` fallback
 * `NumberFormat` gains an `OtherNumberFormat Text` fallback
 * `FormulaResult` gains `FormulaUnsupportedResult` and an `UnknownFormulaResult Value` fallback
+* `NotionError.code` is now `APIErrorCode` (was `Text`); `NotionError` gains `requestId`, `additionalData` and `response` fields. String literals still work via `IsString`; use `apiErrorCodeText` to get `Text`
+* Failure responses whose body is not a Notion error (for example Cloudflare HTML pages) now throw `UnknownHTTPResponseError` instead of servant's `ClientError` (`FailureResponse`)
+* Connection and response timeouts now throw `RequestTimeoutError` instead of `ClientError` (`ConnectionError`)
+* `makeMethods` now retries `rate_limited` (429) and `service_overload` (529) responses for all requests and `internal_server_error`/`service_unavailable` for GET/DELETE, up to 2 times with back-off honoring `retry-after`. Use `makeMethodsWithEnv defaultClientConfig {retryOptions = noRetries}` for the old behavior
+* Requests now send a `User-Agent: notion-client-haskell/<version>` header
+* Request paths containing `..` throw `InvalidPathParameterError` before any request is sent
+* `ListOf` gains a `requestStatus` field; record construction must supply it
+* Minimum `servant-client` is now 0.20.2; new dependencies `base64-bytestring`, `http-client`, `http-types`, `mtl`, `random` and `servant-client-core`
 * `CreatePage.position` changes from `Maybe Blocks.Position` to `Maybe PagePosition`
 * The exported Servant `API` types of `Notion.V1`, `Notion.V1.DataSources` and `Notion.V1.Databases` gain a `QueryParams "filter_properties" Text` segment on the query routes (only affects code deriving its own client from them; the `Methods` record is unchanged)
 
@@ -21,6 +29,13 @@
 * Export `UserOwner (..)` from `Notion.V1.Users`
 * New meeting-notes payload types `MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent` and `MeetingRecording` in `Notion.V1.BlockContent`
 * New `PagePosition` type (`PageAfterBlock`, `PageStart`, `PageEnd`) in `Notion.V1.Pages`
+* `ClientConfig`, `defaultClientConfig`, `makeMethodsWith` and `makeMethodsWithEnv`: configurable Notion-Version, base URL, timeout (default 60s), retries, User-Agent and logging (`stderrLogger` for opt-in logging)
+* `APIErrorCode` with all 14 Notion error codes plus `UnknownErrorCode`
+* `RequestStatus` on list responses
+* OAuth: `Notion.V1.OAuth` with `createOAuthToken`, `revokeOAuthToken` and `introspectOAuthToken` using HTTP Basic auth
+* `Notion.V1.Helpers`: `extractNotionId`, `extractPageId`, `extractDatabaseId`, `extractBlockId`
+* `paginateFoldM` and `paginateForM_` in `Notion.V1.Pagination`
+* Runtime building blocks for non-Servant requests: `RequestContext`, `standardHeaders`, `responseTimeoutFor`, `withRetries`, `buildRequestError` and `notionErrorFromResponse`
 
 ### Bug Fixes
 * Decode the `default_background` color — previously any rich text or block using it failed the whole response

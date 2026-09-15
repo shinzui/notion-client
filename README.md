@@ -8,6 +8,9 @@ A type-safe Haskell client for the [Notion API](https://developers.notion.com/re
 - Comprehensive coverage of Notion API endpoints
 - Support for all Notion object types: Pages, Databases, Data Sources, Blocks, Users, etc.
 - Simple client interface with sensible defaults
+- Automatic retries of rate-limited and overloaded requests, honoring `retry-after`
+- Typed error codes with request IDs for support
+- OAuth token exchange and URL-to-ID helpers
 
 ## Installation
 
@@ -121,16 +124,83 @@ editPage Methods{updatePageMarkdown} pageId =
             }
 ```
 
+### Configuration and retries
+
+`makeMethods` uses sensible defaults. For control over the API version, base
+URL, timeout (default 60 seconds), retries and logging, build a `ClientConfig`:
+
+```haskell
+import Network.HTTP.Client.TLS (newTlsManager)
+import Notion.V1
+
+main :: IO ()
+main = do
+    manager <- newTlsManager
+    let config = defaultClientConfig {logger = Just stderrLogger, logLevel = LogInfo}
+        methods = makeMethodsWith config manager token
+    user <- retrieveMyUser methods
+    print user
+```
+
+Requests that fail with `rate_limited` (HTTP 429) or `service_overload` (529)
+are retried up to two times, as are `internal_server_error` and
+`service_unavailable` for `GET` and `DELETE`. A `retry-after` header sets the
+delay; otherwise the delay grows exponentially with jitter. Disable retries with
+`defaultClientConfig {retryOptions = noRetries}`.
+
 ### Error handling
 
 ```haskell
 import Control.Exception (catch)
-import Notion.V1.Error (NotionError(..))
+import Data.Text qualified as Text
+import Notion.V1.Error
 
 safeRetrieve :: Methods -> PageID -> IO ()
 safeRetrieve Methods{retrievePage} pageId =
-    retrievePage pageId `catch` \(e :: NotionError) ->
-        putStrLn $ "Notion error: " <> code e <> " - " <> message e
+    (retrievePage pageId >>= print) `catch` \(e :: NotionError) -> case code e of
+        ObjectNotFound -> putStrLn "No such page"
+        other ->
+            putStrLn $ "Notion error: " <> Text.unpack (apiErrorCodeText other)
+                <> " - " <> Text.unpack (message e)
+                <> " (request " <> show (requestId e) <> ")"
+```
+
+Besides `NotionError`, a request can throw `UnknownHTTPResponseError` (a
+non-2xx response that is not a Notion error, such as an HTML page from Notion's
+edge proxy; `displayException` explains it and includes the Cloudflare Ray ID),
+`RequestTimeoutError`, or `InvalidPathParameterError` (an ID containing `..`,
+rejected before sending).
+
+### OAuth
+
+```haskell
+import Notion.V1 (defaultBaseUrl, defaultClientConfig)
+import Notion.V1.OAuth
+import Servant.Client (mkClientEnv)
+
+exchangeCode :: Manager -> Text -> IO OAuthTokenResponse
+exchangeCode manager authCode = do
+    let oauth = makeOAuthMethodsWith defaultClientConfig
+            (mkClientEnv manager defaultBaseUrl)
+            OAuthCredentials {clientId = "...", clientSecret = "..."}
+    createOAuthToken oauth $ AuthorizationCode AuthorizationCodeGrant
+        { code = authCode
+        , redirectUri = Just "https://example.com/callback"
+        , externalAccount = Nothing
+        }
+```
+
+`revokeOAuthToken` and `introspectOAuthToken` take a token.
+
+### URL helpers
+
+```haskell
+import Notion.V1.Helpers (extractBlockId, extractNotionId)
+
+extractNotionId "https://www.notion.so/team/Tasks-abc123def456789012345678901234ab?v=..."
+-- Just (UUID "abc123de-f456-7890-1234-5678901234ab")
+extractBlockId "https://www.notion.so/Page-0123456789abcdef0123456789abcdef#block-fedcba9876543210fedcba9876543210"
+-- Just (UUID "fedcba98-7654-3210-fedc-ba9876543210")
 ```
 
 ### Auto-pagination
@@ -146,6 +216,9 @@ allPages <- paginateAll $ \cursor ->
         , inTrash = Nothing, filterProperties = Nothing
         }
 ```
+
+`paginateFoldM` and `paginateForM_` process every item while holding only one
+page in memory.
 
 ## Usage with effectful
 
@@ -204,6 +277,7 @@ the matching `Methods` record selector).
 - **Comments**: Create and list comments
 - **Custom Emojis**: List workspace custom emojis
 - **Webhooks**: Event types (including view events) and signature verification
+- **OAuth**: Exchange authorization codes and refresh tokens, revoke and introspect tokens
 
 ## Running the Example
 
