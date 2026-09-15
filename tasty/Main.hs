@@ -51,12 +51,14 @@ import Notion.V1.RichText (Annotations (..), Date (..), MentionContent (..), Ric
 import Notion.V1.RichText qualified as RT
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), dataSourceFilter, pageFilter, parseSearchResults)
 import Notion.V1.Users (BotUser (..), UserObject (..), WorkspaceLimits (..))
-import Notion.V1.Views (CreateView (..), QueryView (..), UpdateView (..), ViewObject (..), ViewType (..))
+import Notion.V1.Views (CreateView (..), UpdateView (..), ViewObject (..), ViewType (..))
+import Notion.V1.Views qualified as Views
 import OAuthTests qualified
 import RuntimeTests qualified
 import System.Environment qualified as Environment
 import Test.Tasty
 import Test.Tasty.HUnit
+import ViewTests qualified
 import Web.HttpApiData (toQueryParam)
 import WireFormatTests qualified
 
@@ -176,6 +178,7 @@ tests = do
         RuntimeTests.tests,
         OAuthTests.tests,
         HelpersTests.tests,
+        ViewTests.tests,
         basicIntegration,
         markdownE2E,
         pageE2E,
@@ -1326,7 +1329,7 @@ testCreateMarkdownPageInDatabase methods@Methods {createPage, retrievePageMarkdo
 
 -- | Full view lifecycle: create, retrieve, update, list, query, delete.
 testViewLifecycle :: Methods -> Text.Text -> Assertion
-testViewLifecycle methods@Methods {createView, retrieveView, updateView, listViews, queryView, deleteView} dbIdText = do
+testViewLifecycle methods@Methods {createView, retrieveView, updateView, listViews, createViewQuery, getViewQueryResults, deleteViewQuery, deleteView} dbIdText = do
   dsId <- getFirstDataSourceId methods dbIdText
 
   -- Step 1: Create a table view
@@ -1373,9 +1376,14 @@ testViewLifecycle methods@Methods {createView, retrieveView, updateView, listVie
   let viewIds = Vector.map (\(ViewObject {id = vid}) -> vid) (results viewList)
   assertBool "View list should contain our view" (viewId `Vector.elem` viewIds)
 
-  -- Step 5: Query the view (may fail if endpoint URL is different than expected)
-  -- The query view endpoint URL is not yet confirmed in the API docs.
-  -- We skip this step to avoid test failures from URL guessing.
+  -- Step 5: Query the view's rows through the view-query flow
+  Views.ViewQuery {Views.id = queryId, Views.totalCount = total, Views.results = firstPage} <-
+    createViewQuery viewId Views.CreateViewQuery {Views.pageSize = Just 10}
+  assertBool "first page is no larger than total_count" (fromIntegral (Vector.length firstPage) <= total)
+  List {results = page2} <- getViewQueryResults viewId queryId Nothing (Just 10)
+  assertBool "results page is no larger than total_count" (fromIntegral (Vector.length page2) <= total)
+  Views.DeletedViewQuery {Views.deleted = queryDeleted} <- deleteViewQuery viewId queryId
+  assertBool "query deleted" queryDeleted
 
   -- Step 6: Delete the view
   deleted <- deleteView viewId

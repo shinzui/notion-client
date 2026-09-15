@@ -5,11 +5,18 @@ title: "Add View Queries and Typed View Configuration"
 kind: exec-plan
 created_at: 2026-09-14T18:46:51Z
 master_plan: "docs/masterplans/1-reach-parity-with-the-official-notion-js-sdk-on-the-published-rest-api.md"
+intention: intention_01m2jjvjgpef9tyyp50524jfwq
 provenance:
   created_by:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:51Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T14:22:19Z
+      mode: "implement"
+      note: "Implemented EP-4 milestones"
 ---
 
 # Add View Queries and Typed View Configuration
@@ -41,12 +48,12 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 
 ## Progress
 
-- [ ] Milestone 1: Reuse `PartialPageObject` from `src/Notion/V1/Pages.hs`, or add it with EP-5's exact definition if absent.
-- [ ] Milestone 1: Add `CreateViewQuery`, `ViewQuery`, `DeletedViewQuery` and `ViewQueryID` to `src/Notion/V1/Views.hs`.
-- [ ] Milestone 1: Replace the `views/{id}/query` route with the three `views/{id}/queries` routes; update `Methods`, `makeMethods` and the effectful package (`Effect.hs`, `Interpreter.hs`, `Effectful.hs`).
-- [ ] Milestone 1: Add `src/Notion/V1/ViewQueries.hs` with `queryAllViewPages`; register it in `notion-client.cabal`.
-- [ ] Milestone 1: Create `tasty/ViewTests.hs` with the "View queries" group and wire it into `notion-client.cabal` and `tasty/Main.hs`; fix `tasty/Main.hs` imports and the E2E lifecycle test.
-- [ ] Milestone 1: Update `notion-client-example/ViewDemo.hs` with the query flow; `cabal build all` and `cabal test` pass.
+- [x] Milestone 1: Added `PartialPageObject` to `src/Notion/V1/Pages.hs` (EP-4 started first). (2026-09-15)
+- [x] Milestone 1: Added `CreateViewQuery`, `ViewQuery` (with `requestStatus`, since EP-2 landed), `DeletedViewQuery` and `ViewQueryID` to `src/Notion/V1/Views.hs`. (2026-09-15)
+- [x] Milestone 1: Replaced the `views/{id}/query` route with the three `views/{id}/queries` routes; updated `Methods`, `makeMethodsWithEnv` and the effectful package (`Effect.hs`, `Interpreter.hs`, `Effectful.hs`). (2026-09-15)
+- [x] Milestone 1: Added `src/Notion/V1/ViewQueries.hs` with `queryAllViewPages`; registered it in `notion-client.cabal`. (2026-09-15)
+- [x] Milestone 1: Created `tasty/ViewTests.hs` with the "View queries" group (plus a `FakeNotion` test of `queryAllViewPages`), wired it into `notion-client.cabal` and `tasty/Main.hs`; fixed `tasty/Main.hs` imports and the E2E lifecycle test. (2026-09-15)
+- [x] Milestone 1: Updated `notion-client-example/ViewDemo.hs` with the query flow; `cabal build all` and `cabal test` pass, and the live "View E2E" test passes. (2026-09-15)
 - [ ] Milestone 2: Add `src/Notion/V1/Clearable.hs` and register it.
 - [ ] Milestone 2: Add `FromJSON` for `Filter`, `PropertyCondition`, all condition types, `SortDirection` and `Sort`, plus `ToJSON PropertyCondition`, in `src/Notion/V1/Filter.hs` (or record that EP-5 already did).
 - [ ] Milestone 2: Add `ViewFilter`, `ViewSort`, `QuickFilter`, `ViewPropertySort`, `ViewPosition`, `WidgetPlacement`, `CreateDatabaseForView` and `UnknownViewType`; retype `ViewObject`, `CreateView` and `UpdateView` (configuration still `Value`).
@@ -59,7 +66,16 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 
 ## Surprises & Discoveries
 
-(None yet.)
+- EP-2 had already landed, so `RequestStatus` exists in `src/Notion/V1/ListOf.hs` and `ViewQuery` carries `requestStatus :: Maybe RequestStatus`. `makeMethods` is now a wrapper over `makeMethodsWithEnv`; the views pattern binding lives there.
+- The live API (2026-09-15, `Notion-Version: 2026-03-11`) confirms the query flow. `POST views/{id}/queries` with `{"page_size":1}` returned HTTP 200 with `total_count: 47`, one result, and a `next_cursor` equal to the ID of the next page. `GET views/{id}/queries/{query_id}?start_cursor=<that cursor>&page_size=1` returned exactly that page, and `DELETE` returned HTTP 200 with `deleted: true`. All three return 200, not 202, so plain servant verbs are correct. Responses also carry a top-level `request_id`, which the decoders ignore.
+
+  ```text
+  {"object":"view_query",...,"total_count":47,"results":[{"object":"page","id":"…"}],"next_cursor":"33399d8a-…-d13ad7e99abe","has_more":true}
+  {"object":"list","results":[{"object":"page","id":"33399d8a-…-d13ad7e99abe"}],"next_cursor":"33399d8a-…-cf54c43d0175","has_more":true,"type":"page","page":{}}
+  ```
+
+- A freshly retrieved table view on that database had `"filter":null,"sorts":null,"quick_filters":null,"configuration":{"type":"table"}`, so `null` really does appear in responses for these fields.
+- `cabal test --test-options='-p "Views (EP-4)"'` does not work: cabal splits `--test-options` on spaces and tasty rejects the fragment. Use `cabal test --test-option=--pattern=EP-4` instead.
 
 
 ## Decision Log
@@ -99,6 +115,14 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 - Decision: View-query result elements use the shared `PartialPageObject` type from `src/Notion/V1/Pages.hs`, not a view-specific reference type. If the type is absent, this plan adds it with EP-5's exact definition (`newtype PartialPageObject = PartialPageObject {id :: PageID}`, deriving `Generic` and `Show`, decoding only `id`). The `Filter`/`Sort` decoders use EP-5's helper names (`parsePropertyCondition` and friends).
   Rationale: The coordinator decided that the partial-page type is shared between EP-4 and EP-5 (`docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md`, Milestone 1) and that whichever plan starts first defines it. The same applies to the `Filter`/`Sort` `FromJSON` instances. Matching names and shapes exactly means the second plan to land compiles without edits.
   Date: 2026-09-14
+
+- Decision: EP-4 defined `PartialPageObject` in `src/Notion/V1/Pages.hs` with exactly the shared definition, because EP-5 had not started. `ViewQuery` includes `requestStatus`, because EP-2's `RequestStatus` exists.
+  Rationale: The MasterPlan's Integration Points assign the type to whichever of EP-4 and EP-5 starts first, and this plan's Milestone 1 makes `requestStatus` conditional on EP-2.
+  Date: 2026-09-15
+
+- Decision: Bind the results route as `getViewQueryResults_` in `makeMethodsWithEnv` and assign `getViewQueryResults = getViewQueryResults_`, and use a qualified `Notion.V1.Views` import for the query types in `tasty/Main.hs`.
+  Rationale: The first follows the existing convention for routes whose `Methods` field has per-argument Haddock comments (`listViews_`, `listUsers_`). The second is needed because importing `ViewQuery (..)` unqualified would make the `results` and `hasMore` selector functions used elsewhere in `tasty/Main.hs` ambiguous under `DuplicateRecordFields`.
+  Date: 2026-09-15
 
 - Decision: Add `UnknownViewType Text` to `ViewType` in this plan.
   Rationale: The tolerant-decoding rule applies. `ViewType` currently calls `fail` on unknown strings (`src/Notion/V1/Views.hs` line 57), and the MasterPlan assigns no other plan to it.
@@ -1620,7 +1644,7 @@ cabal test 2>&1 | tail -n 60
 To iterate on the new tests only:
 
 ```bash
-cabal test --test-options='-p "Views (EP-4)"'
+cabal test --test-option=--pattern=EP-4
 ```
 
 Expected tail after Milestone 1. The exact test names are the ones you give in `tasty/ViewTests.hs`; integration groups print as skipped when no token is set.

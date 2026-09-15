@@ -98,7 +98,7 @@ import Notion.V1.FileUploads (FileUploadID, FileUploadObject, FileUploadStatus)
 import Notion.V1.FileUploads qualified as FileUploads
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.MeetingNotes qualified as MeetingNotes
-import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
+import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PartialPageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
 import Notion.V1.Pages qualified as Pages
 import Notion.V1.Search (SearchRequest)
 import Notion.V1.Search qualified as Search
@@ -193,7 +193,9 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
                  :<|> updateView
                  :<|> deleteView
                  :<|> listViews_
-                 :<|> queryView
+                 :<|> createViewQuery
+                 :<|> getViewQueryResults_
+                 :<|> deleteViewQuery
                )
         :<|> listCustomEmojis_
         :<|> ( createFileUpload
@@ -238,6 +240,7 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
     search = search_
     listDataSourceTemplates = listDataSourceTemplates_
     listViews = listViews_
+    getViewQueryResults = getViewQueryResults_
     listCustomEmojis = listCustomEmojis_
     listFileUploads = listFileUploads_
     sendFileUploadContent fid upload = do
@@ -363,7 +366,20 @@ data Methods = Methods
       Maybe Natural ->
       -- \^ page_size
       IO (ListOf ViewObject),
-    queryView :: Views.ViewID -> Views.QueryView -> IO (ListOf PageObject),
+    -- | Create a view query: a short-lived snapshot of the rows a view shows,
+    -- with its first page of results.
+    createViewQuery :: Views.ViewID -> Views.CreateViewQuery -> IO Views.ViewQuery,
+    -- | Page through a view query's results.
+    getViewQueryResults ::
+      Views.ViewID ->
+      Views.ViewQueryID ->
+      Maybe Text ->
+      -- \^ start_cursor
+      Maybe Natural ->
+      -- \^ page_size
+      IO (ListOf PartialPageObject),
+    -- | Delete a view query before it expires.
+    deleteViewQuery :: Views.ViewID -> Views.ViewQueryID -> IO Views.DeletedViewQuery,
     -- \* Custom Emojis
     listCustomEmojis ::
       Maybe Text ->

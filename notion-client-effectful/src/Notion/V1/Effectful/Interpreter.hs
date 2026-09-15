@@ -35,9 +35,12 @@ import Notion.V1.Effectful.Effect
         CreatePage,
         CreatePageAsync,
         CreateView,
+        CreateViewQuery,
         DeleteBlock,
         DeleteComment,
         DeleteView,
+        DeleteViewQuery,
+        GetViewQueryResults,
         ListBlockChildren,
         ListComments,
         ListCustomEmojis,
@@ -49,7 +52,6 @@ import Notion.V1.Effectful.Effect
         QueryDataSource,
         QueryDatabase,
         QueryMeetingNotes,
-        QueryView,
         RetrieveAsyncTask,
         RetrieveBlock,
         RetrieveComment,
@@ -142,7 +144,10 @@ runNotion methods = interpret $ \_ -> \case
   DeleteView vid -> runIO (Notion.deleteView methods vid)
   ListViews dbId dsId cursor pageSize ->
     runIO (Notion.listViews methods dbId dsId cursor pageSize)
-  QueryView vid req -> runIO (Notion.queryView methods vid req)
+  CreateViewQuery vid req -> runIO (Notion.createViewQuery methods vid req)
+  GetViewQueryResults vid qid cursor size ->
+    runIO (Notion.getViewQueryResults methods vid qid cursor size)
+  DeleteViewQuery vid qid -> runIO (Notion.deleteViewQuery methods vid qid)
   -- Custom Emojis
   ListCustomEmojis nameFilter cursor pageSize ->
     runIO (Notion.listCustomEmojis methods nameFilter cursor pageSize)

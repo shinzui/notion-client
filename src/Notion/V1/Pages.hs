@@ -3,6 +3,7 @@ module Notion.V1.Pages
   ( -- * Main types
     PageID,
     PageObject (..),
+    PartialPageObject (..),
     CreatePage (..),
     PagePosition (..),
     UpdatePage (..),
@@ -112,6 +113,18 @@ instance ToJSON PageObject where
         <> maybe [] (\v -> ["is_locked" .= v]) isLocked
         <> maybe [] (\v -> ["is_archived" .= v]) isArchived
         <> maybe [] (\pu -> ["public_url" .= pu]) publicUrl
+
+-- | @{"object":"page","id":...}@
+--
+-- A reference to a page returned where Notion sends only the ID, for example
+-- view query results.
+newtype PartialPageObject = PartialPageObject {id :: PageID}
+  deriving stock (Generic, Show)
+
+instance FromJSON PartialPageObject where
+  parseJSON = \case
+    Object o -> PartialPageObject <$> o .: "id"
+    _ -> fail "Expected object for PartialPageObject"
 
 -- | Template configuration for page creation and updates.
 --

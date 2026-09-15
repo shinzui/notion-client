@@ -67,7 +67,9 @@ module Notion.V1.Effectful.Effect
     updateView,
     deleteView,
     listViews,
-    queryView,
+    createViewQuery,
+    getViewQueryResults,
+    deleteViewQuery,
 
     -- * Custom Emojis
     listCustomEmojis,
@@ -106,7 +108,7 @@ import Notion.V1.FileUploads (FileUploadID, FileUploadObject, FileUploadStatus)
 import Notion.V1.FileUploads qualified as FileUploads
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.MeetingNotes qualified as MeetingNotes
-import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
+import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PartialPageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
 import Notion.V1.Search (SearchRequest)
 import Notion.V1.Users (UserID, UserObject)
 import Notion.V1.Views (ViewObject)
@@ -180,7 +182,9 @@ data Notion :: Effect where
     Maybe Text ->
     Maybe Natural ->
     Notion m (ListOf ViewObject)
-  QueryView :: Views.ViewID -> Views.QueryView -> Notion m (ListOf PageObject)
+  CreateViewQuery :: Views.ViewID -> Views.CreateViewQuery -> Notion m Views.ViewQuery
+  GetViewQueryResults :: Views.ViewID -> Views.ViewQueryID -> Maybe Text -> Maybe Natural -> Notion m (ListOf PartialPageObject)
+  DeleteViewQuery :: Views.ViewID -> Views.ViewQueryID -> Notion m Views.DeletedViewQuery
   -- Custom Emojis
   ListCustomEmojis ::
     Maybe Text ->
@@ -433,9 +437,23 @@ listViews ::
 listViews dbId dsId startCursor pageSize =
   send (ListViews dbId dsId startCursor pageSize)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.queryView'.
-queryView :: (Notion :> es) => Views.ViewID -> Views.QueryView -> Eff es (ListOf PageObject)
-queryView vid q = send (QueryView vid q)
+-- | See 'Notion.V1.Methods'.'Notion.V1.createViewQuery'.
+createViewQuery :: (Notion :> es) => Views.ViewID -> Views.CreateViewQuery -> Eff es Views.ViewQuery
+createViewQuery vid req = send (CreateViewQuery vid req)
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.getViewQueryResults'.
+getViewQueryResults ::
+  (Notion :> es) =>
+  Views.ViewID ->
+  Views.ViewQueryID ->
+  Maybe Text ->
+  Maybe Natural ->
+  Eff es (ListOf PartialPageObject)
+getViewQueryResults vid qid cursor size = send (GetViewQueryResults vid qid cursor size)
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.deleteViewQuery'.
+deleteViewQuery :: (Notion :> es) => Views.ViewID -> Views.ViewQueryID -> Eff es Views.DeletedViewQuery
+deleteViewQuery vid qid = send (DeleteViewQuery vid qid)
 
 -- ── Custom Emojis ─────────────────────────────────────────────────
 

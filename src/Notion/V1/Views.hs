@@ -10,7 +10,13 @@ module Notion.V1.Views
     ViewType (..),
     CreateView (..),
     UpdateView (..),
-    QueryView (..),
+
+    -- * View queries
+    ViewQueryID,
+    CreateViewQuery (..),
+    ViewQuery (..),
+    DeletedViewQuery (..),
+    PartialPageObject (..),
 
     -- * Servant
     API,
@@ -20,8 +26,8 @@ where
 import Data.Aeson ((.:), (.:?))
 import Notion.Prelude
 import Notion.V1.Common (ObjectType, UUID)
-import Notion.V1.ListOf (ListOf)
-import Notion.V1.Pages (PageObject)
+import Notion.V1.ListOf (ListOf, RequestStatus)
+import Notion.V1.Pages (PartialPageObject (..))
 import Notion.V1.Users (UserReference)
 import Prelude hiding (id)
 
@@ -148,15 +154,59 @@ data UpdateView = UpdateView
 instance ToJSON UpdateView where
   toJSON = genericToJSON aesonOptions
 
--- | Query a view request (pagination only, view's own filters/sorts are used)
-data QueryView = QueryView
-  { startCursor :: Maybe Text,
+-- | View query ID
+type ViewQueryID = UUID
+
+-- | Body of @POST views/{view_id}/queries@.
+newtype CreateViewQuery = CreateViewQuery
+  { -- | Results per page (max 100)
     pageSize :: Maybe Natural
   }
   deriving stock (Generic, Show)
 
-instance ToJSON QueryView where
+instance ToJSON CreateViewQuery where
   toJSON = genericToJSON aesonOptions
+
+-- | Response of @POST views/{view_id}/queries@: a cached server-side snapshot
+-- of the rows the view matches, plus its first page of results.
+data ViewQuery = ViewQuery
+  { id :: ViewQueryID,
+    viewId :: ViewID,
+    -- | When the cached results expire
+    expiresAt :: POSIXTime,
+    totalCount :: Natural,
+    results :: Vector PartialPageObject,
+    nextCursor :: Maybe Text,
+    hasMore :: Bool,
+    requestStatus :: Maybe RequestStatus
+  }
+  deriving stock (Generic, Show)
+
+instance FromJSON ViewQuery where
+  parseJSON = \case
+    Object o -> do
+      id <- o .: "id"
+      viewId <- o .: "view_id"
+      expiresAt <- o .: "expires_at" >>= parseISO8601
+      totalCount <- o .: "total_count"
+      results <- o .: "results"
+      nextCursor <- o .:? "next_cursor"
+      hasMore <- o .: "has_more"
+      requestStatus <- o .:? "request_status"
+      pure ViewQuery {..}
+    _ -> fail "Expected object for ViewQuery"
+
+-- | Response of @DELETE views/{view_id}/queries/{query_id}@.
+data DeletedViewQuery = DeletedViewQuery
+  { id :: ViewQueryID,
+    deleted :: Bool
+  }
+  deriving stock (Generic, Show)
+
+instance FromJSON DeletedViewQuery where
+  parseJSON = \case
+    Object o -> DeletedViewQuery <$> o .: "id" <*> o .: "deleted"
+    _ -> fail "Expected object for DeletedViewQuery"
 
 -- | Servant API
 type API =
@@ -176,7 +226,17 @@ type API =
            :> QueryParam "page_size" Natural
            :> Get '[JSON] (ListOf ViewObject)
            :<|> Capture "view_id" ViewID
-           :> "query"
-           :> ReqBody '[JSON] QueryView
-           :> Post '[JSON] (ListOf PageObject)
+           :> "queries"
+           :> ReqBody '[JSON] CreateViewQuery
+           :> Post '[JSON] ViewQuery
+           :<|> Capture "view_id" ViewID
+           :> "queries"
+           :> Capture "query_id" ViewQueryID
+           :> QueryParam "start_cursor" Text
+           :> QueryParam "page_size" Natural
+           :> Get '[JSON] (ListOf PartialPageObject)
+           :<|> Capture "view_id" ViewID
+           :> "queries"
+           :> Capture "query_id" ViewQueryID
+           :> Delete '[JSON] DeletedViewQuery
        )

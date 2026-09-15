@@ -6,6 +6,7 @@
 -- - Retrieve a view
 -- - Update a view (rename, add sorts)
 -- - List all views on a database
+-- - Query a view's rows
 -- - Delete a view
 module ViewDemo
   ( runViewDemo,
@@ -13,14 +14,15 @@ module ViewDemo
 where
 
 import Console (printHeader, printSuccess, runTest)
+import Control.Monad (when)
 import Data.Aeson qualified as Aeson
 import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
-import Notion.V1.Common (UUID (..))
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.ListOf (ListOf (..))
+import Notion.V1.ViewQueries (queryAllViewPages)
 import Notion.V1.Views
 import Prelude hiding (id)
 
@@ -139,7 +141,47 @@ runViewDemo methods databaseIdStr = do
     putStrLn $ "  - " <> show vid <> " (type: " <> show vtype <> ")"
 
   -- ---------------------------------------------------------------
-  -- Part 5: Delete the view
+  -- Part 5: Query the view's rows
+  -- ---------------------------------------------------------------
+  printHeader (Text.pack "Views: Query View Rows")
+
+  query <-
+    runTest (Text.pack "Creating view query") $
+      createViewQuery methods viewId CreateViewQuery {pageSize = Just 5}
+
+  let ViewQuery
+        { id = queryId,
+          totalCount = qTotal,
+          expiresAt = qExpires,
+          results = qResults,
+          nextCursor = qCursor,
+          hasMore = qMore
+        } = query
+  putStrLn $ "  query id: " <> show queryId
+  putStrLn $ "  totalCount: " <> show qTotal
+  putStrLn $ "  expiresAt: " <> show qExpires
+  putStrLn $ "  first page: " <> show (Vector.length qResults) <> " results"
+
+  when qMore $ do
+    nextPage <-
+      runTest (Text.pack "Fetching the next page of results") $
+        getViewQueryResults methods viewId queryId qCursor (Just 5)
+    let List {results = nextResults} = nextPage
+    putStrLn $ "  next page: " <> show (Vector.length nextResults) <> " results"
+
+  deletedQuery <-
+    runTest (Text.pack "Deleting view query") $
+      deleteViewQuery methods viewId queryId
+  let DeletedViewQuery {deleted = queryDeleted} = deletedQuery
+  putStrLn $ "  deleted: " <> show queryDeleted
+
+  allPages <-
+    runTest (Text.pack "Collecting all rows with queryAllViewPages") $
+      queryAllViewPages methods viewId (Just 100)
+  putStrLn $ "  queryAllViewPages: " <> show (Vector.length allPages) <> " page references"
+
+  -- ---------------------------------------------------------------
+  -- Part 6: Delete the view
   -- ---------------------------------------------------------------
   printHeader (Text.pack "Views: Delete View")
 

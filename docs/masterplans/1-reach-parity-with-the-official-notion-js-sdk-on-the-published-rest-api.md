@@ -21,6 +21,11 @@ provenance:
       at: 2026-09-15T14:19:29Z
       mode: "implement"
       note: "EP-3 completed, registry updated, ADRs 3-4 added"
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T14:22:19Z
+      mode: "implement"
+      note: "Started EP-4; registry updated"
 ---
 
 # Reach Parity with the Official Notion JS SDK on the Published REST API
@@ -100,7 +105,7 @@ Prior plans in this repository that give useful background (all checked in, all 
 | 1 | Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK | docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md | None | None | Complete |
 | 2 | Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth | docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md | None | None | Complete |
 | 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | Complete |
-| 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | Not Started |
+| 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | In Progress |
 | 5 | Type Data Source, Database, and Search Results and Close Query and Filter Gaps | docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md | EP-1, EP-2 | None | Not Started |
 | 6 | Close Page, Block, Property Value, User, File Upload, and Webhook Field Gaps | docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md | EP-1 | EP-3 | Not Started |
 
