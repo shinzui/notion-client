@@ -1482,7 +1482,8 @@ testPaginateAll = do
                   nextCursor = Just "cursor-1",
                   hasMore = True,
                   type_ = Nothing,
-                  object = Nothing
+                  object = Nothing,
+                  requestStatus = Nothing
                 }
           Just "cursor-1" ->
             pure $
@@ -1491,7 +1492,8 @@ testPaginateAll = do
                   nextCursor = Just "cursor-2",
                   hasMore = True,
                   type_ = Nothing,
-                  object = Nothing
+                  object = Nothing,
+                  requestStatus = Nothing
                 }
           _ ->
             pure $
@@ -1500,7 +1502,8 @@ testPaginateAll = do
                   nextCursor = Nothing,
                   hasMore = False,
                   type_ = Nothing,
-                  object = Nothing
+                  object = Nothing,
+                  requestStatus = Nothing
                 }
   PaginationResult {allResults, totalPages} <- paginateCollect mockFetch
   assertEqual "all results" (Vector.fromList [1, 2, 3, 4, 5, 6]) allResults

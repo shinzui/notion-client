@@ -50,9 +50,9 @@ It is visible through new unit tests in the `tasty` suite that run without netwo
 - [x] Milestone 1: Create `src/Notion/V1/Client.hs` with `ClientConfig`, `LogLevel`, `Logger`, `defaultClientConfig`, `RequestContext`/`requestContextFor`/`standardHeaders`, `responseTimeoutFor`, `configureClientEnv` (timeout + `User-Agent` middleware). (2026-09-15)
 - [x] Milestone 1: Add `makeMethodsWith` / `makeMethodsWithEnv` in `src/Notion/V1.hs`; re-implement `makeMethods` as a wrapper; thread `notionVersion` from the config. (2026-09-15)
 - [x] Milestone 1: Create `tasty/FakeNotion.hs` and `tasty/RuntimeTests.hs` (config tests); register in cabal and `tasty/Main.hs`; `cabal test` green. (2026-09-15)
-- [ ] Milestone 2: Rewrite `src/Notion/V1/Error.hs` (`APIErrorCode`, extended `NotionError`, `HttpErrorResponse`, `UnknownHTTPResponseError`, `RequestTimeoutError`, `InvalidPathParameterError`, `buildRequestError`, `notionErrorFromResponse`, `fromClientError`).
-- [ ] Milestone 2: Convert errors in the runtime; add `RequestStatus` to `src/Notion/V1/ListOf.hs`; fix `requestStatus` in existing test fixtures and the example app.
-- [ ] Milestone 2: Error and `RequestStatus` tests in `tasty/RuntimeTests.hs`; `cabal test` green.
+- [x] Milestone 2: Rewrite `src/Notion/V1/Error.hs` (`APIErrorCode`, extended `NotionError`, `HttpErrorResponse`, `UnknownHTTPResponseError`, `RequestTimeoutError`, `InvalidPathParameterError`, `buildRequestError`, `notionErrorFromResponse`, `fromClientError`). (2026-09-15)
+- [x] Milestone 2: Convert errors in the runtime; add `RequestStatus` to `src/Notion/V1/ListOf.hs`; fix `requestStatus` in existing test fixtures and the example app. (2026-09-15)
+- [x] Milestone 2: Error and `RequestStatus` tests in `tasty/RuntimeTests.hs`; `cabal test` green. (2026-09-15)
 - [ ] Milestone 3: Create `src/Notion/V1/Retry.hs` (pure `canRetry`, `parseRetryAfter`, `retryDelay`, `validateRequestPath`).
 - [ ] Milestone 3: Add `withRetries`, logging and the path guard to the middleware in `src/Notion/V1/Client.hs`.
 - [ ] Milestone 3: Pure retry tests and fake-server retry tests; `cabal test` green.
@@ -76,6 +76,10 @@ It is visible through new unit tests in the `tasty` suite that run without netwo
 
 - Decision: Also export `defaultUserAgent :: Text` from `Notion.V1.Client`.
   Rationale: `defaultClientConfig` needs the value, and callers who set `userAgent` to add a suffix can reuse it. It is purely additive.
+  Date: 2026-09-15
+
+- Decision: In Milestone 2, convert servant errors only in `runClientWith` (via `fromClientError`). The conversion inside `notionMiddleware` is added in Milestone 3, together with the retry loop that needs it.
+  Rationale: Before retries exist, converting in the middleware would duplicate `runClientWith`'s work and change nothing observable. Milestone 3 has to restructure the middleware anyway.
   Date: 2026-09-15
 
 - Decision: The retry loop, timeout, `User-Agent` header and path guard are installed as a servant-client `ClientEnv` middleware (the `middleware` field added in servant-client 0.20.2), not by re-running whole `ClientM` actions inside `run`.

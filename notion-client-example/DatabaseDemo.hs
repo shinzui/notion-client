@@ -18,7 +18,7 @@ import Notion.V1.Comments (CommentObject (..), CreateComment (..))
 import Notion.V1.Common (Icon (..), Parent (..), UUID (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
-import Notion.V1.Error (NotionError (..))
+import Notion.V1.Error (NotionError (..), apiErrorCodeText)
 import Notion.V1.Filter (Sort (..), SortDirection (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyItemResponse (..))
@@ -269,7 +269,8 @@ runDatabaseDemo methods databaseIdStr = do
   case result of
     Left notionErr -> do
       putStrLn "caught!"
-      putStrLn $ "  code: " <> Text.unpack (code notionErr)
+      putStrLn $ "  code: " <> Text.unpack (apiErrorCodeText (code notionErr))
+      putStrLn $ "  request id: " <> maybe "(none)" Text.unpack (requestId notionErr)
       putStrLn $ "  message: " <> Text.unpack (message notionErr)
       putStrLn $ "  status: " <> show (status notionErr)
     Right _ ->

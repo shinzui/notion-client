@@ -46,7 +46,7 @@ import Data.Version (showVersion)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (Header)
 import Notion.Prelude hiding (ByteString)
-import Notion.V1.Error (parseNotionError)
+import Notion.V1.Error (fromClientError)
 import Notion.V1.Retry (RetryOptions (..), defaultRetryOptions, noRetries)
 import Paths_notion_client qualified
 import Servant.Client (BaseUrl (..), ClientEnv (..), ClientM, Scheme (..))
@@ -195,8 +195,6 @@ notionMiddleware ClientConfig {userAgent} app req =
 runClientWith :: ClientEnv -> ClientM a -> IO a
 runClientWith env clientM = do
   result <- Client.runClientM clientM env
-  case result of
-    Left err -> case parseNotionError err of
-      Just notionErr -> Exception.throwIO notionErr
-      Nothing -> Exception.throwIO err
-    Right a -> pure a
+  -- throwIO on a SomeException rethrows the wrapped exception, so callers can
+  -- catch NotionError and friends by their own types.
+  either (Exception.throwIO . fromClientError) pure result
