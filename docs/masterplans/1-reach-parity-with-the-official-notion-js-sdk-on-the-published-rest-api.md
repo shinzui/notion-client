@@ -16,6 +16,11 @@ provenance:
       at: 2026-09-15T13:07:33Z
       mode: "implement"
       note: "Linked intention; started EP-1"
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T14:19:29Z
+      mode: "implement"
+      note: "EP-3 completed, registry updated, ADRs 3-4 added"
 ---
 
 # Reach Parity with the Official Notion JS SDK on the Published REST API
@@ -94,7 +99,7 @@ Prior plans in this repository that give useful background (all checked in, all 
 |---|-------|------|-----------|-----------|--------|
 | 1 | Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK | docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md | None | None | Complete |
 | 2 | Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth | docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md | None | None | Complete |
-| 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | In Progress |
+| 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | Complete |
 | 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | Not Started |
 | 5 | Type Data Source, Database, and Search Results and Close Query and Filter Gaps | docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md | EP-1, EP-2 | None | Not Started |
 | 6 | Close Page, Block, Property Value, User, File Upload, and Webhook Field Gaps | docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md | EP-1 | EP-3 | Not Started |
@@ -149,6 +154,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 **`AsyncTask` (new module `src/Notion/V1/AsyncTasks.hs`).**
 - Owned by EP-3. It is consumed by EP-3's own `allow_async` page responses, optionally by EP-6, and by MasterPlan 2's `agents.batch`.
+- The module also owns `AsyncVerb`, `AsyncStatuses` and `fromAsyncUnion`. Notion answers queued work with HTTP 202, and servant's plain `Post`/`Patch` verbs accept only 200, so every route that can return a task must accept 202 through a `UVerb` (see [docs/adr/3-background-operations-accept-200-or-202-and-return-asyncor.md](../adr/3-background-operations-accept-200-or-202-and-return-asyncor.md)). This includes MasterPlan 2's `agents.batch`.
 
 **`Parent` and `Color` (`src/Notion/V1/Common.hs`).**
 - EP-1 adds `AgentParent` and `default_background`. EP-6 must not re-add them.
@@ -164,6 +170,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - EP-6 reuses it.
 
 **Partial objects (`PartialPageObject`, `PartialDataSourceObject`, `PartialDatabaseObject`).**
+- EP-3 set the pattern with `CommentResponse` and `CreateMeetingNoteResponse`: a full-or-partial sum type decided by a key only the full shape has. It is recorded in [docs/adr/4-full-or-partial-responses-and-request-only-types.md](../adr/4-full-or-partial-responses-and-request-only-types.md), which EP-4, EP-5 and EP-6 should follow.
 - `PartialPageObject` is a newtype `{id :: PageID}` in `src/Notion/V1/Pages.hs`, used by EP-4 (view query results) and EP-5 (query and search result unions). Whichever of the two starts first adds it with exactly that definition, and the other reuses it.
 - EP-5 owns the data-source and database partials and `PageOrDataSource`.
 - EP-6 defers partial page and block responses for other endpoints to a follow-up, which must reuse these types.
@@ -203,6 +210,8 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 3. The retry policy: which errors, which methods, how `retry-after` is honored. **Recorded** as [docs/adr/2-client-runtime-retry-policy-and-typed-errors.md](../adr/2-client-runtime-retry-policy-and-typed-errors.md) (2026-09-15), together with the typed error model and the runtime interfaces for non-Servant requests.
 4. The `notion-client-effectful` lockstep rule.
 5. The deliberate exclusion of unpublished agent routes from the core REST parity effort.
+6. Operations that may run in the background (HTTP 202, `AsyncOr`, `AsyncVerb`). **Recorded** as [docs/adr/3-background-operations-accept-200-or-202-and-return-asyncor.md](../adr/3-background-operations-accept-200-or-202-and-return-asyncor.md) (2026-09-15), from EP-3.
+7. Full-or-partial response sum types and request-only types. **Recorded** as [docs/adr/4-full-or-partial-responses-and-request-only-types.md](../adr/4-full-or-partial-responses-and-request-only-types.md) (2026-09-15), from EP-3.
 
 
 ## Progress
@@ -213,9 +222,9 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - [x] EP-2: Retries with back-off and `retry-after`
 - [x] EP-2: Typed error codes and `request_status` on `ListOf`
 - [x] EP-2: OAuth token, revoke and introspect with Basic auth; `extractNotionId` helpers
-- [ ] EP-3: Comment retrieve, update and delete, plus create-comment write shapes
-- [ ] EP-3: Async task retrieval and `allow_async` page responses
-- [ ] EP-3: Meeting notes create and query with typed filter grammar
+- [x] EP-3: Comment retrieve, update and delete, plus create-comment write shapes
+- [x] EP-3: Async task retrieval and `allow_async` page responses
+- [x] EP-3: Meeting notes create and query with typed filter grammar
 - [ ] EP-4: View query create, results and delete flow (removes the non-existent `queryView` route)
 - [ ] EP-4: Typed view configuration, filters and sorts
 - [ ] EP-5: `database_type`, page-or-data-source query results, `result_type`
@@ -239,6 +248,8 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - EP-1 added `tasty/WireFormatTests.hs` with a `captureRequest` helper. The helper overrides servant-client's `makeClientRequest` to inspect a built HTTP request without network access, which EP-2, EP-3 and EP-5 can copy for their own encoding tests. The first `other-modules` entry of `test-suite tasty` now exists; later plans append their modules to it.
 - EP-2 (completed 2026-09-15) carried EP-1's `queryDataSource_`/`queryDatabase_` wrappers into `makeMethodsWithEnv` unchanged, as the Dependency Graph required; EP-1's `captureRequest` tests kept passing under the new middleware. EP-2 also added `tasty/FakeNotion.hs`, a scripted `ClientEnv` middleware that records requests and replays canned responses, which EP-3, EP-4 and EP-5 can use for network-free endpoint tests. `ListOf.requestStatus` and `RequestStatus`/`RequestStatusType`/`IncompleteReason` now exist for EP-4 and EP-5, and `APIErrorCode` exists for EP-3's `AsyncTask` error, so EP-3 does not need its `Text` fallback. Every hand-built `ListOf.List` literal must now supply `requestStatus`.
 - EP-2's runtime interfaces for plan 14 landed with the names listed under Integration Points. `Notion.V1` also re-exports `withRetries`, and `Notion.V1.Client` additionally exports `defaultUserAgent`.
+- EP-3 (completed 2026-09-15) found that **Notion answers accepted background work with HTTP 202**, which servant-client's `Post '[JSON]`/`Patch '[JSON]` routes reject, because `Verb` accepts only its exact status. `FakeNotion` tests cannot catch this, because the fake middleware bypasses servant's status check. EP-3 added `AsyncVerb` (a `UVerb` accepting 200 and 202) in `src/Notion/V1/AsyncTasks.hs`. MasterPlan 2's `docs/plans/12-add-custom-agent-management-endpoints.md` planned `agents/batch` as `Post '[JSON] AsyncTask` and has been annotated. Any plan adding an endpoint that may return a non-200 success status should check it live.
+- EP-3 found that meeting-notes date filters accept only specific relative strings (documented in `Notion.V1.MeetingNotes` Haddocks). It also found that Notion validates a request body before checking whether the workspace plan includes the feature, so encoders can be validated live against a workspace without AI meeting notes. EP-3 used `APIErrorCode` directly for `AsyncTaskError.code`, so no follow-up switch is needed. `FakeNotion` records request paths without the `/v1` base-URL prefix.
 - The first ADR, [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md), records cross-plan decision 2 below (tolerant decoders). Later plans that add fallback constructors should follow it.
 
 
@@ -277,6 +288,10 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
   Rationale: This reflects EP-2's Decision Log. Users should benefit from retries without code changes, retries can only turn failures into successes or delay failures, and a caller-tuned `Manager` must not be silently changed.
   Date: 2026-09-14
 
+- Decision: Record EP-3's 202 finding as a shared interface (`AsyncVerb` in `Notion.V1.AsyncTasks`, ADR 3) and annotate MasterPlan 2's agents plan, rather than leave each plan to rediscover it.
+  Rationale: The failure appears only against the live API, so a plan that follows its written route type would ship a broken endpoint.
+  Date: 2026-09-15
+
 - Decision: EP-4 removes `queryView` rather than deprecating it.
   Rationale: The route never existed in Notion's published API. It returns HTTP 400, so any existing caller is already broken.
   Date: 2026-09-14
@@ -285,3 +300,6 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 ## Outcomes & Retrospective
 
 (To be filled during and after implementation.)
+
+
+Revision 2026-09-15 (implementation of EP-3): EP-3 is marked Complete, and its three Progress items are checked. Surprises & Discoveries records the HTTP 202 finding, the meeting-notes filter grammar and `FakeNotion`'s path recording. The Integration Points section now names `AsyncVerb` as part of the `AsyncTask` interface, and the partial-objects entry points to the full-or-partial pattern. ADRs 3 and 4 were added to the ADR list. The Decision Log records why the 202 finding was propagated to MasterPlan 2's agents plan.

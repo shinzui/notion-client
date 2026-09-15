@@ -10,6 +10,12 @@ provenance:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:51Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T14:19:29Z
+      mode: "update"
+      note: "Batch route must accept HTTP 202 (from MP1 EP-3)"
 ---
 
 # Add Custom Agent Management Endpoints
@@ -1063,7 +1069,7 @@ mkAgentBatch = \case
 
 `AgentBatch`'s constructor stays exported, so callers who build a `NonEmpty` themselves can skip the smart constructor; the 100 limit is then enforced by the server.
 
-Append the batch route as the last alternative inside the `"agents"` group: `:<|> "batch" :> ReqBody '[JSON] AgentBatch :> Post '[JSON] AsyncTask`, importing `Notion.V1.AsyncTasks (AsyncTask)`. Extend the `makeMethods` pattern with `:<|> batchAgents`. Add the `Methods` field:
+Append the batch route as the last alternative inside the `"agents"` group: `:<|> "batch" :> ReqBody '[JSON] AgentBatch :> Post '[JSON] AsyncTask`, importing `Notion.V1.AsyncTasks (AsyncTask)`. **Before writing this route, read [docs/adr/3-background-operations-accept-200-or-202-and-return-asyncor.md](../adr/3-background-operations-accept-200-or-202-and-return-asyncor.md).** Notion answers queued work with HTTP 202, and a `Post '[JSON]` route accepts only 200, so this route as written would throw `UnknownHTTPResponseError` on a successful batch. Use `UVerb 'POST '[JSON] '[WithStatus 200 AsyncTask, WithStatus 202 AsyncTask]` (from `Servant.API` and `Servant.API.UVerb`), and collapse the `Union` in `makeMethods` the same way `fromAsyncUnion` does in `src/Notion/V1/AsyncTasks.hs`, so `batchAgents` keeps the type `IO AsyncTask`. Confirm the status live once. A `FakeNotion` test cannot catch this, because its middleware bypasses servant's status check. Extend the `makeMethods` pattern with `:<|> batchAgents`. Add the `Methods` field:
 
 ```haskell
     -- | Apply up to 100 agent operations; poll the returned task with 'retrieveAsyncTask'.
@@ -1487,3 +1493,6 @@ Integration points honored:
 - `Notion.V1.Agents.Common` is shared with `docs/plans/13-add-session-endpoints-and-session-event-types.md`; whichever plan runs first creates it.
 - `AsyncTask` is consumed from, and never redefined apart from, `docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md`.
 - Error types and client runtime are consumed from `docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md` as they exist at implementation time.
+
+
+Revision 2026-09-15 (cross-plan update from MasterPlan 1 EP-3): Milestone 4's batch route instructions now warn that Notion returns HTTP 202 for queued work and that a `Post '[JSON] AsyncTask` route would reject it, and they point to ADR 3 and `fromAsyncUnion`. `docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md` discovered this during a live check. No other part of this plan changed.

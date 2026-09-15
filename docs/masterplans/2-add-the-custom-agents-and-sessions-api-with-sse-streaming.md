@@ -9,6 +9,12 @@ provenance:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:33Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T14:19:29Z
+      mode: "update"
+      note: "AsyncTask integration notes HTTP 202 (from MP1 EP-3)"
 ---
 
 # Add the Custom Agents and Sessions API with SSE Streaming
@@ -122,7 +128,7 @@ Order: MP1 EP-2 and MP1 EP-3 (from the other MasterPlan), with EP-2 able to star
 
 Both child plans transcribe the identical definition. Whichever of EP-1 and EP-2 starts first creates this module, and the other imports it. Neither redefines these types. Helpers specific to one plan stay in that plan's own module.
 
-**`AsyncTask`.** Owned by MP1 EP-3 (`src/Notion/V1/AsyncTasks.hs`). EP-1 consumes it for `agents.batch`.
+**`AsyncTask`.** Owned by MP1 EP-3 (`src/Notion/V1/AsyncTasks.hs`). EP-1 consumes it for `agents.batch`. Notion returns HTTP 202 for queued work, so the batch route must accept 202 through a `UVerb`, as MP1 EP-3's `AsyncVerb` does ([docs/adr/3-background-operations-accept-200-or-202-and-return-asyncor.md](../adr/3-background-operations-accept-200-or-202-and-return-asyncor.md)).
 
 **Error types and runtime.** Owned by MP1 EP-2 (`src/Notion/V1/Error.hs`, the configurable client in `src/Notion/V1.hs`). EP-3 uses its exported non-Servant interfaces: `ClientConfig`, `RequestContext`, `standardHeaders`, `responseTimeoutFor`, `withRetries :: ClientConfig -> Method -> Text -> IO a -> IO a` and `notionErrorFromResponse`.
 - EP-3's stream function must go through the same configuration record, so that base URL, version, auth, timeout and retries behave identically.
@@ -194,3 +200,6 @@ EP-3 consumes these. It defines only the stream envelope `SessionStreamEvent`: `
 ## Outcomes & Retrospective
 
 (To be filled during and after implementation.)
+
+
+Revision 2026-09-15 (cross-plan update from MasterPlan 1 EP-3): The `AsyncTask` integration point now notes that queued work returns HTTP 202, which the batch route must accept, and cites ADR 3. `docs/plans/12-add-custom-agent-management-endpoints.md` was annotated to match.
