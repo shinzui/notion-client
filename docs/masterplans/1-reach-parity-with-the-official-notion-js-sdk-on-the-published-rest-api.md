@@ -117,7 +117,7 @@ Prior plans in this repository that give useful background (all checked in, all 
 | 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | Complete |
 | 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | Complete |
 | 5 | Type Data Source, Database, and Search Results and Close Query and Filter Gaps | docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md | EP-1, EP-2 | None | Complete |
-| 6 | Close Page, Block, Property Value, User, File Upload, and Webhook Field Gaps | docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md | EP-1 | EP-3 | In Progress |
+| 6 | Close Page, Block, Property Value, User, File Upload, and Webhook Field Gaps | docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md | EP-1 | EP-3 | Complete |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).
@@ -173,7 +173,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 **`Parent` and `Color` (`src/Notion/V1/Common.hs`).**
 - EP-1 adds `AgentParent` and `default_background`. EP-6 must not re-add them.
-- `Icon` is shared the same way: EP-1 fixes the `custom_emoji` icon's nested shape and adds `UnknownIcon`. EP-6 adds the icon's `name`/`url` fields (changing the `CustomEmojiIcon` constructor and EP-1's icon tests) and types native icon colors.
+- `Icon` is shared the same way: EP-1 fixes the `custom_emoji` icon's nested shape and adds `UnknownIcon`. EP-6 adds the icon's `name`/`url` fields (changing the `CustomEmojiIcon` constructor and EP-1's icon tests) and types native icon colors. **Landed** (2026-09-15): `CustomEmojiIcon {customEmoji :: CustomEmojiRef}`, shared with `CustomEmojiMention`, and `NativeIcon` with `Maybe NoticonColor`. `ObjectType` also gained `UnknownObjectType`.
 
 **Meeting-notes payload types (`src/Notion/V1/BlockContent.hs`).**
 - Owned by EP-1: `MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent`, `MeetingRecording`, and the `MeetingNotesBlock` constructor, including the `transcription` alias.
@@ -188,14 +188,17 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - EP-3 set the pattern with `CommentResponse` and `CreateMeetingNoteResponse`: a full-or-partial sum type decided by a key only the full shape has. It is recorded in [docs/adr/4-full-or-partial-responses-and-request-only-types.md](../adr/4-full-or-partial-responses-and-request-only-types.md), which EP-4, EP-5 and EP-6 should follow.
 - `PartialPageObject` is a newtype `{id :: PageID}` in `src/Notion/V1/Pages.hs`, used by EP-4 (view query results) and EP-5 (query and search result unions). **EP-4 defined it** (2026-09-15) with exactly that definition; EP-5 reuses it.
 - EP-5 owns the data-source and database partials and `PageOrDataSource`. **EP-5 defined them** (2026-09-15) in `src/Notion/V1/DataSources.hs` and `src/Notion/V1/Databases.hs`. `Notion.V1.Search` re-exports `PageOrDataSource` and aliases `SearchResult` to it. ADR 4 records the union's `url`/`title` discriminators.
-- EP-6 defers partial page and block responses for other endpoints to a follow-up, which must reuse these types.
+- EP-6 defers partial page and block responses for other endpoints to a follow-up, which must reuse these types. As of EP-6's completion (2026-09-15), `createPage`, `updatePage` and the block endpoints still return full objects only.
 
 **The mention parser (`src/Notion/V1/RichText.hs`).**
 - EP-1 adds an `UnknownMention Value` fallback so unknown mention types no longer fail. Its tests use made-up mention types, not `link_mention`, so they keep exercising the fallback after EP-6.
-- EP-6 adds `LinkMention` and `CustomEmojiMention`, and enriches `UserMention`, on top of that fallback.
+- EP-6 adds `LinkMention` and `CustomEmojiMention`, and enriches `UserMention`, on top of that fallback. **Landed** (2026-09-15): `UserMention` holds `Notion.V1.Users.UserValue` (partial or full user), which people and verification values share.
 
 **`CodeLanguage` (`src/Notion/V1/BlockContent.hs`).**
 - EP-1 adds the 18 missing languages and an `OtherLanguage Text` fallback.
+
+**Block update payloads (`src/Notion/V1/BlockContent.hs`).**
+- Owned by EP-6. `BlockUpdatePayload {updateContent, inTrash}` and `BlockUpdateContent` replace the `BlockUpdate` newtype. The field is `updateContent` because `Notion.V1.Blocks` re-exports `BlockContent` and `BlockObject` already has `content`. ADR 4 records the request-only shape and the naming rule.
 
 **`Filter`/`Sort` FromJSON instances (`src/Notion/V1/Filter.hs`).**
 - Needed by both EP-4 (typed `ViewObject.filter`/`sorts`) and EP-5 (search sorts, filter variants). **EP-4 added them** (2026-09-15): `FromJSON` for `Filter`, `PropertyCondition`, every condition type, `Sort` and `SortDirection`, plus `ToJSON PropertyCondition`, built from `parsePropertyCondition`, `parseTextCondition`, `parseDateCondition` and similar helpers. EP-5 consumes them, extends those parsers in place when it adds constructors, and records that in its Decision Log.
@@ -203,7 +206,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 **`PropertySchema`, `SelectOption` and `NumberFormat` (`src/Notion/V1/Properties.hs`).**
 - EP-1 makes `NumberFormat` tolerant of unknown values (`OtherNumberFormat Text`).
-- EP-5 owns everything else here: `description` fields, rename-only updates (`PropertyUpdate`), status configuration without `groups`, `LocationSchema`/`LastVisitedTimeSchema`, and the `UnknownSchema` fallback. **All landed** (2026-09-15). `SelectColor` and `RelationType` still fail on unknown values; EP-6 or a follow-up may add fallbacks.
+- EP-5 owns everything else here: `description` fields, rename-only updates (`PropertyUpdate`), status configuration without `groups`, `LocationSchema`/`LastVisitedTimeSchema`, and the `UnknownSchema` fallback. **All landed** (2026-09-15). `SelectColor`, `RelationType` and `FileUploads.FileUploadStatus` still fail on unknown values. EP-6 did not add fallbacks for them, so they are left to a follow-up.
 
 **Runtime interfaces for non-Servant callers.**
 - EP-2 exports `ClientConfig`, `RequestContext`, `standardHeaders`, `responseTimeoutFor`, `withRetries`, `notionErrorFromResponse` and `buildRequestError`.
@@ -220,15 +223,16 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 **Cross-plan decisions that should become ADRs** once implemented (there is no `docs/adr/` yet; create it with a plain Markdown convention, since `mori.dhall` declares no profiled ADR bundle):
 
-1. The JS SDK's generated types are the reference for the wire format, and `2026-03-11` is the pinned API version.
+1. The JS SDK's generated types are the reference for the wire format, and `2026-03-11` is the pinned API version. **Recorded** as [docs/adr/6-js-sdk-types-are-the-wire-format-reference.md](../adr/6-js-sdk-types-are-the-wire-format-reference.md) (2026-09-15).
 2. Decoders must be tolerant: every closed enum and sum type decoded from a response has an "unknown" fallback constructor carrying the raw value. **Recorded** as [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md) (2026-09-15). The directory uses plain Markdown files named `<N>-<slug>.md`.
 3. The retry policy: which errors, which methods, how `retry-after` is honored. **Recorded** as [docs/adr/2-client-runtime-retry-policy-and-typed-errors.md](../adr/2-client-runtime-retry-policy-and-typed-errors.md) (2026-09-15), together with the typed error model and the runtime interfaces for non-Servant requests.
-4. The `notion-client-effectful` lockstep rule.
-5. The deliberate exclusion of unpublished agent routes from the core REST parity effort.
+4. The `notion-client-effectful` lockstep rule. **Recorded** as [docs/adr/7-effectful-package-mirrors-methods-in-lockstep.md](../adr/7-effectful-package-mirrors-methods-in-lockstep.md) (2026-09-15).
+5. The deliberate exclusion of unpublished agent routes from the core REST parity effort. **Recorded** as [docs/adr/8-core-parity-scope-exclusions.md](../adr/8-core-parity-scope-exclusions.md) (2026-09-15), together with the JS-only mechanics and code generation exclusions.
 6. Operations that may run in the background (HTTP 202, `AsyncOr`, `AsyncVerb`). **Recorded** as [docs/adr/3-background-operations-accept-200-or-202-and-return-asyncor.md](../adr/3-background-operations-accept-200-or-202-and-return-asyncor.md) (2026-09-15), from EP-3.
 7. Full-or-partial response sum types and request-only types. **Recorded** as [docs/adr/4-full-or-partial-responses-and-request-only-types.md](../adr/4-full-or-partial-responses-and-request-only-types.md) (2026-09-15), from EP-3.
 8. Three-state (`Clearable`) request fields and one type for a configuration that is read and sent back. **Recorded** as [docs/adr/5-clearable-request-fields-and-shared-configuration-types.md](../adr/5-clearable-request-fields-and-shared-configuration-types.md) (2026-09-15), from EP-4. EP-4 also amended ADR 1 with the parse-failure fallback rule for nested, partially modelled values.
 9. Result unions for query and search (`PageOrDataSource`) and self-contained fallbacks in the filter DSL. **Recorded** as amendments to ADR 4 and ADR 1 (2026-09-15), from EP-5.
+10. Request-only update payloads with field names that do not clash across re-exports, the `UserValue` and webhook-data fallbacks, and `Clearable` page icons and covers. **Recorded** as amendments to ADRs 4, 1 and 5 (2026-09-15), from EP-6.
 
 
 ## Progress
@@ -248,10 +252,11 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - [x] EP-5: Typed search results, sorts and filters
 - [x] EP-5: Property schema and filter condition gaps
 - [x] EP-5: `iterateAllDataSourceRows` helper
-- [ ] EP-6: Page and block request gaps (partial block updates, page create options)
-- [ ] EP-6: Property value, mention, user and file upload response gaps
-- [ ] EP-6: Webhook event types, fields and typed data
-- [ ] Release: bump to 0.8.0.0, update effectful bounds, finalize CHANGELOG, create ADRs
+- [x] EP-6: Page and block request gaps (partial block updates, page create options)
+- [x] EP-6: Property value, mention, user and file upload response gaps
+- [x] EP-6: Webhook event types, fields and typed data
+- [x] Release prerequisite: cross-plan ADRs recorded (ADRs 1–8)
+- [ ] Release: bump to 0.8.0.0, update the effectful package's `notion-client >=0.7 && <0.8` bound, date the CHANGELOG `## Unreleased` heading, fix the pre-existing `-Wmissing-fields` warning for `ColumnBlock.widthRatio` in `notion-client-example/BlockDemo.hs`
 
 
 ## Surprises & Discoveries
@@ -273,6 +278,9 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - `cabal test --test-options='-p "…"'` does not filter tests, because cabal splits the options on spaces. Child plans should use `cabal test --test-option=--pattern=<pattern>`.
 - EP-5 (completed 2026-09-15) consumed EP-4's `PartialPageObject` and `Filter`/`Sort` decoders as planned. It restructured `parsePropertyCondition` to choose the condition key (honouring the optional `type` discriminator) before parsing, so fallbacks keep the key. A read-only live check confirmed relevance search, typed `queryDataSource` results, `database_type: null` on an ordinary database, and `collectAllDataSourceRows`. No wiki data source or 10,000-row data source was available, so those paths are covered only by fixtures.
 - EP-5 found pre-existing `-Wmissing-fields` warnings in `notion-client-example` (`ColumnBlock.widthRatio` in `BlockDemo.hs`, `UpdatePage.isLocked`/`isArchived` in `MarkdownDemo.hs` and `TemplateDemo.hs`), left by earlier plans. The release step should fix them before tagging 0.8.0.0.
+- EP-6 (completed 2026-09-15) found its draft out of date against the tree. EP-3's `createPageAsync` already wrapped `CreatePage` in `AllowAsync`, EP-4's `Clearable` existed, and `docs/adr/` held five ADRs. EP-6 renamed the planned `BlockUpdatePayload.content` field to `updateContent` after it broke `Blocks.content` in the example app. It made `UpdatePage.icon`/`cover` `Clearable`, and passed a live partial `to_do` update and trash. A child plan drafted before its siblings land should be re-checked against the tree before implementation.
+- `Data.ByteString.Lazy.Char8` literals truncate non-ASCII fixture text, so the "made-up Japanese names" fixture rule needs `Text` fixtures encoded as UTF-8 (see `tasty/ObjectFieldTests.hs`).
+- The effectful package's `notion-client >=0.7 && <0.8` bound must move with the 0.8.0.0 bump, or `cabal build all` will fail. This is tracked in the Release item under Progress.
 - The first ADR, [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md), records cross-plan decision 2 below (tolerant decoders). Later plans that add fallback constructors should follow it.
 
 
@@ -322,7 +330,28 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+As of 2026-09-15 all six child plans are complete. A Haskell user can now:
+
+- decode the response shapes described by the JS SDK's published endpoint types, with unknown values landing in fallback constructors rather than failures (ADR 1);
+- send the request body shapes those types accept, including partial block updates, clearable fields and narrowed request-only types (ADRs 4 and 5);
+- call every published endpoint, including OAuth, comment mutation, async tasks with HTTP 202 support, meeting notes and view queries (ADRs 2 and 3);
+- rely on JS-SDK-compatible retries and pattern-match on typed error codes (ADR 2).
+
+The tasty suite grew to 354 tests, mostly JSON fixtures transcribed from the SDK types. EP-3, EP-4, EP-5 and EP-6 also ran live checks.
+
+What remains:
+
+- **Release.** Bump to 0.8.0.0, move the effectful bound, date the CHANGELOG and fix the example warning.
+- **Partial responses.** `createPage`, `updatePage` and the block endpoints still return full objects only.
+- **Missing fallbacks.** `SelectColor`, `RelationType` and `FileUploadStatus` still fail on unknown values.
+- **MasterPlan 2.** The agents and sessions API, which builds on EP-2 and EP-3.
+
+Lessons:
+
+- Splitting crash-level fixes (EP-1) from additive work kept each resource plan's diff focused.
+- The per-plan test modules avoided merge conflicts.
+- Live checks found what fixtures could not: HTTP 202 responses, and view-query status codes.
+- Because the plans ran in sequence rather than in parallel, later plans drifted from their drafts. Each one had to re-read the tree first, and a MasterPlan with long-lived drafts should expect that step.
 
 
 Revision 2026-09-15 (implementation of EP-3): EP-3 is marked Complete, and its three Progress items are checked. Surprises & Discoveries records the HTTP 202 finding, the meeting-notes filter grammar and `FakeNotion`'s path recording. The Integration Points section now names `AsyncVerb` as part of the `AsyncTask` interface, and the partial-objects entry points to the full-or-partial pattern. ADRs 3 and 4 were added to the ADR list. The Decision Log records why the 202 finding was propagated to MasterPlan 2's agents plan.
@@ -330,3 +359,5 @@ Revision 2026-09-15 (implementation of EP-3): EP-3 is marked Complete, and its t
 Revision 2026-09-15 (implementation of EP-4): EP-4 is marked Complete, and its two Progress items are checked. Integration Points now record that EP-4 defined `PartialPageObject` and the `Filter`/`Sort` `FromJSON` instances, which EP-5 consumes. Surprises & Discoveries record the live view-query findings, the new `Clearable` type for EP-5 and EP-6, and the tasty filter-command gotcha. ADR 5 was added to the ADR list, and ADR 1 was amended.
 
 Revision 2026-09-15 (implementation of EP-5): EP-5 is marked Complete, and its four Progress items are checked. Integration Points record that EP-5 defined `PageOrDataSource` and the partial data-source and database types, and added the filter constructors and the unknown fallbacks for `Filter`, `Sort` and property schemas. Surprises & Discoveries record the restructured condition decoder, the live-check results and the pre-existing example warnings for the release step. The ADR list notes the amendments to ADRs 1 and 4.
+
+Revision 2026-09-15 (implementation of EP-6): EP-6 is marked Complete, and its three Progress items are checked. The Release item is split into a completed ADR prerequisite and the remaining version bump, with the concrete bound and warning to fix. Integration Points record what EP-6 landed for icons, mentions, block update payloads and partial responses. Surprises & Discoveries record EP-6's drift from its draft, the UTF-8 fixture gotcha and the effectful bound. Outcomes & Retrospective is filled in. The ADR distillation pass created ADRs 6, 7 and 8 for cross-plan decisions 1, 4 and 5, and EP-6 amended ADRs 1, 4 and 5.

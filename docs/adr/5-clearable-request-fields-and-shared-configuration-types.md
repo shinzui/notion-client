@@ -52,5 +52,11 @@ configuration back.
 - Switching an existing `Maybe` request field to `Clearable` is a breaking change.
 - Record literals must name every field, and record-update syntax on these request types is
   ambiguous under `DuplicateRecordFields`. The tests and examples write full literals.
+- The rule also covers hand-written encoders. `UpdatePage.icon` and `UpdatePage.cover` became
+  `Clearable` (2026-09-15, from
+  `docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md`),
+  because `null` is the only way to remove a page icon or cover. `UpdatePage`'s hand-written
+  `ToJSON` uses a local `clearablePair` helper rather than generic encoding. Create requests keep
+  `Maybe`, because there `null` means the same as leaving the key out.
 - The dashboard configuration encodes even though Notion does not accept it in requests. Its
   Haddock comment says so.

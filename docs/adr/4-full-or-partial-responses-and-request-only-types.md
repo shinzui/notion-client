@@ -48,6 +48,19 @@ questions for comments and meeting notes.
 - **Request shapes.** A request whose shape differs from the response gets its own request-only
   type (`CommentAttachmentRequest`, `CommentDisplayNameRequest`, `CreateMeetingNote`). Read-side
   types and their tolerant decoders stay unchanged.
+- **Update payloads.** Block updates follow the request-shapes rule (2026-09-15, from
+  `docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md`).
+  `BlockUpdatePayload` holds `updateContent :: Maybe BlockUpdateContent` and `inTrash`. It has one
+  constructor per updatable block type, and each constructor carries only the fields the update
+  accepts. The payload has no `children`, no `table_width` and no Notion-hosted file sources, and
+  block types that cannot be updated have no constructor. `blockUpdateFromContent` converts read
+  content to an update and returns `Nothing` for those types. `MovePageParent` and
+  `UpdatePageTemplate` likewise narrow shared types (`Parent`, `Template`) to the variants the
+  endpoint accepts.
+- **Field names across re-exports.** A request type's field must not share a name with a response
+  type's field when one module re-exports the other. `Notion.V1.Blocks` re-exports
+  `Notion.V1.BlockContent`, so the update payload's field is `updateContent`, not `content`, which
+  would make `Blocks.content` ambiguous.
 - **Mutually exclusive fields.** Such request fields become small sum types (`CommentTarget`,
   `CommentContent`, `MeetingNoteSource`) instead of independent `Maybe` fields. Smart
   constructors (`mkCreateComment`, `mkReplyComment`, `mkCreateMeetingNote`) keep call sites short.
@@ -63,4 +76,5 @@ questions for comments and meeting notes.
   received full comments.
 - The partial page, data source and database types (`PartialPageObject`, `PartialDataSourceObject`,
   `PartialDatabaseObject`) follow the same pattern. Later partial types for pages and blocks
-  should reuse them.
+  should reuse them. As of 2026-09-15, `createPage`, `updatePage` and the block endpoints still
+  return full objects only, although the JS SDK types them as full-or-partial.

@@ -62,6 +62,8 @@
 * `ObjectType` gains `FileUploadObjectType`, `PageMarkdownObjectType`, `AsyncTaskObjectType`, `GroupObjectType` and `UnknownObjectType`; its JSON instances are hand-written
 * `PageMarkdown` gains `object`
 * `FileUploadObject.createdBy` is a typed `FileUploadCreator`, and `CreateFileUpload.mode` is `Maybe FileUploadMode`
+* `WebhookEvent.data_` is `Maybe WebhookEventData`, and `WebhookEvent` gains `workspaceName` and `apiVersion`
+* `EventType` gains the `file_upload.*` and `page.transcription_block.transcript_deleted` events; `EntityType` gains `FileUploadEntity` and `BlockEntity`
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
@@ -95,6 +97,7 @@
 * Smart constructors `placeValue`, `verifiedValue`, `unverifiedValue` and `peopleEntriesValue`
 * `Eq` instances on `UserObject` and the other user types
 * `FileUploadObject.uploadUrl` and `completeUrl`
+* Typed webhook event data (`WebhookEventData`, `parseEventData`) for every event family, falling back to `RawEventData` for shapes it does not recognize
 * Page create and update omit `properties` when the map is empty, so trash-only or markdown-only requests send just those keys
 * New module `Notion.V1.DataSourceRows` with `iterateAllDataSourceRows`, `collectAllDataSourceRows` and `foldAllDataSourceRows`, which read every row of a data source past Notion's per-query result limit
 

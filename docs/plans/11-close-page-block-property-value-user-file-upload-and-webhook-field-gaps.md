@@ -67,9 +67,11 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
 - [x] Milestone 3: `NoticonColor` on `NativeIcon`; `ObjectType` additions with `UnknownObjectType` fallback; `PageMarkdown.object`. (2026-09-15)
 - [x] Milestone 3: `FileUploadObject.uploadUrl`, `completeUrl`, typed `createdBy`; typed `FileUploadMode` on `CreateFileUpload`. (2026-09-15)
 - [x] Milestone 3: bot user `{}` decode test (passed without a decoder change); tests green (344 tests). (2026-09-15)
-- [ ] Milestone 4: webhook event types and entity types; `workspaceName`, `apiVersion`.
-- [ ] Milestone 4: `WebhookEventData` typed per event family with raw fallback.
-- [ ] Milestone 4: tests green; CHANGELOG `## Unreleased` entries complete.
+- [x] Milestone 4: webhook event types and entity types; `workspaceName`, `apiVersion`. (2026-09-15)
+- [x] Milestone 4: `WebhookEventData` typed per event family with raw fallback. (2026-09-15)
+- [x] Milestone 4: tests green (354 tests, 46 in `Object Field Gaps`); CHANGELOG `## Unreleased` entries complete. (2026-09-15)
+- [x] Validation: live partial to-do update and trash against a real page. (2026-09-15)
+- [x] ADR distillation: amended ADRs 1, 4 and 5. (2026-09-15)
 
 
 ## Surprises & Discoveries
@@ -83,6 +85,14 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
     ```
 
 - EP-1's mention fallback tests in `tasty/WireFormatTests.hs` had already been rewritten during MasterPlan review to use `future_mention` and `future_emoji`, so the Milestone 2 step that renames them was unnecessary.
+- The live check in Validation and Acceptance passed on 2026-09-15. A partial `to_do` update kept the block's text, and `trashBlockUpdate` trashed it:
+
+    ```text
+    AFTER PARTIAL UPDATE: ToDoBlock {richText = [RichText {plainText = "EP-6 live check: check me", ...}], color = Default, checked = True, children = []}
+    AFTER TRASH in_trash=True
+    ```
+
+- `"bot":{}` already decoded, because every `BotUser` field is `Maybe`, so the bot-user test passed without a decoder change.
 - Lazy `Data.ByteString.Lazy.Char8` string literals truncate non-ASCII characters, so a fixture containing `こんにちは` failed with `Invalid UTF-8 stream`. `tasty/ObjectFieldTests.hs` takes fixtures as `Text` and encodes them as UTF-8.
 
 
@@ -167,7 +177,24 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+Completed 2026-09-15 in four commits, one per milestone. Everything in Purpose / Big Picture now works:
+
+- **Partial block updates.** `updateBlock` takes a `BlockUpdatePayload` that sends only the fields Notion accepts, and the live check confirmed a checked-only update keeps the text.
+- **Page requests.** Page create and update accept `filter_properties`. Page create has an optional parent and omits empty properties. Page update can clear icons and covers, and has no `none` template. Moves send only a page or data source parent, and markdown can be inserted at the start or end.
+- **Typed values.** Property values decode typed place, verification, group people and rollup arrays. Unknown property types decode to a fallback, and paginated property items expose `next_url` and the rollup summary.
+- **Mentions.** Rich text decodes `link_mention`, `custom_emoji` and full-user mentions.
+- **Objects and file uploads.** Custom-emoji icons keep name and URL. Native icon colors and object types are typed with fallbacks. File uploads expose their URLs and creator, and accept a typed mode.
+- **Webhooks.** Events decode file-upload and transcript-deleted events, `workspace_name`, `api_version` and typed data per event family, with a raw fallback.
+
+The suite grew from 325 to 354 tests. `cabal build all` builds `notion-client`, `notion-client-effectful` and `notion-client-example`.
+
+What remains: partial page and block responses for `createPage`, `updatePage` and the block endpoints are still deferred, as recorded in the Decision Log. `FileUploadStatus`, `SelectColor` and `RelationType` still fail on unknown values. The package version bump belongs to the MasterPlan's release step.
+
+Lessons:
+
+- A plan drafted before its sibling plans land has to be re-read against the tree. Here that meant `createPageAsync`, `Clearable` and the ADR directory.
+- A record field name that is fine inside one module can clash once a module re-exports another, as `Notion.V1.Blocks` does with `Notion.V1.BlockContent`.
+- Test fixtures with non-ASCII text must not be `Char8` literals.
 
 
 ## Context and Orientation
@@ -309,7 +336,11 @@ EP-3 (`docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.
 
 ### ADRs
 
-This repository has no `docs/adr/` directory, and no relevant ADR exists.
+When this plan was drafted, the repository had no `docs/adr/` directory. By the time it was implemented, EP-1 to EP-5 had added five ADRs. Three of them apply here:
+
+- [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md): every decoded enum or sum type has an unknown fallback. Nested values whose model is incomplete also fall back when their typed parse fails. Examples in this plan are `UnknownPropertyValue`, `UnknownNoticonColor`, `UnknownObjectType`, the `UserValue` partial fallback and `RawEventData`.
+- [docs/adr/4-full-or-partial-responses-and-request-only-types.md](../adr/4-full-or-partial-responses-and-request-only-types.md): request shapes that differ from responses get request-only types, as `BlockUpdatePayload` does.
+- [docs/adr/5-clearable-request-fields-and-shared-configuration-types.md](../adr/5-clearable-request-fields-and-shared-configuration-types.md): fields that accept `null` to clear use `Clearable`, as `UpdatePage.icon` and `cover` do.
 
 ### Reference wire shapes (transcribed from the JS SDK)
 
@@ -1443,3 +1474,6 @@ Cross-plan dependencies:
 - **EP-1** (hard dependency) supplies the lenient `MentionContent`, `Color`, `Icon` custom-emoji, `UserOwner`/`PersonUser`, `CodeLanguage` and webhook `accessible_by` changes that this plan builds on.
 - **EP-3** (soft dependency) may have changed `createPage`'s return type and added `allow_async`. This plan mirrors any such return type in `createPageFiltered` and preserves `allow_async` encoding in the hand-written `CreatePage` ToJSON.
 - **Partial page and block objects** are deliberately not handled here (see the Decision Log). The MasterPlan coordinator should assign one shared representation.
+
+
+Revision 2026-09-15 (implementation): All four milestones and the live check are done. Progress, Surprises & Discoveries, the Decision Log and Outcomes & Retrospective record how the implementation differed from the draft. The payload field is `updateContent`, `UpdatePage.icon`/`cover` are `Clearable`, and `UserValue` falls back to a partial user. The draft's mention-test rename was unnecessary, and `Text` fixtures replaced `Char8` literals. The ADRs subsection of Context and Orientation now cites the ADRs that exist, and ADRs 1, 4 and 5 were amended with this plan's cases.

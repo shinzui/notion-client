@@ -56,6 +56,20 @@ import Notion.V1.PropertyValue
   )
 import Notion.V1.RichText (LinkMentionValue (..), MentionContent (..), RichText (..), RichTextContent (..))
 import Notion.V1.Users (GroupObject (..), PeopleEntry (..), UserObject (..), UserType (..), UserValue (..))
+import Notion.V1.Webhooks
+  ( EntityType (..),
+    EventType (..),
+    PropertyAction (..),
+    UpdatedPropertySchema (..),
+    ViewField (..),
+    WebhookBlockRef (..),
+    WebhookEntity (..),
+    WebhookEvent (..),
+    WebhookEventData (..),
+    WebhookParent (..),
+    WebhookParentType (..),
+    WebhookRefType (..),
+  )
 import Servant.Client qualified as Client
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -67,7 +81,7 @@ tests =
     [ testGroup "Page and block requests" pageBlockRequestTests,
       testGroup "Property values and mentions" propertyValueMentionTests,
       testGroup "Users, file uploads, and object types" userFileUploadObjectTypeTests,
-      testGroup "Webhooks" []
+      testGroup "Webhooks" webhookTests
     ]
 
 ------------------------------------------------------------------------------
@@ -364,4 +378,122 @@ userFileUploadObjectTypeTests =
       u <- decodeOrFail "{\"object\":\"user\",\"id\":\"b1\",\"type\":\"bot\",\"name\":\"Kaizen Bot\",\"avatar_url\":null,\"bot\":{}}"
       let UserObject {type_} = u
       type_ @?= Bot
+  ]
+
+------------------------------------------------------------------------------
+-- Milestone 4: webhooks
+
+-- | Decode a webhook event built from a shared base payload plus the given
+-- @type@, @entity@ and (optionally) @data@ JSON fragments.
+decodeEvent :: Text -> Text -> Maybe Text -> IO WebhookEvent
+decodeEvent eventType entity mData =
+  decodeOrFail $
+    "{\"id\":\"evt-1\",\"timestamp\":\"2026-09-14T10:00:00.000Z\",\"workspace_id\":\"ws-1\",\"workspace_name\":\"Yamada Lab\",\"subscription_id\":\"sub-1\",\"integration_id\":\"int-1\",\"authors\":[{\"id\":\"u1\",\"type\":\"person\"}],\"attempt_number\":1,\"api_version\":\"2026-03-11\",\"type\":\""
+      <> eventType
+      <> "\",\"entity\":"
+      <> entity
+      <> maybe "" (",\"data\":" <>) mData
+      <> "}"
+
+webhookTests :: [TestTree]
+webhookTests =
+  [ testCase "file_upload.upload_failed" $ do
+      e <-
+        decodeEvent
+          "file_upload.upload_failed"
+          "{\"id\":\"fu-1\",\"type\":\"file_upload\"}"
+          (Just "{\"file_import_result\":{\"type\":\"error\",\"imported_time\":\"2026-09-14T10:00:00.000Z\",\"error\":{\"type\":\"download_error\",\"code\":\"timeout\",\"message\":\"Download timed out\",\"parameter\":null,\"status_code\":504}}}")
+      let WebhookEvent {type_, entity = WebhookEntity {type_ = entityType}, workspaceName, apiVersion, data_} = e
+      type_ @?= FileUploadUploadFailed
+      entityType @?= FileUploadEntity
+      workspaceName @?= Just "Yamada Lab"
+      apiVersion @?= Just "2026-03-11"
+      case data_ of
+        Just (FileUploadFailedData FU.FileImportError {errorCode, errorStatusCode}) -> do
+          errorCode @?= "timeout"
+          errorStatusCode @?= Just 504
+        other -> assertFailure ("expected FileUploadFailedData, got " <> show other),
+    testCase "file_upload.created has no data" $ do
+      e <- decodeEvent "file_upload.created" "{\"id\":\"fu-1\",\"type\":\"file_upload\"}" Nothing
+      let WebhookEvent {type_, data_} = e
+      type_ @?= FileUploadCreated
+      case data_ of
+        Nothing -> pure ()
+        other -> assertFailure ("expected no data, got " <> show other),
+    testCase "page.transcription_block.transcript_deleted" $ do
+      e <-
+        decodeEvent
+          "page.transcription_block.transcript_deleted"
+          "{\"id\":\"b1\",\"type\":\"page\"}"
+          (Just "{\"target\":{\"id\":\"b1\",\"type\":\"block\"},\"transcript_id\":null}")
+      let WebhookEvent {type_, data_} = e
+      type_ @?= PageTranscriptBlockTranscriptDeleted
+      case data_ of
+        Just (TranscriptDeletedData ref tid) -> do
+          ref @?= WebhookBlockRef (UUID "b1") WebhookRefBlock
+          tid @?= Nothing
+        other -> assertFailure ("expected TranscriptDeletedData, got " <> show other),
+    testCase "database.content_updated on a linked database block" $ do
+      e <-
+        decodeEvent
+          "database.content_updated"
+          "{\"id\":\"d1\",\"type\":\"block\"}"
+          (Just "{\"parent\":{\"id\":\"p1\",\"type\":\"page\"},\"updated_blocks\":[{\"id\":\"b2\",\"type\":\"block\"}]}")
+      let WebhookEvent {entity = WebhookEntity {type_ = entityType}, data_} = e
+      entityType @?= BlockEntity
+      case data_ of
+        Just (ContentUpdatedData WebhookParent {type_ = parentType} refs) -> do
+          parentType @?= WebhookParentPage
+          Vector.toList refs @?= [WebhookBlockRef (UUID "b2") WebhookRefBlock]
+        other -> assertFailure ("expected ContentUpdatedData, got " <> show other),
+    testCase "data_source.schema_updated" $ do
+      e <-
+        decodeEvent
+          "data_source.schema_updated"
+          "{\"id\":\"ds1\",\"type\":\"data_source\"}"
+          (Just "{\"parent\":{\"id\":\"db1\",\"type\":\"database\",\"data_source_id\":\"ds1\"},\"updated_properties\":[{\"id\":\"abc\",\"name\":null,\"action\":\"deleted\"}]}")
+      case e of
+        WebhookEvent {data_ = Just (SchemaUpdatedData WebhookParent {dataSourceId} props)} -> do
+          dataSourceId @?= Just (UUID "ds1")
+          Vector.toList props @?= [UpdatedPropertySchema "abc" Nothing PropertyDeleted]
+        other -> assertFailure ("expected SchemaUpdatedData, got " <> show other),
+    testCase "page.properties_updated" $ do
+      e <-
+        decodeEvent
+          "page.properties_updated"
+          "{\"id\":\"p1\",\"type\":\"page\"}"
+          (Just "{\"parent\":{\"id\":\"s1\",\"type\":\"space\"},\"updated_properties\":[\"title\",\"xyz\"]}")
+      case e of
+        WebhookEvent {data_ = Just (PagePropertiesUpdatedData WebhookParent {type_ = parentType} props)} -> do
+          parentType @?= WebhookParentSpace
+          Vector.toList props @?= ["title", "xyz"]
+        other -> assertFailure ("expected PagePropertiesUpdatedData, got " <> show other),
+    testCase "view.updated" $ do
+      e <-
+        decodeEvent
+          "view.updated"
+          "{\"id\":\"v1\",\"type\":\"view\"}"
+          (Just "{\"parent\":{\"id\":\"db1\",\"type\":\"database\"},\"updated_fields\":[\"filter\",\"sorts\"]}")
+      case e of
+        WebhookEvent {data_ = Just (ViewUpdatedData _ fields)} -> Vector.toList fields @?= [ViewFieldFilter, ViewFieldSorts]
+        other -> assertFailure ("expected ViewUpdatedData, got " <> show other),
+    testCase "comment.created" $ do
+      e <-
+        decodeEvent
+          "comment.created"
+          "{\"id\":\"c1\",\"type\":\"comment\"}"
+          (Just "{\"parent\":{\"id\":\"p1\",\"type\":\"page\"},\"page_id\":\"p1\"}")
+      case e of
+        WebhookEvent {data_ = Just (CommentEventData ref pid)} -> do
+          ref @?= WebhookBlockRef (UUID "p1") WebhookRefPage
+          pid @?= UUID "p1"
+        other -> assertFailure ("expected CommentEventData, got " <> show other),
+    testCase "mismatched data falls back to RawEventData" $ do
+      e <- decodeEvent "page.created" "{\"id\":\"p1\",\"type\":\"page\"}" (Just "{\"unexpected\":true}")
+      case e of
+        WebhookEvent {data_ = Just (RawEventData raw)} -> raw `encodesTo` "{\"unexpected\":true}"
+        other -> assertFailure ("expected RawEventData, got " <> show other),
+    testCase "typed event data re-encodes to the wire shape" $
+      ContentUpdatedData (WebhookParent (UUID "p1") WebhookParentPage Nothing) (Vector.singleton (WebhookBlockRef (UUID "b2") WebhookRefBlock))
+        `encodesTo` "{\"parent\":{\"id\":\"p1\",\"type\":\"page\"},\"updated_blocks\":[{\"id\":\"b2\",\"type\":\"block\"}]}"
   ]

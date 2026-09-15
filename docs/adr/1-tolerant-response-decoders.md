@@ -53,6 +53,18 @@ malformed known condition then keeps its key in `UnknownCondition`. The same app
 that callers added before these fallbacks existed (`RawViewFilter`, `RawViewSort`) are no longer
 reached, but stay for compatibility.
 
+Page objects, users and webhooks apply the same rule (2026-09-15, from
+`docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md`).
+`PropertyValue` gains `UnknownPropertyValue Text Text Value`, `RollupResult` gains
+`RollupUnknownResult`, and `ObjectType`, `NoticonColor`, `VerificationState` and the webhook
+enumerations gain `Unknown…` constructors. Two decoders use the parse-failure refinement:
+
+- A user inside a mention, people value or verification value (`UserValue`) that has a `type` key
+  but does not decode as a full `UserObject` becomes `PartialUser`, keeping its ID.
+- `parseEventData` never fails. When a webhook's `data` does not match the typed shape for its
+  event type, or the event type is untyped, the object is kept as `RawEventData Value`. The event
+  still decodes.
+
 When a later change types a value that was previously falling back, it adds a new constructor
 and keeps the fallback. Tests for the fallback use made-up discriminators, so they keep
 exercising it after new kinds are typed.
