@@ -22,7 +22,7 @@ import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.Error (NotionError (..), apiErrorCodeText)
 import Notion.V1.Filter (Sort (..), SortDirection (..))
 import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyItemResponse (..))
+import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyItemList (..), PropertyItemResponse (..))
 import Notion.V1.Pagination (paginateAll)
 import Notion.V1.Properties (PropertySchema (..), PropertyUpdate (..), SelectColor (..), SelectOption (..))
 import Notion.V1.PropertyValue qualified as PV
@@ -209,7 +209,7 @@ runDatabaseDemo methods databaseIdStr = do
   -- Pattern-match on typed property values from the retrieved page
   putStrLn "Reading typed properties:"
   case Map.lookup "Status" pageProps of
-    Just (PV.SelectValue _pid (Just (PV.SelectOptionValue _ optName optColor))) ->
+    Just (PV.SelectValue _pid (Just (PV.SelectOptionValue _ optName optColor _))) ->
       putStrLn $ "  Status: " <> Text.unpack optName <> " (color: " <> show optColor <> ")"
     Just (PV.SelectValue _pid Nothing) ->
       putStrLn "  Status: (empty)"
@@ -217,7 +217,7 @@ runDatabaseDemo methods databaseIdStr = do
       putStrLn "  Status: (not found or unexpected type)"
 
   case Map.lookup "Priority" pageProps of
-    Just (PV.SelectValue _pid (Just (PV.SelectOptionValue _ optName _))) ->
+    Just (PV.SelectValue _pid (Just (PV.SelectOptionValue _ optName _ _))) ->
       putStrLn $ "  Priority: " <> Text.unpack optName
     _ ->
       putStrLn "  Priority: (not found)"
@@ -240,7 +240,7 @@ runDatabaseDemo methods databaseIdStr = do
       case propItem of
         SinglePropertyItem pv ->
           putStrLn $ "  Single property item: " <> show pv
-        PaginatedPropertyItems _list propType ->
+        PaginatedPropertyItems PropertyItemList {propertyType = propType} ->
           putStrLn $ "  Paginated property items (type: " <> Text.unpack propType <> ")"
     _ ->
       putStrLn "  Skipping (Status property not found)"

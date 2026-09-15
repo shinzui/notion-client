@@ -11,6 +11,7 @@ module Notion.V1.Common
     Cover (..),
     File (..),
     ExternalFile (..),
+    CustomEmojiRef (..),
   )
 where
 
@@ -217,6 +218,21 @@ instance ToJSON Icon where
     object ["type" .= ("custom_emoji" :: Text), "custom_emoji" .= object ["id" .= eid]]
   toJSON (FileUploadIcon uid) = object ["type" .= ("file_upload" :: Text), "file_upload" .= object ["id" .= uid]]
   toJSON (UnknownIcon v) = v
+
+-- | Reference to a workspace custom emoji. Responses always include 'name'
+-- and 'url'; requests may send only the ID.
+data CustomEmojiRef = CustomEmojiRef
+  { id :: UUID,
+    name :: Maybe Text,
+    url :: Maybe Text
+  }
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON CustomEmojiRef where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON CustomEmojiRef where
+  toJSON = genericToJSON aesonOptions
 
 -- | Cover object for pages/databases
 data Cover

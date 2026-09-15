@@ -28,18 +28,31 @@ import Notion.V1.BlockContent
     trashBlockUpdate,
   )
 import Notion.V1.Clearable (Clearable (..))
-import Notion.V1.Common (UUID (..))
+import Notion.V1.Common (CustomEmojiRef (..), UUID (..))
 import Notion.V1.Pages
   ( CreatePage (..),
     InsertContentRequest (..),
     InsertPosition (..),
     MovePage (..),
     MovePageParent (..),
+    PropertyItemList (..),
+    PropertyItemResponse (..),
     UpdatePage (..),
     UpdatePageMarkdown (..),
     UpdatePageTemplate (..),
     mkUpdatePage,
   )
+import Notion.V1.PropertyValue
+  ( Place (..),
+    PropertyValue (..),
+    RollupResult (..),
+    SelectOptionValue (..),
+    VerificationResult (..),
+    VerificationState (..),
+    unverifiedValue,
+  )
+import Notion.V1.RichText (LinkMentionValue (..), MentionContent (..), RichText (..), RichTextContent (..))
+import Notion.V1.Users (GroupObject (..), PeopleEntry (..), UserObject (..), UserValue (..))
 import Servant.Client qualified as Client
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -49,7 +62,7 @@ tests =
   testGroup
     "Object Field Gaps"
     [ testGroup "Page and block requests" pageBlockRequestTests,
-      testGroup "Property values and mentions" [],
+      testGroup "Property values and mentions" propertyValueMentionTests,
       testGroup "Users, file uploads, and object types" [],
       testGroup "Webhooks" []
     ]
@@ -183,4 +196,114 @@ pageBlockRequestTests =
     testCase "unsupported block keeps block_type" $ do
       v <- value "{\"block_type\":\"form\"}"
       parseEither (parseBlockContent "unsupported") v @?= Right (UnsupportedBlock (Just "form"))
+  ]
+
+------------------------------------------------------------------------------
+-- Milestone 2: property values and mentions
+
+-- | A rich-text item wrapping the given mention object.
+mentionRichText :: Text -> Text
+mentionRichText mention =
+  "{\"type\":\"mention\",\"mention\":"
+    <> mention
+    <> ",\"annotations\":{\"bold\":false,\"italic\":false,\"strikethrough\":false,\"underline\":false,\"code\":false,\"color\":\"default\"},\"plain_text\":\"@\",\"href\":null}"
+
+-- | Decode a rich-text mention fixture and return its mention.
+decodeMention :: Text -> IO MentionContent
+decodeMention mention = do
+  rt <- decodeOrFail (mentionRichText mention)
+  case rt of
+    RichText {content = MentionContentWrapper m} -> pure m
+    other -> assertFailure ("expected a mention, got " <> show other)
+
+propertyValueMentionTests :: [TestTree]
+propertyValueMentionTests =
+  [ testCase "select option with description encodes" $
+      SelectValue "" (Just (SelectOptionValue Nothing "急ぎ" Nothing (Just "今日中")))
+        `encodesTo` "{\"select\":{\"name\":\"急ぎ\",\"description\":\"今日中\"}}",
+    testCase "people with partial user, full user and group decodes" $ do
+      pv <-
+        decodeOrFail
+          "{\"id\":\"p1\",\"type\":\"people\",\"people\":[{\"object\":\"user\",\"id\":\"u1\"},{\"object\":\"user\",\"id\":\"u2\",\"type\":\"person\",\"name\":\"Tanaka Hanako\",\"avatar_url\":null,\"person\":{\"email\":\"hanako@example.com\"}},{\"object\":\"group\",\"id\":\"g1\",\"name\":\"Design Team\"}]}"
+      case pv of
+        PeopleValue "p1" entries -> case Vector.toList entries of
+          [PersonEntry (PartialUser (UUID "u1")), PersonEntry (FullUser UserObject {name}), GroupEntry GroupObject {name = groupName}] -> do
+            name @?= Just "Tanaka Hanako"
+            groupName @?= Just "Design Team"
+          other -> assertFailure ("unexpected entries: " <> show other)
+        other -> assertFailure ("expected PeopleValue, got " <> show other),
+    testCase "group people entry encodes" $
+      GroupEntry (GroupObject (UUID "g1") (Just "Design Team"))
+        `encodesTo` "{\"object\":\"group\",\"id\":\"g1\",\"name\":\"Design Team\"}",
+    testCase "place decodes" $ do
+      pv <-
+        decodeOrFail
+          "{\"id\":\"p2\",\"type\":\"place\",\"place\":{\"lat\":35.6812,\"lon\":139.7671,\"name\":\"東京駅\",\"address\":null,\"google_place_id\":\"abc\"}}"
+      case pv of
+        PlaceValue _ (Just Place {lat, name, googlePlaceId}) -> do
+          lat @?= 35.6812
+          name @?= Just "東京駅"
+          googlePlaceId @?= Just "abc"
+        other -> assertFailure ("expected PlaceValue, got " <> show other),
+    testCase "verification decodes state, date and verifier" $ do
+      pv <-
+        decodeOrFail
+          "{\"id\":\"p3\",\"type\":\"verification\",\"verification\":{\"state\":\"expired\",\"date\":{\"start\":\"2026-01-01\",\"end\":null,\"time_zone\":null},\"verified_by\":{\"object\":\"user\",\"id\":\"u3\"}}}"
+      case pv of
+        VerificationValue _ (Just VerificationResult {state, verifiedBy}) -> do
+          state @?= Expired
+          verifiedBy @?= Just (PartialUser (UUID "u3"))
+        other -> assertFailure ("expected VerificationValue, got " <> show other)
+      unknown <- decodeOrFail "{\"id\":\"p4\",\"type\":\"verification\",\"verification\":{\"state\":\"pending_review\",\"date\":null,\"verified_by\":null}}"
+      case unknown of
+        VerificationValue _ (Just VerificationResult {state}) -> state @?= UnknownVerificationState "pending_review"
+        other -> assertFailure ("expected VerificationValue, got " <> show other),
+    testCase "unverifiedValue encodes the request shape" $
+      unverifiedValue `encodesTo` "{\"verification\":{\"state\":\"unverified\"}}",
+    testCase "rollup array decodes typed property values" $ do
+      pv <-
+        decodeOrFail
+          "{\"id\":\"p5\",\"type\":\"rollup\",\"rollup\":{\"type\":\"array\",\"function\":\"show_original\",\"array\":[{\"type\":\"number\",\"number\":3},{\"type\":\"title\",\"title\":[]}]}}"
+      case pv of
+        RollupValue _ (RollupArrayResult values _) -> case Vector.toList values of
+          [NumberValue "" (Just 3), TitleValue "" _] -> pure ()
+          other -> assertFailure ("unexpected rollup values: " <> show other)
+        other -> assertFailure ("expected RollupValue, got " <> show other),
+    testCase "unknown property type decodes to UnknownPropertyValue" $ do
+      pv <- decodeOrFail "{\"id\":\"p6\",\"type\":\"hologram\",\"hologram\":{\"x\":1}}"
+      case pv of
+        UnknownPropertyValue "p6" "hologram" _ -> pv `encodesTo` "{\"hologram\":{\"x\":1}}"
+        other -> assertFailure ("expected UnknownPropertyValue, got " <> show other),
+    testCase "paginated rollup property item decodes next_url and summary" $ do
+      r <-
+        decodeOrFail
+          "{\"object\":\"list\",\"type\":\"property_item\",\"results\":[],\"next_cursor\":null,\"has_more\":false,\"property_item\":{\"id\":\"r1\",\"type\":\"rollup\",\"next_url\":\"https://api.notion.com/v1/pages/x/properties/r1?start_cursor=abc\",\"rollup\":{\"type\":\"number\",\"number\":7,\"function\":\"count\"}}}"
+      case r of
+        PaginatedPropertyItems PropertyItemList {propertyType, propertyId, nextUrl, rollup} -> do
+          propertyType @?= "rollup"
+          propertyId @?= "r1"
+          nextUrl @?= Just "https://api.notion.com/v1/pages/x/properties/r1?start_cursor=abc"
+          case rollup of
+            Just (RollupNumberResult (Just 7) _) -> pure ()
+            other -> assertFailure ("unexpected rollup: " <> show other)
+        other -> assertFailure ("expected PaginatedPropertyItems, got " <> show other),
+    testCase "link_mention decodes" $ do
+      m <- decodeMention "{\"type\":\"link_mention\",\"link_mention\":{\"href\":\"https://github.com\",\"title\":\"GitHub\",\"padding_top\":12}}"
+      case m of
+        LinkMention LinkMentionValue {href, title, paddingTop} -> do
+          href @?= "https://github.com"
+          title @?= Just "GitHub"
+          paddingTop @?= Just 12
+        other -> assertFailure ("expected LinkMention, got " <> show other),
+    testCase "custom_emoji mention decodes and re-encodes" $ do
+      m <- decodeMention "{\"type\":\"custom_emoji\",\"custom_emoji\":{\"id\":\"e1\",\"name\":\"bufo\",\"url\":\"https://example.com/bufo.png\"}}"
+      m @?= CustomEmojiMention (CustomEmojiRef (UUID "e1") (Just "bufo") (Just "https://example.com/bufo.png"))
+      m `encodesTo` "{\"type\":\"custom_emoji\",\"custom_emoji\":{\"id\":\"e1\",\"name\":\"bufo\",\"url\":\"https://example.com/bufo.png\"}}",
+    testCase "user mention keeps the full user" $ do
+      m <- decodeMention "{\"type\":\"user\",\"user\":{\"object\":\"user\",\"id\":\"u9\",\"type\":\"person\",\"name\":\"Sato Kenji\",\"avatar_url\":null,\"person\":{}}}"
+      case m of
+        UserMention (FullUser UserObject {name}) -> name @?= Just "Sato Kenji"
+        other -> assertFailure ("expected a full user mention, got " <> show other)
+      partial <- decodeMention "{\"type\":\"user\",\"user\":{\"object\":\"user\",\"id\":\"u10\"}}"
+      partial @?= UserMention (PartialUser (UUID "u10"))
   ]

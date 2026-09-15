@@ -56,13 +56,13 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
 - [x] Milestone 1: `BlockUpdatePayload` / `BlockUpdateContent` replace `BlockUpdate`; `blockUpdateFromContent`, `trashBlockUpdate`; `updateBlock` route and effectful constructor updated. (2026-09-15)
 - [x] Milestone 1: audio and embed `caption`; `UnsupportedBlock` carries `block_type`; `tabBlock` smart constructor. (2026-09-15)
 - [x] Milestone 1: fix existing tests and examples that break; `cabal build all` and `cabal test` green (325 tests). (2026-09-15)
-- [ ] Milestone 2: `SelectOptionValue.description`.
-- [ ] Milestone 2: `UserValue`, `GroupObject`, `PeopleEntry` in `Notion.V1.Users`; `PeopleValue` uses `PeopleEntry`; `Eq` derived on user types.
-- [ ] Milestone 2: typed `Place`, `VerificationResult` with `VerificationState`, smart constructors `placeValue`, `verifiedValue`, `unverifiedValue`.
-- [ ] Milestone 2: typed `RollupArrayResult`, `RollupUnknownResult`, `UnknownPropertyValue`, `id` optional on property values.
-- [ ] Milestone 2: `PropertyItemList` with `next_url` and rollup summary.
-- [ ] Milestone 2: `CustomEmojiRef` in `Common.hs`; `LinkMention`, `CustomEmojiMention`, `UserMention` carrying `UserValue`; EP-1's two "mention falls back to UnknownMention" tests switched to a truly unknown mention type.
-- [ ] Milestone 2: tests green.
+- [x] Milestone 2: `SelectOptionValue.description`. (2026-09-15)
+- [x] Milestone 2: `UserValue`, `GroupObject`, `PeopleEntry` in `Notion.V1.Users`; `PeopleValue` uses `PeopleEntry`; `Eq` derived on user types. (2026-09-15)
+- [x] Milestone 2: typed `Place`, `VerificationResult` with `VerificationState`, smart constructors `placeValue`, `verifiedValue`, `unverifiedValue`. (2026-09-15)
+- [x] Milestone 2: typed `RollupArrayResult`, `RollupUnknownResult`, `UnknownPropertyValue`, `id` optional on property values. (2026-09-15)
+- [x] Milestone 2: `PropertyItemList` with `next_url` and rollup summary. (2026-09-15)
+- [x] Milestone 2: `CustomEmojiRef` in `Common.hs`; `LinkMention`, `CustomEmojiMention`, `UserMention` carrying `UserValue`. EP-1's two mention fallback tests already used made-up types (`future_mention`, `future_emoji`), so they needed no change. (2026-09-15)
+- [x] Milestone 2: tests green (337 tests). (2026-09-15)
 - [ ] Milestone 3: `CustomEmojiIcon` carries `CustomEmojiRef` (id, name, url); EP-1's custom-emoji icon tests updated.
 - [ ] Milestone 3: `NoticonColor` on `NativeIcon`; `ObjectType` additions with `UnknownObjectType` fallback; `PageMarkdown.object`.
 - [ ] Milestone 3: `FileUploadObject.uploadUrl`, `completeUrl`, typed `createdBy`; typed `FileUploadMode` on `CreateFileUpload`.
@@ -82,6 +82,7 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
         Ambiguous occurrence ‘Blocks.content’.
     ```
 
+- EP-1's mention fallback tests in `tasty/WireFormatTests.hs` had already been rewritten during MasterPlan review to use `future_mention` and `future_emoji`, so the Milestone 2 step that renames them was unnecessary.
 - Lazy `Data.ByteString.Lazy.Char8` string literals truncate non-ASCII characters, so a fixture containing `こんにちは` failed with `Invalid UTF-8 stream`. `tasty/ObjectFieldTests.hs` takes fixtures as `Text` and encodes them as UTF-8.
 
 
@@ -153,6 +154,10 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
 
 - Decision: Make `UpdatePage.icon` and `UpdatePage.cover` `Clearable` (from `Notion.V1.Clearable`) instead of `Maybe`, and keep `CreatePage.icon`/`cover` as `Maybe`.
   Rationale: `UpdatePageBodyParameters` accepts `icon?: PageIconRequest | null` and `cover?: PageCoverRequest | null` (`pages.ts:596-597`), and `null` is the only way to remove a page icon or cover. ADR 5 (`docs/adr/5-clearable-request-fields-and-shared-configuration-types.md`) prescribes `Clearable` for such fields. On create, `null` means the same as leaving the key out. Since the hand-written `UpdatePage` encoder was already being written, the cost was five record literals in tests and examples.
+  Date: 2026-09-15
+
+- Decision: `FromJSON UserValue` falls back to `PartialUser` (reading only `id`) when an object with a `type` key does not decode as a full `UserObject`.
+  Rationale: A user mention or people entry sits deep inside rich text and page properties. A new user type, or any other shape `UserObject` cannot read, would otherwise fail the whole page. This follows ADR 1's parse-failure fallback rule for nested, partially modelled values (`docs/adr/1-tolerant-response-decoders.md`).
   Date: 2026-09-15
 
 - Decision: Add an `UnknownPropertyValue Text Text Value` fallback to `PropertyValue`, and make the `id` key optional when decoding a property value (default `""`).

@@ -5,6 +5,7 @@ module Notion.V1.RichText
     RichTextContent (..),
     TextContent (..),
     MentionContent (..),
+    LinkMentionValue (..),
     EquationContent (..),
     Annotations (..),
     defaultAnnotations,
@@ -16,7 +17,8 @@ where
 
 import Data.Aeson (object, (.:), (.:?), (.=))
 import Notion.Prelude
-import Notion.V1.Common (Color (..), UUID)
+import Notion.V1.Common (Color (..), CustomEmojiRef, UUID)
+import Notion.V1.Users (UserValue)
 
 -- | Rich text object in Notion
 data RichText = RichText
@@ -75,18 +77,23 @@ instance ToJSON TextContent where
 -- the corresponding field name. For example:
 --
 -- @
--- { "type": "user", "user": { "id": "..." } }
+-- { "type": "user", "user": { "object": "user", "id": "..." } }
 -- @
 data MentionContent
-  = UserMention {user :: UUID}
+  = -- | A user mention; Notion sends either a reference or the full user.
+    UserMention {user :: UserValue}
   | PageMention {page :: UUID}
   | DatabaseMention {database :: UUID}
   | DateMention {date :: Date}
   | LinkPreviewMention {url :: Text}
   | TemplateMentionDate {templateMentionDate :: Text}
   | TemplateMentionUser {templateMentionUser :: Text}
+  | -- | A link with rich preview metadata.
+    LinkMention {linkMention :: LinkMentionValue}
+  | -- | A workspace custom emoji.
+    CustomEmojiMention {customEmoji :: CustomEmojiRef}
   | -- | A mention kind this library does not model yet; holds the whole mention
-    -- object. Typed @link_mention@ and @custom_emoji@ constructors come later.
+    -- object.
     UnknownMention Value
   deriving stock (Eq, Generic, Show)
 
@@ -95,9 +102,7 @@ instance FromJSON MentionContent where
     Object o -> do
       mentionType :: Text <- o .: "type"
       case mentionType of
-        "user" -> do
-          userObj <- o .: "user"
-          UserMention <$> parseIdField userObj
+        "user" -> UserMention <$> o .: "user"
         "page" -> do
           pageObj <- o .: "page"
           PageMention <$> parseIdField pageObj
@@ -115,6 +120,8 @@ instance FromJSON MentionContent where
             "template_mention_date" -> TemplateMentionDate <$> tmObj .: "template_mention_date"
             "template_mention_user" -> TemplateMentionUser <$> tmObj .: "template_mention_user"
             _ -> pure (UnknownMention v)
+        "link_mention" -> LinkMention <$> o .: "link_mention"
+        "custom_emoji" -> CustomEmojiMention <$> o .: "custom_emoji"
         _ -> pure (UnknownMention v)
     _ -> fail "Expected object for MentionContent"
     where
@@ -127,8 +134,8 @@ instance FromJSON MentionContent where
 
 instance ToJSON MentionContent where
   toJSON = \case
-    UserMention uid ->
-      object ["type" .= ("user" :: Text), "user" .= object ["id" .= uid]]
+    UserMention u ->
+      object ["type" .= ("user" :: Text), "user" .= u]
     PageMention pid ->
       object ["type" .= ("page" :: Text), "page" .= object ["id" .= pid]]
     DatabaseMention dbid ->
@@ -147,7 +154,33 @@ instance ToJSON MentionContent where
         [ "type" .= ("template_mention" :: Text),
           "template_mention" .= object ["type" .= ("template_mention_user" :: Text), "template_mention_user" .= u]
         ]
+    LinkMention lm ->
+      object ["type" .= ("link_mention" :: Text), "link_mention" .= lm]
+    CustomEmojiMention ce ->
+      object ["type" .= ("custom_emoji" :: Text), "custom_emoji" .= ce]
     UnknownMention raw -> raw
+
+-- | Rich link preview metadata carried by a @link_mention@.
+data LinkMentionValue = LinkMentionValue
+  { href :: Text,
+    title :: Maybe Text,
+    description :: Maybe Text,
+    linkAuthor :: Maybe Text,
+    linkProvider :: Maybe Text,
+    thumbnailUrl :: Maybe Text,
+    iconUrl :: Maybe Text,
+    iframeUrl :: Maybe Text,
+    height :: Maybe Double,
+    padding :: Maybe Double,
+    paddingTop :: Maybe Double
+  }
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON LinkMentionValue where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON LinkMentionValue where
+  toJSON = genericToJSON aesonOptions
 
 -- | Equation content
 newtype EquationContent = EquationContent

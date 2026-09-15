@@ -1846,7 +1846,7 @@ testParseSelectValue = do
         "{\"id\":\"abc\",\"type\":\"select\",\"select\":{\"id\":\"opt-1\",\"name\":\"Done\",\"color\":\"green\"}}"
   case Aeson.eitherDecode json of
     Left err -> assertFailure $ "Failed to parse SelectValue: " <> err
-    Right (PV.SelectValue pid (Just (PV.SelectOptionValue _ optName optColor))) -> do
+    Right (PV.SelectValue pid (Just (PV.SelectOptionValue _ optName optColor _))) -> do
       assertEqual "property id" "abc" pid
       assertEqual "option name" "Done" optName
       assertEqual "option color" (Just "green") optColor
@@ -1897,7 +1897,7 @@ testParseStatusValue = do
   let json = "{\"id\":\"st\",\"type\":\"status\",\"status\":{\"id\":\"opt-1\",\"name\":\"In Progress\",\"color\":\"yellow\"}}"
   case Aeson.eitherDecode json of
     Left err -> assertFailure $ "Failed to parse StatusValue: " <> err
-    Right (PV.StatusValue pid (Just (PV.SelectOptionValue _ optName _))) -> do
+    Right (PV.StatusValue pid (Just (PV.SelectOptionValue _ optName _ _))) -> do
       assertEqual "property id" "st" pid
       assertEqual "status name" "In Progress" optName
     Right other -> assertFailure $ "Expected StatusValue, got: " <> show other
@@ -2007,7 +2007,7 @@ testSmartSelectValue :: Assertion
 testSmartSelectValue = do
   let pv = PV.selectValue "Done"
   case pv of
-    PV.SelectValue pid (Just (PV.SelectOptionValue _ optName _)) -> do
+    PV.SelectValue pid (Just (PV.SelectOptionValue _ optName _ _)) -> do
       assertEqual "schema id should be empty" "" pid
       assertEqual "name" "Done" optName
     _ -> assertFailure "Expected SelectValue"

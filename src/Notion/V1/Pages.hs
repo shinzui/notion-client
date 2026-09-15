@@ -14,6 +14,7 @@ module Notion.V1.Pages
 
     -- * Property item
     PropertyItemResponse (..),
+    PropertyItemList (..),
 
     -- * Markdown
     PageMarkdown (..),
@@ -44,13 +45,14 @@ import Data.Aeson.Key (Key)
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Pair)
 import Data.Map qualified as Map
+import Data.Maybe (fromMaybe)
 import Notion.Prelude
 import Notion.V1.AsyncTasks (AllowAsync, AsyncVerb)
 import Notion.V1.BlockContent (BlockContent)
 import Notion.V1.Clearable (Clearable (..))
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
-import Notion.V1.PropertyValue (PropertyValue)
+import Notion.V1.PropertyValue (PropertyValue, RollupResult)
 import Notion.V1.Users (UserReference)
 import Servant.API (QueryParams, StdMethod (PATCH, POST))
 
@@ -440,8 +442,20 @@ instance ToJSON ReplaceContentRangeRequest where
 data PropertyItemResponse
   = -- | A single property value
     SinglePropertyItem PropertyValue
-  | -- | A paginated list of property items. The 'Text' is the property type name.
-    PaginatedPropertyItems (ListOf PropertyValue) Text
+  | -- | A paginated list of property items
+    PaginatedPropertyItems PropertyItemList
+  deriving stock (Show)
+
+-- | A paginated property item response (title, rich_text, people, relation,
+-- rollup). 'nextUrl' is the URL of the next page of items, if any; 'rollup'
+-- is the rollup summary Notion attaches to paginated rollup properties.
+data PropertyItemList = PropertyItemList
+  { items :: ListOf PropertyValue,
+    propertyType :: Text,
+    propertyId :: Text,
+    nextUrl :: Maybe Text,
+    rollup :: Maybe RollupResult
+  }
   deriving stock (Show)
 
 instance FromJSON PropertyItemResponse where
@@ -450,9 +464,13 @@ instance FromJSON PropertyItemResponse where
       -- Check if this is a paginated response (has "results" key) or single item
       if KeyMap.member "results" o
         then do
-          listOf <- Aeson.parseJSON (Object o)
-          propType <- o .: "property_item" >>= (.: "type")
-          pure $ PaginatedPropertyItems listOf propType
+          items <- Aeson.parseJSON (Object o)
+          propertyItem <- o .: "property_item"
+          propertyType <- propertyItem .: "type"
+          propertyId <- fromMaybe "" <$> propertyItem .:? "id"
+          nextUrl <- propertyItem .:? "next_url"
+          rollup <- propertyItem .:? "rollup"
+          pure $ PaginatedPropertyItems PropertyItemList {..}
         else SinglePropertyItem <$> Aeson.parseJSON (Object o)
     _ -> fail "Expected object for PropertyItemResponse"
 

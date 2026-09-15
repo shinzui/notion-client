@@ -51,6 +51,12 @@
 * `CreatePage.parent` is `Maybe Parent`
 * `AudioBlock` and `EmbedBlock` gain `caption`; `UnsupportedBlock` carries the `block_type` as `Maybe Text`
 * `InsertContentRequest` gains `position`
+* `SelectOptionValue` gains `description`
+* `PeopleValue` holds `PeopleEntry` (a `UserValue` or a `GroupObject`); `PlaceValue` holds a typed `Place`
+* `VerificationResult.state` is `VerificationState`, and `verifiedBy` is `Maybe UserValue`
+* `RollupArrayResult` holds typed `PropertyValue`s; `RollupResult` gains `RollupUnknownResult` and `PropertyValue` gains `UnknownPropertyValue`
+* `PaginatedPropertyItems` holds a `PropertyItemList` record with `nextUrl`, `propertyId` and the rollup summary
+* `UserMention` holds a `UserValue` (partial or full user) instead of a bare ID; `MentionContent` gains `LinkMention` and `CustomEmojiMention`
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
@@ -80,6 +86,9 @@
 * `createPageFiltered` and `updatePageFiltered` send `filter_properties` query parameters, mirrored in `notion-client-effectful`
 * `trashBlockUpdate`, `mkBlockUpdate` and the `tabBlock` smart constructor
 * Insert markdown at the start or end of a page with `InsertAtStart` / `InsertAtEnd`
+* `CustomEmojiRef` in `Notion.V1.Common`, `LinkMentionValue` in `Notion.V1.RichText`, and `UserValue`, `GroupObject` and `PeopleEntry` in `Notion.V1.Users`
+* Smart constructors `placeValue`, `verifiedValue`, `unverifiedValue` and `peopleEntriesValue`
+* `Eq` instances on `UserObject` and the other user types
 * Page create and update omit `properties` when the map is empty, so trash-only or markdown-only requests send just those keys
 * New module `Notion.V1.DataSourceRows` with `iterateAllDataSourceRows`, `collectAllDataSourceRows` and `foldAllDataSourceRows`, which read every row of a data source past Notion's per-query result limit
 
@@ -99,6 +108,7 @@
 * Data source queries on wiki databases (which return child data sources and partial objects) no longer fail to decode
 * Search no longer silently drops partial or undecodable results
 * Unknown property types no longer fail data source decoding
+* Page property values of unknown types, and rollup array values without an `id`, no longer fail page decoding
 * `verifySignature` accepts upper- or lowercase hex and rejects headers without the `sha256=` prefix, of the wrong length, or with non-hex characters
 
 ## 0.7.0.2 (2026-06-27)

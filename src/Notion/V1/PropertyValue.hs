@@ -22,6 +22,8 @@ module Notion.V1.PropertyValue
     RollupResult (..),
     UniqueIdResult (..),
     VerificationResult (..),
+    VerificationState (..),
+    Place (..),
 
     -- * Smart constructors
     titleValue,
@@ -37,6 +39,10 @@ module Notion.V1.PropertyValue
     relationValue,
     statusValue,
     peopleValue,
+    peopleEntriesValue,
+    placeValue,
+    verifiedValue,
+    unverifiedValue,
     filesValue,
     fileUploadFilesValue,
   )
@@ -45,13 +51,14 @@ where
 import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
+import Data.Maybe (fromMaybe)
 import Data.Scientific (Scientific)
 import Data.Vector qualified as Vector
 import Notion.Prelude
 import Notion.V1.Common (ExternalFile (..), File, UUID (..))
 import Notion.V1.Properties (RollupFunction)
 import Notion.V1.RichText (Date (..), RichText)
-import Notion.V1.Users (UserReference (..))
+import Notion.V1.Users (PeopleEntry (..), UserReference (..), UserValue (..))
 import Prelude hiding (id)
 
 -- | A typed property value from a Notion page.
@@ -63,6 +70,10 @@ import Prelude hiding (id)
 -- Read-only variants ('FormulaValue', 'RollupValue', 'UniqueIdValue',
 -- 'CreatedTimeValue', 'CreatedByValue', 'LastEditedTimeValue', 'LastEditedByValue',
 -- 'VerificationValue') only appear in API responses.
+--
+-- A property value of a type this library does not know decodes as
+-- 'UnknownPropertyValue'. Values nested in a rollup array carry no ID; their
+-- first field is @\"\"@.
 data PropertyValue
   = TitleValue Text (Vector RichText)
   | RichTextValue Text (Vector RichText)
@@ -70,7 +81,7 @@ data PropertyValue
   | SelectValue Text (Maybe SelectOptionValue)
   | MultiSelectValue Text (Vector SelectOptionValue)
   | DateValue Text (Maybe Date)
-  | PeopleValue Text (Vector UserReference)
+  | PeopleValue Text (Vector PeopleEntry)
   | FilesValue Text (Vector FileValue)
   | CheckboxValue Text Bool
   | UrlValue Text (Maybe Text)
@@ -85,15 +96,18 @@ data PropertyValue
   | LastEditedByValue Text UserReference
   | StatusValue Text (Maybe SelectOptionValue)
   | UniqueIdValue Text UniqueIdResult
-  | PlaceValue Text (Maybe Value)
+  | PlaceValue Text (Maybe Place)
   | ButtonValue Text (Maybe Value)
   | VerificationValue Text (Maybe VerificationResult)
+  | -- | A property type this library does not model yet: the property ID, the
+    -- type name and the raw value under the type key ('Null' when absent).
+    UnknownPropertyValue Text Text Value
   deriving stock (Show)
 
 instance FromJSON PropertyValue where
   parseJSON = \case
     Object o -> do
-      pid <- o .: "id"
+      pid <- fromMaybe "" <$> o .:? "id"
       propType <- o .: "type"
       let key = Key.fromText propType
       case propType of
@@ -121,7 +135,7 @@ instance FromJSON PropertyValue where
         "place" -> PlaceValue pid <$> o .:? key
         "button" -> ButtonValue pid <$> o .:? key
         "verification" -> VerificationValue pid <$> o .:? key
-        other -> fail $ "Unknown property value type: " <> unpack other
+        other -> UnknownPropertyValue pid other . fromMaybe Null <$> o .:? key
     _ -> fail "Expected object for PropertyValue"
 
 instance ToJSON PropertyValue where
@@ -150,6 +164,7 @@ instance ToJSON PropertyValue where
     PlaceValue _ v -> Aeson.object ["place" .= v]
     ButtonValue _ v -> Aeson.object ["button" .= v]
     VerificationValue _ v -> Aeson.object ["verification" .= v]
+    UnknownPropertyValue _ t v -> Aeson.object [Key.fromText t .= v]
 
 -- ---------------------------------------------------------------------------
 -- Supporting types
@@ -162,7 +177,8 @@ instance ToJSON PropertyValue where
 data SelectOptionValue = SelectOptionValue
   { id :: Maybe Text,
     name :: Text,
-    color :: Maybe Text
+    color :: Maybe Text,
+    description :: Maybe Text
   }
   deriving stock (Generic, Show)
 
@@ -256,23 +272,30 @@ instance ToJSON FormulaResult where
 data RollupResult
   = RollupNumberResult (Maybe Scientific) RollupFunction
   | RollupDateResult (Maybe Date) RollupFunction
-  | RollupArrayResult (Vector Value) RollupFunction
+  | -- | The rolled-up property values. They carry no property ID.
+    RollupArrayResult (Vector PropertyValue) RollupFunction
   | RollupIncompleteResult RollupFunction
   | RollupUnsupportedResult RollupFunction
+  | -- | A rollup result type this library does not model yet: the type name
+    -- and the raw rollup object.
+    RollupUnknownResult Text Value
   deriving stock (Show)
 
 instance FromJSON RollupResult where
   parseJSON = \case
     Object o -> do
       rollupType <- o .: "type"
-      fn <- o .: "function"
       case rollupType of
-        "number" -> RollupNumberResult <$> o .:? "number" <*> pure fn
-        "date" -> RollupDateResult <$> o .:? "date" <*> pure fn
-        "array" -> RollupArrayResult <$> o .: "array" <*> pure fn
-        "incomplete" -> pure $ RollupIncompleteResult fn
-        "unsupported" -> pure $ RollupUnsupportedResult fn
-        other -> fail $ "Unknown rollup result type: " <> unpack other
+        "number" -> RollupNumberResult <$> o .:? "number" <*> o .: "function"
+        "date" -> RollupDateResult <$> o .:? "date" <*> o .: "function"
+        "array" -> do
+          raw :: Vector Value <- o .: "array"
+          -- The paginated property-item summary sends empty objects here.
+          values <- traverse parseJSON (Vector.filter (/= Aeson.object []) raw)
+          RollupArrayResult values <$> o .: "function"
+        "incomplete" -> RollupIncompleteResult <$> o .: "function"
+        "unsupported" -> RollupUnsupportedResult <$> o .: "function"
+        other -> pure (RollupUnknownResult other (Object o))
     _ -> fail "Expected object for RollupResult"
 
 instance ToJSON RollupResult where
@@ -282,6 +305,7 @@ instance ToJSON RollupResult where
     RollupArrayResult v fn -> Aeson.object ["type" .= ("array" :: Text), "array" .= v, "function" .= fn]
     RollupIncompleteResult fn -> Aeson.object ["type" .= ("incomplete" :: Text), "function" .= fn]
     RollupUnsupportedResult fn -> Aeson.object ["type" .= ("unsupported" :: Text), "function" .= fn]
+    RollupUnknownResult _ v -> v
 
 -- | Unique ID property value (read-only).
 data UniqueIdResult = UniqueIdResult
@@ -296,10 +320,11 @@ instance FromJSON UniqueIdResult where
 instance ToJSON UniqueIdResult where
   toJSON = genericToJSON aesonOptions
 
--- | Verification property value (read-only).
+-- | Verification property value. Build request values with 'verifiedValue'
+-- and 'unverifiedValue'.
 data VerificationResult = VerificationResult
-  { state :: Text,
-    verifiedBy :: Maybe UserReference,
+  { state :: VerificationState,
+    verifiedBy :: Maybe UserValue,
     date :: Maybe Date
   }
   deriving stock (Generic, Show)
@@ -307,7 +332,52 @@ data VerificationResult = VerificationResult
 instance FromJSON VerificationResult where
   parseJSON = genericParseJSON aesonOptions
 
+-- | Always writes @state@; @date@ and @verified_by@ only when present.
 instance ToJSON VerificationResult where
+  toJSON VerificationResult {..} =
+    Aeson.object $
+      ["state" .= state]
+        <> maybe [] (\d -> ["date" .= d]) date
+        <> maybe [] (\u -> ["verified_by" .= u]) verifiedBy
+
+-- | State of a verification property.
+data VerificationState
+  = Verified
+  | Expired
+  | Unverified
+  | -- | A state this library does not know yet; holds the raw string.
+    UnknownVerificationState Text
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON VerificationState where
+  parseJSON = Aeson.withText "VerificationState" $ \case
+    "verified" -> pure Verified
+    "expired" -> pure Expired
+    "unverified" -> pure Unverified
+    other -> pure (UnknownVerificationState other)
+
+instance ToJSON VerificationState where
+  toJSON = \case
+    Verified -> String "verified"
+    Expired -> String "expired"
+    Unverified -> String "unverified"
+    UnknownVerificationState t -> String t
+
+-- | A place property value (a location with optional name and address).
+data Place = Place
+  { lat :: Double,
+    lon :: Double,
+    name :: Maybe Text,
+    address :: Maybe Text,
+    awsPlaceId :: Maybe Text,
+    googlePlaceId :: Maybe Text
+  }
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON Place where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON Place where
   toJSON = genericToJSON aesonOptions
 
 -- ---------------------------------------------------------------------------
@@ -328,11 +398,11 @@ numberValue n = NumberValue "" (Just n)
 
 -- | Create a select property value by option name.
 selectValue :: Text -> PropertyValue
-selectValue name = SelectValue "" (Just (SelectOptionValue Nothing name Nothing))
+selectValue name = SelectValue "" (Just (SelectOptionValue Nothing name Nothing Nothing))
 
 -- | Create a multi-select property value from a list of option names.
 multiSelectValue :: [Text] -> PropertyValue
-multiSelectValue names = MultiSelectValue "" (Vector.fromList (map (\n -> SelectOptionValue Nothing n Nothing) names))
+multiSelectValue names = MultiSelectValue "" (Vector.fromList (map (\n -> SelectOptionValue Nothing n Nothing Nothing) names))
 
 -- | Create a date property value.
 dateValue :: Text -> Maybe Text -> PropertyValue
@@ -360,11 +430,28 @@ relationValue ids = RelationValue "" (Vector.fromList (map RelationRef ids))
 
 -- | Create a status property value by option name.
 statusValue :: Text -> PropertyValue
-statusValue name = StatusValue "" (Just (SelectOptionValue Nothing name Nothing))
+statusValue name = StatusValue "" (Just (SelectOptionValue Nothing name Nothing Nothing))
 
 -- | Create a people property value from a list of user IDs.
 peopleValue :: [UUID] -> PropertyValue
-peopleValue ids = PeopleValue "" (Vector.fromList (map (\i -> UserReference i "user") ids))
+peopleValue ids = PeopleValue "" (Vector.fromList (map (PersonEntry . PartialUser) ids))
+
+-- | Create a people property value from users and groups.
+peopleEntriesValue :: [PeopleEntry] -> PropertyValue
+peopleEntriesValue = PeopleValue "" . Vector.fromList
+
+-- | Create a place property value from a latitude and longitude.
+placeValue :: Double -> Double -> PropertyValue
+placeValue latitude longitude =
+  PlaceValue "" (Just (Place latitude longitude Nothing Nothing Nothing Nothing))
+
+-- | Mark a verification property as verified, optionally until a date.
+verifiedValue :: Maybe Date -> PropertyValue
+verifiedValue d = VerificationValue "" (Just (VerificationResult Verified Nothing d))
+
+-- | Mark a verification property as unverified.
+unverifiedValue :: PropertyValue
+unverifiedValue = VerificationValue "" (Just (VerificationResult Unverified Nothing Nothing))
 
 -- | Create a files property value from a list of external URLs.
 filesValue :: [Text] -> PropertyValue

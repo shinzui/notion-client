@@ -12,11 +12,21 @@ module Notion.V1.Users
     WorkspaceLimits (..),
     UserReference (..),
 
+    -- * Users inside values
+    UserValue (..),
+    userValueId,
+    GroupObject (..),
+    PeopleEntry (..),
+
     -- * Servant
     API,
   )
 where
 
+import Control.Applicative ((<|>))
+import Data.Aeson ((.:?), (.=))
+import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types ((.:))
 import Notion.Prelude
 import Notion.V1.Common (ObjectType (..), UUID)
@@ -35,7 +45,7 @@ data UserObject = UserObject
     bot :: Maybe BotUser,
     object :: ObjectType
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON UserObject where
   parseJSON = genericParseJSON aesonOptions {fieldLabelModifier = \s -> if s == "type_" then "type" else labelModifier s}
@@ -44,7 +54,7 @@ instance FromJSON UserObject where
 data UserType
   = Person
   | Bot
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON UserType where
   parseJSON = genericParseJSON aesonOptions
@@ -53,7 +63,7 @@ instance FromJSON UserType where
 newtype PersonUser = PersonUser
   { email :: Maybe Text
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON PersonUser where
   parseJSON = genericParseJSON aesonOptions
@@ -62,7 +72,7 @@ instance FromJSON PersonUser where
 data WorkspaceLimits = WorkspaceLimits
   { maxFileUploadSizeInBytes :: Maybe Natural
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON WorkspaceLimits where
   parseJSON = genericParseJSON aesonOptions
@@ -74,7 +84,7 @@ data BotUser = BotUser
     workspaceId :: Maybe Text,
     workspaceLimits :: Maybe WorkspaceLimits
   }
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON BotUser where
   parseJSON = genericParseJSON aesonOptions
@@ -85,7 +95,7 @@ data UserOwner
   | WorkspaceOwner {type_ :: Text, workspace :: Bool}
   | -- | Owner kind not modelled yet; holds the raw owner object.
     UnknownOwner {type_ :: Text, ownerValue :: Value}
-  deriving stock (Generic, Show)
+  deriving stock (Eq, Generic, Show)
 
 instance FromJSON UserOwner where
   parseJSON = \case
@@ -114,6 +124,61 @@ instance FromJSON UserReference where
 
 instance ToJSON UserReference where
   toJSON = genericToJSON aesonOptions
+
+-- | A user as it appears inside mentions, people values and verification
+-- values: either just a reference (@{"object":"user","id":...}@) or a full
+-- user object (one with a @type@ key).
+data UserValue
+  = PartialUser UserID
+  | FullUser UserObject
+  deriving stock (Eq, Generic, Show)
+
+-- | The ID of a partial or full user.
+userValueId :: UserValue -> UserID
+userValueId (PartialUser i) = i
+userValueId (FullUser UserObject {id = i}) = i
+
+-- | A full user object that this library cannot decode (for example a new
+-- user type) is kept as a 'PartialUser' rather than failing the response.
+instance FromJSON UserValue where
+  parseJSON = \case
+    Object o
+      | KeyMap.member "type" o -> (FullUser <$> parseJSON (Object o)) <|> (PartialUser <$> o .: "id")
+      | otherwise -> PartialUser <$> o .: "id"
+    _ -> fail "Expected object for UserValue"
+
+-- | Encodes the request shape only (@object@ and @id@); full user details are
+-- not sent back to the API.
+instance ToJSON UserValue where
+  toJSON u = Aeson.object ["object" .= ("user" :: Text), "id" .= userValueId u]
+
+-- | A group (team) that can appear in a people property.
+data GroupObject = GroupObject
+  { id :: UUID,
+    name :: Maybe Text
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- | One entry of a people property: a user or a group.
+data PeopleEntry
+  = PersonEntry UserValue
+  | GroupEntry GroupObject
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON PeopleEntry where
+  parseJSON = \case
+    Object o -> do
+      objectType :: Maybe Text <- o .:? "object"
+      case objectType of
+        Just "group" -> GroupEntry <$> (GroupObject <$> o .: "id" <*> o .:? "name")
+        _ -> PersonEntry <$> parseJSON (Object o)
+    _ -> fail "Expected object for PeopleEntry"
+
+instance ToJSON PeopleEntry where
+  toJSON = \case
+    PersonEntry u -> toJSON u
+    GroupEntry (GroupObject gid gname) ->
+      Aeson.object (["object" .= ("group" :: Text), "id" .= gid] <> maybe [] (\n -> ["name" .= n]) gname)
 
 -- | Servant API
 type API =
