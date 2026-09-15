@@ -14,9 +14,11 @@ module Notion.V1.Common
   )
 where
 
-import Data.Aeson (Object, object, (.:), (.:?), (.=))
+import Data.Aeson (Object, object, withText, (.:), (.:?), (.=))
 import Data.Aeson.Types (Parser)
 import Data.Foldable (asum)
+import Data.Maybe (fromMaybe)
+import Data.Tuple (swap)
 import Notion.Prelude
 
 -- | UUID type for Notion resource IDs
@@ -50,6 +52,9 @@ data Parent
   | PageParent {pageId :: UUID}
   | BlockParent {blockId :: UUID}
   | WorkspaceParent {workspace :: Bool}
+  | AgentParent {agentId :: UUID}
+  | -- | A parent kind this library does not model yet; holds the raw JSON object.
+    UnknownParent Value
   deriving stock (Generic, Show)
 
 instance FromJSON Parent where
@@ -72,7 +77,8 @@ instance FromJSON Parent where
         "block" -> fmap BlockParent . (.: "block_id")
         "block_id" -> fmap BlockParent . (.: "block_id")
         "workspace" -> fmap WorkspaceParent . (.: "workspace")
-        other -> \_ -> fail $ "Unknown parent type: " <> unpack other
+        "agent_id" -> fmap AgentParent . (.: "agent_id")
+        _ -> pure . UnknownParent . Object
 
       parseByKey :: Object -> Parser Parent
       parseByKey o =
@@ -81,7 +87,9 @@ instance FromJSON Parent where
             DatabaseParent <$> o .: "database_id",
             PageParent <$> o .: "page_id",
             BlockParent <$> o .: "block_id",
-            WorkspaceParent <$> o .: "workspace"
+            AgentParent <$> o .: "agent_id",
+            WorkspaceParent <$> o .: "workspace",
+            pure (UnknownParent (Object o))
           ]
 
 instance ToJSON Parent where
@@ -93,6 +101,8 @@ instance ToJSON Parent where
   toJSON (PageParent pId) = object ["type" .= ("page_id" :: Text), "page_id" .= pId]
   toJSON (BlockParent bId) = object ["type" .= ("block_id" :: Text), "block_id" .= bId]
   toJSON (WorkspaceParent ws) = object ["type" .= ("workspace" :: Text), "workspace" .= ws]
+  toJSON (AgentParent aId) = object ["type" .= ("agent_id" :: Text), "agent_id" .= aId]
+  toJSON (UnknownParent v) = v
 
 -- | Unified parent ID type
 type ParentID = UUID
@@ -109,6 +119,7 @@ data Color
   | Purple
   | Pink
   | Red
+  | DefaultBackground
   | GrayBackground
   | BrownBackground
   | OrangeBackground
@@ -118,13 +129,42 @@ data Color
   | PurpleBackground
   | PinkBackground
   | RedBackground
+  | -- | A color this library does not know yet; holds the raw string.
+    UnknownColor Text
   deriving stock (Eq, Show, Generic)
 
+colorNames :: [(Color, Text)]
+colorNames =
+  [ (Default, "default"),
+    (Gray, "gray"),
+    (Brown, "brown"),
+    (Orange, "orange"),
+    (Yellow, "yellow"),
+    (Green, "green"),
+    (Blue, "blue"),
+    (Purple, "purple"),
+    (Pink, "pink"),
+    (Red, "red"),
+    (DefaultBackground, "default_background"),
+    (GrayBackground, "gray_background"),
+    (BrownBackground, "brown_background"),
+    (OrangeBackground, "orange_background"),
+    (YellowBackground, "yellow_background"),
+    (GreenBackground, "green_background"),
+    (BlueBackground, "blue_background"),
+    (PurpleBackground, "purple_background"),
+    (PinkBackground, "pink_background"),
+    (RedBackground, "red_background")
+  ]
+
 instance FromJSON Color where
-  parseJSON = genericParseJSON aesonOptions
+  parseJSON = withText "Color" $ \t ->
+    pure (fromMaybe (UnknownColor t) (lookup t (map swap colorNames)))
 
 instance ToJSON Color where
-  toJSON = genericToJSON aesonOptions
+  toJSON = \case
+    UnknownColor t -> String t
+    c -> String (fromMaybe "default" (lookup c colorNames))
 
 -- | Icon object for pages/databases
 data Icon
@@ -137,12 +177,14 @@ data Icon
     CustomEmojiIcon {customEmojiId :: UUID}
   | -- | File upload icon referenced by upload ID
     FileUploadIcon {fileUploadId :: UUID}
+  | -- | An icon kind this library does not model yet; holds the raw icon object.
+    UnknownIcon Value
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON Icon where
   parseJSON = \case
     Object o -> do
-      iconType <- o .: "type"
+      iconType :: Text <- o .: "type"
       case iconType of
         "emoji" -> EmojiIcon <$> o .: "emoji"
         "file" -> FileIcon <$> o .: "file"
@@ -150,11 +192,16 @@ instance FromJSON Icon where
         "icon" -> do
           inner <- o .: "icon"
           NativeIcon <$> inner .: "name" <*> inner .:? "color"
-        "custom_emoji" -> CustomEmojiIcon <$> o .: "id"
+        "custom_emoji" -> do
+          mInner <- o .:? "custom_emoji"
+          case mInner of
+            Just inner -> CustomEmojiIcon <$> inner .: "id"
+            -- Shape written by notion-client <= 0.7.0.2; still accepted when reading.
+            Nothing -> CustomEmojiIcon <$> o .: "id"
         "file_upload" -> do
           uploadObj <- o .: "file_upload"
           FileUploadIcon <$> uploadObj .: "id"
-        _ -> fail $ "Unknown icon type: " <> unpack iconType
+        _ -> pure (UnknownIcon (Object o))
     _ -> fail "Expected object for Icon"
 
 instance ToJSON Icon where
@@ -166,8 +213,10 @@ instance ToJSON Icon where
       [ "type" .= ("icon" :: Text),
         "icon" .= object (["name" .= name] <> maybe [] (\c -> ["color" .= c]) color)
       ]
-  toJSON (CustomEmojiIcon eid) = object ["type" .= ("custom_emoji" :: Text), "id" .= eid]
+  toJSON (CustomEmojiIcon eid) =
+    object ["type" .= ("custom_emoji" :: Text), "custom_emoji" .= object ["id" .= eid]]
   toJSON (FileUploadIcon uid) = object ["type" .= ("file_upload" :: Text), "file_upload" .= object ["id" .= uid]]
+  toJSON (UnknownIcon v) = v
 
 -- | Cover object for pages/databases
 data Cover

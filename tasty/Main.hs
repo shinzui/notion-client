@@ -52,6 +52,7 @@ import System.Environment qualified as Environment
 import Test.Tasty
 import Test.Tasty.HUnit
 import Web.HttpApiData (toQueryParam)
+import WireFormatTests qualified
 
 main :: IO ()
 main = do
@@ -162,6 +163,7 @@ tests = do
         jsonSerializationTests,
         propertyValueTests,
         fileUploadTests,
+        WireFormatTests.tests,
         basicIntegration,
         markdownE2E,
         pageE2E,
@@ -847,7 +849,11 @@ testCustomEmojiIconRoundTrip = do
   case json of
     Aeson.Object o -> do
       assertEqual "type" (Just (Aeson.String "custom_emoji")) (KeyMap.lookup "type" o)
-      assertEqual "id" (Just (Aeson.String "emoji-abc-123")) (KeyMap.lookup "id" o)
+      assertEqual "no top-level id" Nothing (KeyMap.lookup "id" o)
+      assertEqual
+        "custom_emoji"
+        (Just (Aeson.object ["id" Aeson..= ("emoji-abc-123" :: Text.Text)]))
+        (KeyMap.lookup "custom_emoji" o)
     _ -> assertFailure "Expected JSON object"
   case Aeson.fromJSON json of
     Aeson.Success (CustomEmojiIcon eid) ->

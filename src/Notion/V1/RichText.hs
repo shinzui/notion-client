@@ -85,12 +85,15 @@ data MentionContent
   | LinkPreviewMention {url :: Text}
   | TemplateMentionDate {templateMentionDate :: Text}
   | TemplateMentionUser {templateMentionUser :: Text}
+  | -- | A mention kind this library does not model yet; holds the whole mention
+    -- object. Typed @link_mention@ and @custom_emoji@ constructors come later.
+    UnknownMention Value
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON MentionContent where
-  parseJSON = \case
+  parseJSON v = case v of
     Object o -> do
-      mentionType <- o .: "type"
+      mentionType :: Text <- o .: "type"
       case mentionType of
         "user" -> do
           userObj <- o .: "user"
@@ -107,12 +110,12 @@ instance FromJSON MentionContent where
           LinkPreviewMention <$> parseUrlField lpObj
         "template_mention" -> do
           tmObj <- o .: "template_mention"
-          tmType <- tmObj .: "type"
+          tmType :: Text <- tmObj .: "type"
           case tmType of
             "template_mention_date" -> TemplateMentionDate <$> tmObj .: "template_mention_date"
             "template_mention_user" -> TemplateMentionUser <$> tmObj .: "template_mention_user"
-            other2 -> fail $ "Unknown template_mention type: " <> unpack other2
-        other -> fail $ "Unknown mention type: " <> unpack other
+            _ -> pure (UnknownMention v)
+        _ -> pure (UnknownMention v)
     _ -> fail "Expected object for MentionContent"
     where
       parseIdField = \case
@@ -144,6 +147,7 @@ instance ToJSON MentionContent where
         [ "type" .= ("template_mention" :: Text),
           "template_mention" .= object ["type" .= ("template_mention_user" :: Text), "template_mention_user" .= u]
         ]
+    UnknownMention raw -> raw
 
 -- | Equation content
 newtype EquationContent = EquationContent

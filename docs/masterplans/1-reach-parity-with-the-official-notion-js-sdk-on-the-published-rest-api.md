@@ -4,11 +4,18 @@ slug: reach-parity-with-the-official-notion-js-sdk-on-the-published-rest-api
 title: "Reach Parity with the Official Notion JS SDK on the Published REST API"
 kind: master-plan
 created_at: 2026-09-14T18:46:33Z
+intention: intention_01m2jjvjgpef9tyyp50524jfwq
 provenance:
   created_by:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:33Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T13:07:33Z
+      mode: "implement"
+      note: "Linked intention; started EP-1"
 ---
 
 # Reach Parity with the Official Notion JS SDK on the Published REST API
@@ -85,7 +92,7 @@ Prior plans in this repository that give useful background (all checked in, all 
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 1 | Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK | docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md | None | None | Not Started |
+| 1 | Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK | docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md | None | None | In Progress |
 | 2 | Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth | docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md | None | None | Not Started |
 | 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | Not Started |
 | 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | Not Started |

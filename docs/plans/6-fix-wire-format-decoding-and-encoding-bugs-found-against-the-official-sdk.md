@@ -4,12 +4,19 @@ slug: fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk
 title: "Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK"
 kind: exec-plan
 created_at: 2026-09-14T18:46:51Z
+intention: intention_01m2jjvjgpef9tyyp50524jfwq
 master_plan: "docs/masterplans/1-reach-parity-with-the-official-notion-js-sdk-on-the-published-rest-api.md"
 provenance:
   created_by:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:51Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T13:07:33Z
+      mode: "implement"
+      note: "Implementing EP-1 milestones"
 ---
 
 # Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK
@@ -32,12 +39,12 @@ This is EP-1 of the MasterPlan `docs/masterplans/1-reach-parity-with-the-officia
 
 ## Progress
 
-- [ ] Milestone 1: Create `tasty/WireFormatTests.hs`, wire it into `notion-client.cabal` and `tasty/Main.hs`, and confirm the empty group runs.
-- [ ] Milestone 1: `Color` gains `DefaultBackground` and `UnknownColor Text`, with hand-written instances (`src/Notion/V1/Common.hs`).
-- [ ] Milestone 1: `Parent` gains `AgentParent` and `UnknownParent Value` (`src/Notion/V1/Common.hs`).
-- [ ] Milestone 1: `Icon` decodes and encodes the nested `custom_emoji` object and gains `UnknownIcon Value` (`src/Notion/V1/Common.hs`); update `testCustomEmojiIconRoundTrip` in `tasty/Main.hs`.
-- [ ] Milestone 1: `MentionContent` gains `UnknownMention Value` (`src/Notion/V1/RichText.hs`).
-- [ ] Milestone 1: Ten Milestone-1 tests pass; CHANGELOG entries added.
+- [x] Milestone 1: Create `tasty/WireFormatTests.hs`, wire it into `notion-client.cabal` and `tasty/Main.hs`, and confirm the empty group runs. (2026-09-15)
+- [x] Milestone 1: `Color` gains `DefaultBackground` and `UnknownColor Text`, with hand-written instances (`src/Notion/V1/Common.hs`). (2026-09-15)
+- [x] Milestone 1: `Parent` gains `AgentParent` and `UnknownParent Value` (`src/Notion/V1/Common.hs`). (2026-09-15)
+- [x] Milestone 1: `Icon` decodes and encodes the nested `custom_emoji` object and gains `UnknownIcon Value` (`src/Notion/V1/Common.hs`); update `testCustomEmojiIconRoundTrip` in `tasty/Main.hs`. (2026-09-15)
+- [x] Milestone 1: `MentionContent` gains `UnknownMention Value` (`src/Notion/V1/RichText.hs`). (2026-09-15)
+- [x] Milestone 1: Ten Milestone-1 tests pass; CHANGELOG entries added. (2026-09-15)
 - [ ] Milestone 2: `CodeLanguage` gains the 18 missing languages and `OtherLanguage Text` (`src/Notion/V1/BlockContent.hs`).
 - [ ] Milestone 2: Meeting-notes payload typed (`MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent`, `MeetingRecording`), the `transcription` alias decodes, and `withChildren` no longer touches meeting notes; update `testBlockContentMeetingNotes` in `tasty/Main.hs`.
 - [ ] Milestone 2: `PersonUser.email` becomes optional, and `UserOwner` reads the nested user object and gains `UnknownOwner` (`src/Notion/V1/Users.hs`).
@@ -53,7 +60,7 @@ This is EP-1 of the MasterPlan `docs/masterplans/1-reach-parity-with-the-officia
 
 ## Surprises & Discoveries
 
-(None yet.)
+- Removing the `fail $ "... " <> unpack other` branches from the `Icon` and `MentionContent` decoders made the discriminator's type ambiguous, because `unpack` was what pinned it to `Text`. GHC reported `Ambiguous type variable ‘a0’ arising from a use of ‘.:’`. Fixed with `iconType :: Text <- o .: "type"` (and likewise `mentionType`, `tmType`). Expect the same when replacing other `fail` fallbacks in later milestones.
 
 
 ## Decision Log

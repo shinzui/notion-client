@@ -1,5 +1,19 @@
 # Changelog for notion-client
 
+## Unreleased
+
+### Breaking Changes
+* `Color` gains `DefaultBackground` and an `UnknownColor Text` fallback; its JSON instances are now hand-written
+* `Parent` gains `AgentParent` and an `UnknownParent Value` fallback
+* `Icon` gains an `UnknownIcon Value` fallback, and `CustomEmojiIcon` now encodes as `{"type":"custom_emoji","custom_emoji":{"id":...}}`
+* `MentionContent` gains an `UnknownMention Value` fallback
+
+### Bug Fixes
+* Decode the `default_background` color — previously any rich text or block using it failed the whole response
+* Decode `agent_id` parents on pages and blocks
+* Read and write custom-emoji icons in the nested `custom_emoji` object shape Notion uses; the old top-level `id` shape is still accepted when reading
+* Unknown colors, parent kinds, icon kinds and mention kinds (for example `link_mention` and `custom_emoji` mentions) decode into fallback constructors instead of failing
+
 ## 0.7.0.2 (2026-06-27)
 
 ### Bug Fixes
