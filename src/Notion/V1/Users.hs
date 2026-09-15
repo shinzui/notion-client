@@ -8,6 +8,7 @@ module Notion.V1.Users
     UserType (..),
     PersonUser (..),
     BotUser (..),
+    UserOwner (..),
     WorkspaceLimits (..),
     UserReference (..),
 
@@ -50,7 +51,7 @@ instance FromJSON UserType where
 
 -- | Person user
 newtype PersonUser = PersonUser
-  { email :: Text
+  { email :: Maybe Text
   }
   deriving stock (Generic, Show)
 
@@ -82,16 +83,21 @@ instance FromJSON BotUser where
 data UserOwner
   = UserOwner {type_ :: Text, user :: UserID}
   | WorkspaceOwner {type_ :: Text, workspace :: Bool}
+  | -- | Owner kind not modelled yet; holds the raw owner object.
+    UnknownOwner {type_ :: Text, ownerValue :: Value}
   deriving stock (Generic, Show)
 
 instance FromJSON UserOwner where
   parseJSON = \case
     Object o -> do
-      ownerType <- o .: "type"
+      ownerType :: Text <- o .: "type"
       case ownerType of
-        "user" -> UserOwner ownerType <$> (o .: "user")
+        "user" -> do
+          -- Notion sends the owning user object, not a bare ID.
+          userObj <- o .: "user"
+          UserOwner ownerType <$> userObj .: "id"
         "workspace" -> WorkspaceOwner ownerType <$> (o .: "workspace")
-        _ -> fail $ "Unknown owner type: " <> unpack ownerType
+        _ -> pure (UnknownOwner ownerType (Object o))
     _ -> fail "Expected object for UserOwner"
 
 -- | Simple user reference objects that appear in created_by and last_edited_by fields

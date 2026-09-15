@@ -140,6 +140,8 @@ data NumberFormat
   | ArgentinePeso
   | UruguayanPeso
   | SingaporeDollar
+  | -- | A format this library does not know yet; Notion treats the set as open.
+    OtherNumberFormat Text
   deriving stock (Eq, Show, Generic)
 
 instance FromJSON NumberFormat where
@@ -183,7 +185,7 @@ instance FromJSON NumberFormat where
     "argentine_peso" -> pure ArgentinePeso
     "uruguayan_peso" -> pure UruguayanPeso
     "singapore_dollar" -> pure SingaporeDollar
-    other -> fail $ "Unknown NumberFormat: " <> unpack other
+    other -> pure (OtherNumberFormat other)
 
 instance ToJSON NumberFormat where
   toJSON NumberPlain = Aeson.String "number"
@@ -225,6 +227,7 @@ instance ToJSON NumberFormat where
   toJSON ArgentinePeso = Aeson.String "argentine_peso"
   toJSON UruguayanPeso = Aeson.String "uruguayan_peso"
   toJSON SingaporeDollar = Aeson.String "singapore_dollar"
+  toJSON (OtherNumberFormat t) = Aeson.String t
 
 -- | Rollup aggregation function.
 data RollupFunction

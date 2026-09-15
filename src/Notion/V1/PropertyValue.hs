@@ -225,18 +225,22 @@ data FormulaResult
   | FormulaNumberResult (Maybe Scientific)
   | FormulaBooleanResult (Maybe Bool)
   | FormulaDateResult (Maybe Date)
+  | FormulaUnsupportedResult
+  | -- | A result kind this library does not model yet; holds the raw object.
+    UnknownFormulaResult Value
   deriving stock (Show)
 
 instance FromJSON FormulaResult where
   parseJSON = \case
     Object o -> do
-      formulaType <- o .: "type"
+      formulaType :: Text <- o .: "type"
       case formulaType of
         "string" -> FormulaStringResult <$> o .:? "string"
         "number" -> FormulaNumberResult <$> o .:? "number"
         "boolean" -> FormulaBooleanResult <$> o .:? "boolean"
         "date" -> FormulaDateResult <$> o .:? "date"
-        other -> fail $ "Unknown formula result type: " <> unpack other
+        "unsupported" -> pure FormulaUnsupportedResult
+        _ -> pure (UnknownFormulaResult (Object o))
     _ -> fail "Expected object for FormulaResult"
 
 instance ToJSON FormulaResult where
@@ -245,6 +249,8 @@ instance ToJSON FormulaResult where
     FormulaNumberResult v -> Aeson.object ["type" .= ("number" :: Text), "number" .= v]
     FormulaBooleanResult v -> Aeson.object ["type" .= ("boolean" :: Text), "boolean" .= v]
     FormulaDateResult v -> Aeson.object ["type" .= ("date" :: Text), "date" .= v]
+    FormulaUnsupportedResult -> Aeson.object ["type" .= ("unsupported" :: Text), "unsupported" .= Aeson.object []]
+    UnknownFormulaResult v -> v
 
 -- | The result of a rollup property (read-only).
 data RollupResult
@@ -279,7 +285,7 @@ instance ToJSON RollupResult where
 
 -- | Unique ID property value (read-only).
 data UniqueIdResult = UniqueIdResult
-  { number :: Natural,
+  { number :: Maybe Natural,
     prefix :: Maybe Text
   }
   deriving stock (Generic, Show)

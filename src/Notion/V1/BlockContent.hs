@@ -17,6 +17,10 @@ module Notion.V1.BlockContent
 
     -- * Supporting types
     CodeLanguage (..),
+    MeetingNotesStatus (..),
+    MeetingNotesChildren (..),
+    MeetingCalendarEvent (..),
+    MeetingRecording (..),
     FileSource (..),
     ListFormat (..),
     SyncedFrom (..),
@@ -61,18 +65,26 @@ import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..)
 -- | Programming language for code blocks.
 data CodeLanguage
   = Abap
+  | Abc
+  | Agda
   | Arduino
+  | AsciiArt
+  | Assembly
   | Bash
   | Basic
+  | Bnf
   | C
   | Clojure
   | CoffeeScript
+  | Coq
   | Cpp
   | CSharp
   | Css
   | Dart
+  | Dhall
   | Diff
   | Docker
+  | Ebnf
   | Elixir
   | Elm
   | Erlang
@@ -85,7 +97,9 @@ data CodeLanguage
   | GraphQL
   | Groovy
   | Haskell
+  | Hcl
   | Html
+  | Idris
   | Java
   | JavaScript
   | Json
@@ -95,13 +109,16 @@ data CodeLanguage
   | Less
   | Lisp
   | LiveScript
+  | LlvmIr
   | Lua
   | Makefile
   | Markdown
   | Markup
+  | Mathematica
   | Matlab
   | Mermaid
   | Nix
+  | NotionFormula
   | ObjectiveC
   | OCaml
   | Pascal
@@ -111,8 +128,10 @@ data CodeLanguage
   | PowerShell
   | Prolog
   | Protobuf
+  | PureScript
   | Python
   | R
+  | Racket
   | Reason
   | Ruby
   | Rust
@@ -121,8 +140,11 @@ data CodeLanguage
   | Scheme
   | Scss
   | Shell
+  | Smalltalk
+  | Solidity
   | Sql
   | Swift
+  | Toml
   | TypeScript
   | VbNet
   | Verilog
@@ -132,6 +154,8 @@ data CodeLanguage
   | Xml
   | Yaml
   | JavaCCppCSharp
+  | -- | A language this library does not know yet; holds the raw string.
+    OtherLanguage Text
   deriving stock (Eq, Show, Generic)
 
 instance FromJSON CodeLanguage where
@@ -207,8 +231,26 @@ instance FromJSON CodeLanguage where
     "webassembly" -> pure WebAssembly
     "xml" -> pure Xml
     "yaml" -> pure Yaml
+    "abc" -> pure Abc
+    "agda" -> pure Agda
+    "ascii art" -> pure AsciiArt
+    "assembly" -> pure Assembly
+    "bnf" -> pure Bnf
+    "coq" -> pure Coq
+    "dhall" -> pure Dhall
+    "ebnf" -> pure Ebnf
+    "hcl" -> pure Hcl
+    "idris" -> pure Idris
+    "llvm ir" -> pure LlvmIr
+    "mathematica" -> pure Mathematica
+    "notion formula" -> pure NotionFormula
+    "purescript" -> pure PureScript
+    "racket" -> pure Racket
+    "smalltalk" -> pure Smalltalk
+    "solidity" -> pure Solidity
+    "toml" -> pure Toml
     "java/c/c++/c#" -> pure JavaCCppCSharp
-    other -> fail $ "Unknown CodeLanguage: " <> unpack other
+    other -> pure (OtherLanguage other)
 
 instance ToJSON CodeLanguage where
   toJSON = \case
@@ -283,7 +325,112 @@ instance ToJSON CodeLanguage where
     WebAssembly -> Aeson.String "webassembly"
     Xml -> Aeson.String "xml"
     Yaml -> Aeson.String "yaml"
+    Abc -> Aeson.String "abc"
+    Agda -> Aeson.String "agda"
+    AsciiArt -> Aeson.String "ascii art"
+    Assembly -> Aeson.String "assembly"
+    Bnf -> Aeson.String "bnf"
+    Coq -> Aeson.String "coq"
+    Dhall -> Aeson.String "dhall"
+    Ebnf -> Aeson.String "ebnf"
+    Hcl -> Aeson.String "hcl"
+    Idris -> Aeson.String "idris"
+    LlvmIr -> Aeson.String "llvm ir"
+    Mathematica -> Aeson.String "mathematica"
+    NotionFormula -> Aeson.String "notion formula"
+    PureScript -> Aeson.String "purescript"
+    Racket -> Aeson.String "racket"
+    Smalltalk -> Aeson.String "smalltalk"
+    Solidity -> Aeson.String "solidity"
+    Toml -> Aeson.String "toml"
     JavaCCppCSharp -> Aeson.String "java/c/c++/c#"
+    OtherLanguage t -> Aeson.String t
+
+-- | Processing state of a meeting-notes block.
+data MeetingNotesStatus
+  = TranscriptionNotStarted
+  | TranscriptionPaused
+  | TranscriptionInProgress
+  | TranscriptionFailed
+  | SummaryInProgress
+  | NotesReady
+  | -- | A status this library does not know yet; holds the raw string.
+    UnknownMeetingNotesStatus Text
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON MeetingNotesStatus where
+  parseJSON = Aeson.withText "MeetingNotesStatus" $ \case
+    "transcription_not_started" -> pure TranscriptionNotStarted
+    "transcription_paused" -> pure TranscriptionPaused
+    "transcription_in_progress" -> pure TranscriptionInProgress
+    "transcription_failed" -> pure TranscriptionFailed
+    "summary_in_progress" -> pure SummaryInProgress
+    "notes_ready" -> pure NotesReady
+    other -> pure (UnknownMeetingNotesStatus other)
+
+instance ToJSON MeetingNotesStatus where
+  toJSON = \case
+    TranscriptionNotStarted -> Aeson.String "transcription_not_started"
+    TranscriptionPaused -> Aeson.String "transcription_paused"
+    TranscriptionInProgress -> Aeson.String "transcription_in_progress"
+    TranscriptionFailed -> Aeson.String "transcription_failed"
+    SummaryInProgress -> Aeson.String "summary_in_progress"
+    NotesReady -> Aeson.String "notes_ready"
+    UnknownMeetingNotesStatus t -> Aeson.String t
+
+-- | IDs of the child blocks Notion creates under a meeting-notes block.
+data MeetingNotesChildren = MeetingNotesChildren
+  { summaryBlockId :: Maybe UUID,
+    notesBlockId :: Maybe UUID,
+    transcriptBlockId :: Maybe UUID
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON MeetingNotesChildren where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON MeetingNotesChildren where
+  toJSON = genericToJSON aesonOptions
+
+-- | Calendar event linked to a meeting; times are ISO 8601 strings as sent.
+data MeetingCalendarEvent = MeetingCalendarEvent
+  { calendarStartTime :: Text,
+    calendarEndTime :: Text,
+    calendarAttendees :: Maybe (Vector UUID)
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON MeetingCalendarEvent where
+  parseJSON = Aeson.withObject "MeetingCalendarEvent" $ \o -> do
+    calendarStartTime <- o .: "start_time"
+    calendarEndTime <- o .: "end_time"
+    calendarAttendees <- o .:? "attendees"
+    pure MeetingCalendarEvent {..}
+
+instance ToJSON MeetingCalendarEvent where
+  toJSON MeetingCalendarEvent {..} =
+    object $
+      ["start_time" .= calendarStartTime, "end_time" .= calendarEndTime]
+        <> maybe [] (\as -> ["attendees" .= as]) calendarAttendees
+
+-- | Recording window of a meeting; times are ISO 8601 strings as sent.
+data MeetingRecording = MeetingRecording
+  { recordingStartTime :: Maybe Text,
+    recordingEndTime :: Maybe Text
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON MeetingRecording where
+  parseJSON = Aeson.withObject "MeetingRecording" $ \o -> do
+    recordingStartTime <- o .:? "start_time"
+    recordingEndTime <- o .:? "end_time"
+    pure MeetingRecording {..}
+
+instance ToJSON MeetingRecording where
+  toJSON MeetingRecording {..} =
+    object $
+      maybe [] (\t -> ["start_time" .= t]) recordingStartTime
+        <> maybe [] (\t -> ["end_time" .= t]) recordingEndTime
 
 -- | File source for media blocks (image, video, audio, file, pdf).
 --
@@ -577,13 +724,14 @@ data BlockContent
     TabBlock
       { children :: Vector BlockContent
       }
-  | -- | Meeting notes block (read-only).
+  | -- | Meeting notes block (read-only). Also decoded from the deprecated
+    -- @transcription@ block type.
     MeetingNotesBlock
-      { meetingTitle :: Text,
-        meetingStatus :: Maybe Text,
-        calendarEvent :: Maybe Value,
-        recording :: Maybe Value,
-        children :: Vector BlockContent
+      { meetingTitle :: Maybe (Vector RichText),
+        meetingStatus :: Maybe MeetingNotesStatus,
+        calendarEvent :: Maybe MeetingCalendarEvent,
+        recording :: Maybe MeetingRecording,
+        meetingChildren :: Maybe MeetingNotesChildren
       }
   | -- | Template block (deprecated, but still returned by the API).
     TemplateBlock
@@ -750,11 +898,11 @@ blockContentFields = \case
   MeetingNotesBlock {..} ->
     ( "meeting_notes",
       object $
-        ["title" .= meetingTitle]
+        maybe [] (\t -> ["title" .= t]) meetingTitle
           <> maybe [] (\s -> ["status" .= s]) meetingStatus
           <> maybe [] (\ce -> ["calendar_event" .= ce]) calendarEvent
           <> maybe [] (\r -> ["recording" .= r]) recording
-          <> childrenPairs children
+          <> maybe [] (\c -> ["children" .= c]) meetingChildren
     )
   TemplateBlock {..} ->
     ( "template",
@@ -915,13 +1063,8 @@ parseBlockContent typeName val = case typeName of
   "tab" -> parseObj $ \o -> do
     children <- fromMaybe Vector.empty <$> o .:? "children"
     pure TabBlock {..}
-  "meeting_notes" -> parseObj $ \o -> do
-    meetingTitle <- o .: "title"
-    meetingStatus <- o .:? "status"
-    calendarEvent <- o .:? "calendar_event"
-    recording <- o .:? "recording"
-    children <- fromMaybe Vector.empty <$> o .:? "children"
-    pure MeetingNotesBlock {..}
+  "meeting_notes" -> parseMeetingNotes
+  "transcription" -> parseMeetingNotes
   "template" -> parseObj $ \o -> do
     richText <- o .: "rich_text"
     children <- fromMaybe Vector.empty <$> o .:? "children"
@@ -929,6 +1072,13 @@ parseBlockContent typeName val = case typeName of
   "unsupported" -> pure UnsupportedBlock
   _ -> pure (UnknownBlock typeName val)
   where
+    parseMeetingNotes = parseObj $ \o -> do
+      meetingTitle <- o .:? "title"
+      meetingStatus <- o .:? "status"
+      calendarEvent <- o .:? "calendar_event"
+      recording <- o .:? "recording"
+      meetingChildren <- o .:? "children"
+      pure MeetingNotesBlock {..}
     parseObj :: (Aeson.Object -> Parser BlockContent) -> Parser BlockContent
     parseObj f = case val of
       Object o -> f o
@@ -1073,6 +1223,5 @@ withChildren block cs = case block of
   SyncedBlockContent {} -> block {children = cs}
   Heading4Block {} -> block {children = cs}
   TabBlock {} -> block {children = cs}
-  MeetingNotesBlock {} -> block {children = cs}
   TemplateBlock {} -> block {children = cs}
   _ -> block

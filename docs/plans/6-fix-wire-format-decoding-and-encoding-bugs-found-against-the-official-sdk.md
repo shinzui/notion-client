@@ -45,12 +45,12 @@ This is EP-1 of the MasterPlan `docs/masterplans/1-reach-parity-with-the-officia
 - [x] Milestone 1: `Icon` decodes and encodes the nested `custom_emoji` object and gains `UnknownIcon Value` (`src/Notion/V1/Common.hs`); update `testCustomEmojiIconRoundTrip` in `tasty/Main.hs`. (2026-09-15)
 - [x] Milestone 1: `MentionContent` gains `UnknownMention Value` (`src/Notion/V1/RichText.hs`). (2026-09-15)
 - [x] Milestone 1: Ten Milestone-1 tests pass; CHANGELOG entries added. (2026-09-15)
-- [ ] Milestone 2: `CodeLanguage` gains the 18 missing languages and `OtherLanguage Text` (`src/Notion/V1/BlockContent.hs`).
-- [ ] Milestone 2: Meeting-notes payload typed (`MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent`, `MeetingRecording`), the `transcription` alias decodes, and `withChildren` no longer touches meeting notes; update `testBlockContentMeetingNotes` in `tasty/Main.hs`.
-- [ ] Milestone 2: `PersonUser.email` becomes optional, and `UserOwner` reads the nested user object and gains `UnknownOwner` (`src/Notion/V1/Users.hs`).
-- [ ] Milestone 2: `NumberFormat` gains `OtherNumberFormat Text` (`src/Notion/V1/Properties.hs`).
-- [ ] Milestone 2: `UniqueIdResult.number` becomes `Maybe Natural`, and `FormulaResult` gains `FormulaUnsupportedResult` and `UnknownFormulaResult Value` (`src/Notion/V1/PropertyValue.hs`).
-- [ ] Milestone 2: Ten Milestone-2 tests pass; CHANGELOG entries added.
+- [x] Milestone 2: `CodeLanguage` gains the 18 missing languages and `OtherLanguage Text` (`src/Notion/V1/BlockContent.hs`). (2026-09-15)
+- [x] Milestone 2: Meeting-notes payload typed (`MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent`, `MeetingRecording`), the `transcription` alias decodes, and `withChildren` no longer touches meeting notes; update `testBlockContentMeetingNotes` in `tasty/Main.hs`. (2026-09-15)
+- [x] Milestone 2: `PersonUser.email` becomes optional, and `UserOwner` reads the nested user object and gains `UnknownOwner` (`src/Notion/V1/Users.hs`). (2026-09-15)
+- [x] Milestone 2: `NumberFormat` gains `OtherNumberFormat Text` (`src/Notion/V1/Properties.hs`). (2026-09-15)
+- [x] Milestone 2: `UniqueIdResult.number` becomes `Maybe Natural`, and `FormulaResult` gains `FormulaUnsupportedResult` and `UnknownFormulaResult Value` (`src/Notion/V1/PropertyValue.hs`). (2026-09-15)
+- [x] Milestone 2: Ten Milestone-2 tests pass; CHANGELOG entries added. (2026-09-15)
 - [ ] Milestone 3: `filter_properties` sent as a repeated query parameter for `queryDataSource` and `queryDatabase` (`DataSources.hs`, `Databases.hs`, `V1.hs`), with `Methods` signatures unchanged.
 - [ ] Milestone 3: New `PagePosition` type used by `CreatePage.position` (`src/Notion/V1/Pages.hs`).
 - [ ] Milestone 3: Four Milestone-3 tests pass; `cabal build all` builds `notion-client-effectful` unchanged; CHANGELOG entries added.

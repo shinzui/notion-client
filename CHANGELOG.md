@@ -7,12 +7,28 @@
 * `Parent` gains `AgentParent` and an `UnknownParent Value` fallback
 * `Icon` gains an `UnknownIcon Value` fallback, and `CustomEmojiIcon` now encodes as `{"type":"custom_emoji","custom_emoji":{"id":...}}`
 * `MentionContent` gains an `UnknownMention Value` fallback
+* `PersonUser.email` changes from `Text` to `Maybe Text`
+* `UniqueIdResult.number` changes from `Natural` to `Maybe Natural`
+* `MeetingNotesBlock` fields are now typed: `meetingTitle :: Maybe (Vector RichText)`, `meetingStatus :: Maybe MeetingNotesStatus`, `calendarEvent :: Maybe MeetingCalendarEvent`, `recording :: Maybe MeetingRecording`, and the `children` field is replaced by `meetingChildren :: Maybe MeetingNotesChildren`; `withChildren` leaves meeting-notes blocks unchanged
+* `CodeLanguage` gains 18 languages (`Abc`, `Agda`, `AsciiArt`, `Assembly`, `Bnf`, `Coq`, `Dhall`, `Ebnf`, `Hcl`, `Idris`, `LlvmIr`, `Mathematica`, `NotionFormula`, `PureScript`, `Racket`, `Smalltalk`, `Solidity`, `Toml`) and an `OtherLanguage Text` fallback
+* `UserOwner` gains an `UnknownOwner` fallback
+* `NumberFormat` gains an `OtherNumberFormat Text` fallback
+* `FormulaResult` gains `FormulaUnsupportedResult` and an `UnknownFormulaResult Value` fallback
+
+### New Features
+* Export `UserOwner (..)` from `Notion.V1.Users`
+* New meeting-notes payload types `MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent` and `MeetingRecording` in `Notion.V1.BlockContent`
 
 ### Bug Fixes
 * Decode the `default_background` color — previously any rich text or block using it failed the whole response
 * Decode `agent_id` parents on pages and blocks
 * Read and write custom-emoji icons in the nested `custom_emoji` object shape Notion uses; the old top-level `id` shape is still accepted when reading
 * Unknown colors, parent kinds, icon kinds and mention kinds (for example `link_mention` and `custom_emoji` mentions) decode into fallback constructors instead of failing
+* Decode code blocks in every language Notion supports (for example `toml`), with unknown languages kept as `OtherLanguage`
+* Decode real meeting-notes blocks (rich-text `title`, object `children`) and the deprecated `transcription` block type
+* Decode person users without a visible email, and bots owned by a user (Notion sends the user object, not a bare ID)
+* Decode data sources with number formats newer than this library
+* Decode unique-ID properties whose `number` is null, and formula properties with an `unsupported` result
 
 ## 0.7.0.2 (2026-06-27)
 

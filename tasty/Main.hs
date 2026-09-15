@@ -1550,12 +1550,17 @@ testBlockContentMeetingNotes :: Assertion
 testBlockContentMeetingNotes = do
   let json =
         "{\"type\":\"meeting_notes\",\"meeting_notes\":"
-          <> "{\"title\":\"Weekly Sync\",\"status\":\"scheduled\","
+          <> "{\"title\":[{\"type\":\"text\",\"text\":{\"content\":\"Weekly Sync\",\"link\":null},"
+          <> "\"annotations\":{\"bold\":false,\"italic\":false,\"strikethrough\":false,\"underline\":false,\"code\":false,\"color\":\"default\"},"
+          <> "\"plain_text\":\"Weekly Sync\",\"href\":null}],\"status\":\"scheduled\","
           <> "\"calendar_event\":null,\"recording\":null}}"
   case Aeson.eitherDecode json of
     Left err -> assertFailure $ "Failed to parse meeting_notes: " <> err
     Right (MeetingNotesBlock {meetingTitle}) ->
-      assertEqual "meetingTitle" "Weekly Sync" meetingTitle
+      assertEqual
+        "meetingTitle"
+        (Just (Vector.singleton "Weekly Sync"))
+        (fmap (Vector.map (\RichText {plainText} -> plainText)) meetingTitle)
     Right other -> assertFailure $ "Expected MeetingNotesBlock, got: " <> show other
 
 testBlockContentTemplate :: Assertion
