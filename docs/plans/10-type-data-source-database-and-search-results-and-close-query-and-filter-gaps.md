@@ -58,8 +58,8 @@ The proof is a new `tasty` test module, `tasty/DataSourceSearchTests.hs`. It dec
 - [x] (2026-09-15) Milestone 2: `SearchSort` and `SearchFilter` sum types; `search` returns `ListOf PageOrDataSource`; `SearchResult`/`parseSearchResults` removed; call sites and effectful package updated; M2 tests pass.
 - [x] (2026-09-15) Milestone 3: property schema `schemaDescription`, `SelectOption.description`, relation `relationDatabaseId`, optional dual-property fields, `LocationSchema`, `LastVisitedTimeSchema`, `UnknownSchema`, status without groups, empty id omitted.
 - [x] (2026-09-15) Milestone 3: `PropertyUpdate`/`OptionUpdate`/`OptionTarget` for `UpdateDataSource`; call sites updated; M3 tests pass.
-- [ ] Milestone 4: new filter constructors (verification `does_not_equal`, array values, `unique_id` empty checks with `Scientific`, `RelativeDate`), unknown fallbacks.
-- [ ] Milestone 4: `FromJSON` for `Filter` and `Sort` added (or extended, if EP-4 added them first); M4 tests pass.
+- [x] (2026-09-15) Milestone 4: new filter constructors (verification `does_not_equal`, array values, `unique_id` empty checks with `Scientific`, `RelativeDate`), unknown fallbacks.
+- [x] (2026-09-15) Milestone 4: `FromJSON` for `Filter` and `Sort` added (or extended, if EP-4 added them first); M4 tests pass.
 - [ ] Milestone 5: `src/Notion/V1/DataSourceRows.hs` with `createdTimeLowerBound`, `foldAllDataSourceRows`, `iterateAllDataSourceRows`, `collectAllDataSourceRows`; M5 tests pass.
 - [ ] CHANGELOG `## Unreleased` entries written; `cabal build all` and `cabal test` green; MasterPlan Progress items for EP-5 checked.
 

@@ -4,15 +4,18 @@ module DataSourceSearchTests (tests) where
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy.Char8 qualified as L8
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map qualified as Map
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1.Common (Parent (..))
 import Notion.V1.DataSources
 import Notion.V1.Databases (CreateDatabase (..), CreateDatabaseType (..), DatabaseObject (..), DatabaseType (..), InitialDataSource (..), PartialDatabaseObject (..))
+import Notion.V1.Filter
 import Notion.V1.ListOf (IncompleteReason (..), ListOf (..), RequestStatus (..), RequestStatusType (..))
 import Notion.V1.Properties
-import Notion.V1.Search (SearchFilter (..), SearchObjectType (..), SearchSort (..), SearchSortDirection (..))
+import Notion.V1.Search (SearchFilter (..), SearchObjectType (..), SearchSort (..), SearchSortDirection)
+import Notion.V1.Search qualified as Search
 import Test.Tasty
 import Test.Tasty.HUnit
 import Prelude hiding (id)
@@ -23,7 +26,8 @@ tests =
     "EP-5 Data sources, databases, search, filters"
     [ milestone1Tests,
       milestone2Tests,
-      milestone3Tests
+      milestone3Tests,
+      milestone4Tests
     ]
 
 -- ---------------------------------------------------------------------
@@ -208,7 +212,7 @@ milestone2Tests =
     [ testCase "SearchSort relevance encodes" $
         Aeson.toJSON SearchByRelevance @?= Aeson.object ["property" Aeson..= ("relevance" :: Text.Text)],
       testCase "SearchSort last_edited_time encodes" $
-        Aeson.toJSON (SearchByLastEditedTime Descending)
+        Aeson.toJSON (SearchByLastEditedTime Search.Descending)
           @?= Aeson.object ["timestamp" Aeson..= ("last_edited_time" :: Text.Text), "direction" Aeson..= ("descending" :: Text.Text)],
       testCase "SearchFilter object filter with in_trash" $
         Aeson.toJSON (SearchObjectFilter SearchPage (Just True))
@@ -325,4 +329,105 @@ milestone3Tests =
                                ]
                   ]
             ]
+    ]
+
+-- ---------------------------------------------------------------------
+-- Milestone 4
+-- ---------------------------------------------------------------------
+
+jsonValue :: L8.ByteString -> Aeson.Value
+jsonValue bs = either error (\v -> v) (Aeson.eitherDecode bs)
+
+-- | Filters covering every condition constructor, including the EP-5 additions.
+everyFilter :: [Filter]
+everyFilter =
+  [ And
+      [ PropertyFilter "Name" (TitleCondition (TextContains "Tanaka")),
+        Or
+          [ PropertyFilter "Notes" (RichTextCondition (TextDoesNotContain "draft")),
+            PropertyFilter "Phone" (PhoneNumberCondition TextIsNotEmpty)
+          ]
+      ],
+    TimestampFilter FilterCreatedTime (DateOnOrAfter "2024-01-04T00:00:00Z"),
+    TimestampFilter FilterLastEditedTime DatePastWeek,
+    PropertyFilter "Estimate" (NumberCondition (NumLessThanOrEqualTo 8)),
+    PropertyFilter "Done" (CheckboxCondition (CheckboxEquals True)),
+    PropertyFilter "Priority" (SelectCondition (SelectEquals "High")),
+    PropertyFilter "Priority" (SelectCondition (SelectEqualsAny ("High" :| ["Medium"]))),
+    PropertyFilter "Priority" (SelectCondition (SelectDoesNotEqualAny ("Low" :| []))),
+    PropertyFilter "Priority" (SelectCondition SelectIsEmpty),
+    PropertyFilter "Tags" (MultiSelectCondition (MultiSelectContains "urgent")),
+    PropertyFilter "Tags" (MultiSelectCondition (MultiSelectContainsAny ("urgent" :| ["home"]))),
+    PropertyFilter "Tags" (MultiSelectCondition (MultiSelectDoesNotContainAny ("work" :| []))),
+    PropertyFilter "Stage" (StatusCondition (StatusDoesNotEqual "Done")),
+    PropertyFilter "Stage" (StatusCondition (StatusEqualsAny ("Todo" :| ["Doing"]))),
+    PropertyFilter "Stage" (StatusCondition (StatusDoesNotEqualAny ("Done" :| ["Archived"]))),
+    PropertyFilter "Due" (DateCondition (DateBefore (relativeDate Tomorrow))),
+    PropertyFilter "Owner" (PeopleCondition (PeopleContains "user-1")),
+    PropertyFilter "Attachments" (FilesCondition FilesIsNotEmpty),
+    PropertyFilter "Project" (RelationCondition (RelationContains "page-1")),
+    PropertyFilter "Ticket" (UniqueIdCondition (UniqueIdGreaterThan 2.5)),
+    PropertyFilter "Ticket" (UniqueIdCondition UniqueIdIsEmpty),
+    PropertyFilter "Ticket" (UniqueIdCondition UniqueIdIsNotEmpty),
+    PropertyFilter "Reviewed" (VerificationCondition (VerificationStatus VerificationVerified)),
+    PropertyFilter "Reviewed" (VerificationCondition (VerificationDoesNotEqual VerificationExpired)),
+    PropertyFilter "Score" (FormulaCondition (FormulaString (TextStartsWith "A"))),
+    PropertyFilter "Score" (FormulaCondition (FormulaCheckbox (CheckboxDoesNotEqual False))),
+    PropertyFilter "Score" (FormulaCondition (FormulaDate DateThisMonth)),
+    PropertyFilter "Tasks" (RollupCondition (RollupAny (SelectCondition (SelectEquals "Done")))),
+    PropertyFilter "Tasks" (RollupCondition (RollupEvery (StatusCondition StatusIsNotEmpty))),
+    PropertyFilter "Tasks" (RollupCondition (RollupNone (NumberCondition (NumEquals 0)))),
+    PropertyFilter "Tasks" (RollupCondition (RollupDate DateIsEmpty)),
+    PropertyFilter "Created" (CreatedTimeCondition DateNextYear),
+    PropertyFilter "Author" (CreatedByCondition (PeopleDoesNotContain "user-2")),
+    PropertyFilter "Edited" (LastEditedTimeCondition (DateEquals "2024-01-01")),
+    PropertyFilter "Editor" (LastEditedByCondition PeopleIsNotEmpty),
+    PropertyFilter "Site" (UrlCondition (TextEquals "https://example.jp")),
+    PropertyFilter "Email" (EmailCondition (TextEndsWith "@example.jp"))
+  ]
+
+milestone4Tests :: TestTree
+milestone4Tests =
+  testGroup
+    "Milestone 4"
+    [ testCase "Verification does_not_equal encodes" $
+        Aeson.toJSON (PropertyFilter "Reviewed" (VerificationCondition (VerificationDoesNotEqual VerificationExpired)))
+          @?= jsonValue "{\"property\":\"Reviewed\",\"verification\":{\"does_not_equal\":\"expired\"}}",
+      testCase "Select equals array encodes" $
+        Aeson.toJSON (PropertyFilter "Priority" (SelectCondition (SelectEqualsAny ("High" :| ["Medium"]))))
+          @?= jsonValue "{\"property\":\"Priority\",\"select\":{\"equals\":[\"High\",\"Medium\"]}}",
+      testCase "Status and multi_select array variants encode" $ do
+        Aeson.toJSON (PropertyFilter "Stage" (StatusCondition (StatusDoesNotEqualAny ("Done" :| ["Archived"]))))
+          @?= jsonValue "{\"property\":\"Stage\",\"status\":{\"does_not_equal\":[\"Done\",\"Archived\"]}}"
+        Aeson.toJSON (PropertyFilter "Tags" (MultiSelectCondition (MultiSelectContainsAny ("urgent" :| ["home"]))))
+          @?= jsonValue "{\"property\":\"Tags\",\"multi_select\":{\"contains\":[\"urgent\",\"home\"]}}",
+      testCase "unique_id is_empty and fractional numbers encode" $ do
+        Aeson.toJSON (PropertyFilter "Ticket" (UniqueIdCondition UniqueIdIsEmpty))
+          @?= jsonValue "{\"property\":\"Ticket\",\"unique_id\":{\"is_empty\":true}}"
+        Aeson.toJSON (PropertyFilter "Ticket" (UniqueIdCondition (UniqueIdGreaterThan 2.5)))
+          @?= jsonValue "{\"property\":\"Ticket\",\"unique_id\":{\"greater_than\":2.5}}",
+      testCase "relativeDate renders keywords" $ do
+        Aeson.toJSON (PropertyFilter "Due" (DateCondition (DateOnOrAfter (relativeDate OneWeekAgo))))
+          @?= jsonValue "{\"property\":\"Due\",\"date\":{\"on_or_after\":\"one_week_ago\"}}"
+        map relativeDate [minBound .. maxBound]
+          @?= ["today", "tomorrow", "yesterday", "one_week_ago", "one_week_from_now", "one_month_ago", "one_month_from_now"],
+      testCase "Filter FromJSON round-trips every constructor" $
+        mapM_ (\f -> Aeson.fromJSON (Aeson.toJSON f) @?= Aeson.Success f) everyFilter,
+      testCase "Filter FromJSON accepts optional type discriminator" $
+        Aeson.fromJSON (jsonValue "{\"property\":\"Name\",\"type\":\"title\",\"title\":{\"contains\":\"Tanaka\"}}")
+          @?= Aeson.Success (PropertyFilter "Name" (TitleCondition (TextContains "Tanaka"))),
+      testCase "Unknown filter shapes fall back" $ do
+        Aeson.fromJSON (jsonValue "{\"property\":\"Mood\",\"sentiment\":{\"equals\":\"happy\"}}")
+          @?= Aeson.Success (PropertyFilter "Mood" (UnknownCondition "sentiment" (jsonValue "{\"equals\":\"happy\"}")))
+        Aeson.fromJSON (jsonValue "{\"property\":\"Priority\",\"select\":{\"resembles\":\"High\"}}")
+          @?= Aeson.Success (PropertyFilter "Priority" (UnknownCondition "select" (jsonValue "{\"resembles\":\"High\"}")))
+        let weird = jsonValue "{\"weird\":1}"
+        Aeson.fromJSON weird @?= Aeson.Success (UnknownFilter weird)
+        Aeson.toJSON (UnknownFilter weird) @?= weird,
+      testCase "Sort FromJSON round-trips and falls back" $ do
+        mapM_
+          (\srt -> Aeson.fromJSON (Aeson.toJSON srt) @?= Aeson.Success srt)
+          [PropertySort "Due" Ascending, TimestampSort FilterCreatedTime Descending]
+        let sideways = jsonValue "{\"property\":\"X\",\"direction\":\"sideways\"}"
+        Aeson.fromJSON sideways @?= Aeson.Success (UnknownSort sideways)
     ]

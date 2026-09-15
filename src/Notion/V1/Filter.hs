@@ -31,8 +31,13 @@ module Notion.V1.Filter
     StatusCondition (..),
     UniqueIdCondition (..),
     VerificationCondition (..),
+    VerificationState (..),
     FormulaCondition (..),
     RollupCondition (..),
+
+    -- * Relative dates
+    RelativeDate (..),
+    relativeDate,
 
     -- * Sorts
     Sort (..),
@@ -40,9 +45,11 @@ module Notion.V1.Filter
   )
 where
 
-import Data.Aeson ((.:), (.=))
+import Control.Applicative ((<|>))
+import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Parser)
 import Data.Foldable (asum)
 import Data.Scientific (Scientific)
@@ -73,9 +80,12 @@ data Filter
   | Or [Filter]
   | PropertyFilter Text PropertyCondition
   | TimestampFilter TimestampType DateCondition
+  | -- | A filter shape this library does not model; the raw JSON is kept and re-sent unchanged.
+    UnknownFilter Value
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON Filter where
+  toJSON (UnknownFilter v) = v
   toJSON (And filters) = Aeson.object ["and" .= filters]
   toJSON (Or filters) = Aeson.object ["or" .= filters]
   toJSON (PropertyFilter propName condition) =
@@ -88,19 +98,22 @@ instance ToJSON Filter where
             Key.fromText tsKey .= dateConditionToValue condition
           ]
 
--- | Inverts the 'ToJSON' encoding. Fails on shapes the DSL cannot express.
+-- | Inverts the 'ToJSON' encoding. Shapes the DSL cannot express decode to 'UnknownFilter'.
 instance FromJSON Filter where
-  parseJSON = Aeson.withObject "Filter" $ \o ->
-    asum
-      [ And <$> o .: "and",
-        Or <$> o .: "or",
-        do
-          ts <- o .: "timestamp"
-          tsType <- parseTimestampType ts
-          cond <- o .: Key.fromText ts >>= parseDateCondition
-          pure (TimestampFilter tsType cond),
-        PropertyFilter <$> o .: "property" <*> parsePropertyCondition o
-      ]
+  parseJSON v = case v of
+    Object o ->
+      asum
+        [ And <$> o .: "and",
+          Or <$> o .: "or",
+          do
+            ts <- o .: "timestamp"
+            tsType <- parseTimestampType ts
+            cond <- o .: Key.fromText ts >>= parseDateCondition
+            pure (TimestampFilter tsType cond),
+          PropertyFilter <$> o .: "property" <*> parsePropertyCondition o,
+          pure (UnknownFilter v)
+        ]
+    _ -> pure (UnknownFilter v)
 
 -- | Property-type-specific filter condition.
 --
@@ -129,6 +142,8 @@ data PropertyCondition
   | PhoneNumberCondition TextCondition
   | UrlCondition TextCondition
   | EmailCondition TextCondition
+  | -- | A condition this library does not model: the condition key and its raw value.
+    UnknownCondition Text Value
   deriving stock (Eq, Show, Generic)
 
 -- | Convert a PropertyCondition to key-value pairs for inclusion in a JSON object.
@@ -156,6 +171,7 @@ propertyConditionToObject = \case
   PhoneNumberCondition c -> [("phone_number", textConditionToValue c)]
   UrlCondition c -> [("url", textConditionToValue c)]
   EmailCondition c -> [("email", textConditionToValue c)]
+  UnknownCondition k v -> [(Key.fromText k, v)]
 
 -- | Encodes a condition as the object Notion uses for quick filters,
 -- e.g. @{"select":{"equals":"High"}}@.
@@ -166,32 +182,56 @@ instance FromJSON PropertyCondition where
   parseJSON = Aeson.withObject "PropertyCondition" parsePropertyCondition
 
 -- | Finds the property-type key (title, rich_text, number, …) and parses its condition.
+--
+-- The optional @type@ discriminator wins when present. Otherwise the first known key is used,
+-- and failing that, the only key other than @property@ and @type@. A known key whose condition
+-- does not parse, or an unknown key, decodes to 'UnknownCondition'. An object with no candidate
+-- key fails.
 parsePropertyCondition :: Aeson.Object -> Parser PropertyCondition
-parsePropertyCondition o =
-  asum
-    [ TitleCondition <$> (o .: "title" >>= parseTextCondition),
-      RichTextCondition <$> (o .: "rich_text" >>= parseTextCondition),
-      NumberCondition <$> (o .: "number" >>= parseNumberCondition),
-      CheckboxCondition <$> (o .: "checkbox" >>= parseCheckboxCondition),
-      SelectCondition <$> (o .: "select" >>= parseSelectCondition),
-      MultiSelectCondition <$> (o .: "multi_select" >>= parseMultiSelectCondition),
-      DateCondition <$> (o .: "date" >>= parseDateCondition),
-      PeopleCondition <$> (o .: "people" >>= parsePeopleCondition),
-      FilesCondition <$> (o .: "files" >>= parseFilesCondition),
-      RelationCondition <$> (o .: "relation" >>= parseRelationCondition),
-      StatusCondition <$> (o .: "status" >>= parseStatusCondition),
-      UniqueIdCondition <$> (o .: "unique_id" >>= parseUniqueIdCondition),
-      VerificationCondition <$> (o .: "verification" >>= parseVerificationCondition),
-      FormulaCondition <$> (o .: "formula" >>= parseFormulaCondition),
-      RollupCondition <$> (o .: "rollup" >>= parseRollupCondition),
-      CreatedTimeCondition <$> (o .: "created_time" >>= parseDateCondition),
-      CreatedByCondition <$> (o .: "created_by" >>= parsePeopleCondition),
-      LastEditedTimeCondition <$> (o .: "last_edited_time" >>= parseDateCondition),
-      LastEditedByCondition <$> (o .: "last_edited_by" >>= parsePeopleCondition),
-      PhoneNumberCondition <$> (o .: "phone_number" >>= parseTextCondition),
-      UrlCondition <$> (o .: "url" >>= parseTextCondition),
-      EmailCondition <$> (o .: "email" >>= parseTextCondition)
-    ]
+parsePropertyCondition o = do
+  discriminator <- o .:? "type"
+  let known = filter (\k -> KeyMap.member (Key.fromText k) o) (map fst conditionParsers)
+      others = filter (`notElem` ["property", "type"]) (map Key.toText (KeyMap.keys o))
+      chosen = case discriminator of
+        Just k | KeyMap.member (Key.fromText k) o -> Just k
+        _ -> case (known, others) of
+          (k : _, _) -> Just k
+          ([], [k]) -> Just k
+          _ -> Nothing
+  case chosen of
+    Nothing -> fail "no filter condition key found"
+    Just k -> do
+      raw <- o .: Key.fromText k
+      case lookup k conditionParsers of
+        Just parser -> parser raw <|> pure (UnknownCondition k raw)
+        Nothing -> pure (UnknownCondition k raw)
+
+-- | Condition key and its parser, in the order keys are tried.
+conditionParsers :: [(Text, Value -> Parser PropertyCondition)]
+conditionParsers =
+  [ ("title", fmap TitleCondition . parseTextCondition),
+    ("rich_text", fmap RichTextCondition . parseTextCondition),
+    ("number", fmap NumberCondition . parseNumberCondition),
+    ("checkbox", fmap CheckboxCondition . parseCheckboxCondition),
+    ("select", fmap SelectCondition . parseSelectCondition),
+    ("multi_select", fmap MultiSelectCondition . parseMultiSelectCondition),
+    ("status", fmap StatusCondition . parseStatusCondition),
+    ("date", fmap DateCondition . parseDateCondition),
+    ("people", fmap PeopleCondition . parsePeopleCondition),
+    ("files", fmap FilesCondition . parseFilesCondition),
+    ("url", fmap UrlCondition . parseTextCondition),
+    ("email", fmap EmailCondition . parseTextCondition),
+    ("phone_number", fmap PhoneNumberCondition . parseTextCondition),
+    ("relation", fmap RelationCondition . parseRelationCondition),
+    ("created_by", fmap CreatedByCondition . parsePeopleCondition),
+    ("created_time", fmap CreatedTimeCondition . parseDateCondition),
+    ("last_edited_by", fmap LastEditedByCondition . parsePeopleCondition),
+    ("last_edited_time", fmap LastEditedTimeCondition . parseDateCondition),
+    ("formula", fmap FormulaCondition . parseFormulaCondition),
+    ("unique_id", fmap UniqueIdCondition . parseUniqueIdCondition),
+    ("rollup", fmap RollupCondition . parseRollupCondition),
+    ("verification", fmap VerificationCondition . parseVerificationCondition)
+  ]
 
 -- | Requires the flag key to hold JSON @true@ (Notion encodes @is_empty@ as @{"is_empty": true}@).
 flagKey :: Aeson.Object -> Aeson.Key -> Parser ()
@@ -297,6 +337,10 @@ parseCheckboxCondition = Aeson.withObject "CheckboxCondition" $ \c ->
 data SelectCondition
   = SelectEquals Text
   | SelectDoesNotEqual Text
+  | -- | @{"equals": [..]}@: any of the options.
+    SelectEqualsAny (NonEmpty Text)
+  | -- | @{"does_not_equal": [..]}@: none of the options.
+    SelectDoesNotEqualAny (NonEmpty Text)
   | SelectIsEmpty
   | SelectIsNotEmpty
   deriving stock (Eq, Show, Generic)
@@ -305,6 +349,8 @@ selectConditionToValue :: SelectCondition -> Aeson.Value
 selectConditionToValue = \case
   SelectEquals v -> Aeson.object ["equals" .= v]
   SelectDoesNotEqual v -> Aeson.object ["does_not_equal" .= v]
+  SelectEqualsAny vs -> Aeson.object ["equals" .= vs]
+  SelectDoesNotEqualAny vs -> Aeson.object ["does_not_equal" .= vs]
   SelectIsEmpty -> Aeson.object ["is_empty" .= True]
   SelectIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
 
@@ -313,6 +359,8 @@ parseSelectCondition = Aeson.withObject "SelectCondition" $ \c ->
   asum
     [ SelectEquals <$> c .: "equals",
       SelectDoesNotEqual <$> c .: "does_not_equal",
+      SelectEqualsAny <$> c .: "equals",
+      SelectDoesNotEqualAny <$> c .: "does_not_equal",
       SelectIsEmpty <$ flagKey c "is_empty",
       SelectIsNotEmpty <$ flagKey c "is_not_empty"
     ]
@@ -321,6 +369,10 @@ parseSelectCondition = Aeson.withObject "SelectCondition" $ \c ->
 data MultiSelectCondition
   = MultiSelectContains Text
   | MultiSelectDoesNotContain Text
+  | -- | @{"contains": [..]}@
+    MultiSelectContainsAny (NonEmpty Text)
+  | -- | @{"does_not_contain": [..]}@
+    MultiSelectDoesNotContainAny (NonEmpty Text)
   | MultiSelectIsEmpty
   | MultiSelectIsNotEmpty
   deriving stock (Eq, Show, Generic)
@@ -329,6 +381,8 @@ multiSelectConditionToValue :: MultiSelectCondition -> Aeson.Value
 multiSelectConditionToValue = \case
   MultiSelectContains v -> Aeson.object ["contains" .= v]
   MultiSelectDoesNotContain v -> Aeson.object ["does_not_contain" .= v]
+  MultiSelectContainsAny vs -> Aeson.object ["contains" .= vs]
+  MultiSelectDoesNotContainAny vs -> Aeson.object ["does_not_contain" .= vs]
   MultiSelectIsEmpty -> Aeson.object ["is_empty" .= True]
   MultiSelectIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
 
@@ -337,13 +391,16 @@ parseMultiSelectCondition = Aeson.withObject "MultiSelectCondition" $ \c ->
   asum
     [ MultiSelectContains <$> c .: "contains",
       MultiSelectDoesNotContain <$> c .: "does_not_contain",
+      MultiSelectContainsAny <$> c .: "contains",
+      MultiSelectDoesNotContainAny <$> c .: "does_not_contain",
       MultiSelectIsEmpty <$ flagKey c "is_empty",
       MultiSelectIsNotEmpty <$ flagKey c "is_not_empty"
     ]
 
 -- | Date filter conditions. Also used for timestamp filters and created_time/last_edited_time.
 --
--- Text values are ISO 8601 date strings (e.g., @\"2024-01-15\"@ or @\"2024-01-15T00:00:00Z\"@).
+-- Text values are ISO 8601 date strings (e.g., @\"2024-01-15\"@ or @\"2024-01-15T00:00:00Z\"@)
+-- or relative date keywords rendered with 'relativeDate'.
 data DateCondition
   = DateAfter Text
   | DateBefore Text
@@ -473,6 +530,10 @@ parseRelationCondition = Aeson.withObject "RelationCondition" $ \c ->
 data StatusCondition
   = StatusEquals Text
   | StatusDoesNotEqual Text
+  | -- | @{"equals": [..]}@
+    StatusEqualsAny (NonEmpty Text)
+  | -- | @{"does_not_equal": [..]}@
+    StatusDoesNotEqualAny (NonEmpty Text)
   | StatusIsEmpty
   | StatusIsNotEmpty
   deriving stock (Eq, Show, Generic)
@@ -481,6 +542,8 @@ statusConditionToValue :: StatusCondition -> Aeson.Value
 statusConditionToValue = \case
   StatusEquals v -> Aeson.object ["equals" .= v]
   StatusDoesNotEqual v -> Aeson.object ["does_not_equal" .= v]
+  StatusEqualsAny vs -> Aeson.object ["equals" .= vs]
+  StatusDoesNotEqualAny vs -> Aeson.object ["does_not_equal" .= vs]
   StatusIsEmpty -> Aeson.object ["is_empty" .= True]
   StatusIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
 
@@ -489,18 +552,22 @@ parseStatusCondition = Aeson.withObject "StatusCondition" $ \c ->
   asum
     [ StatusEquals <$> c .: "equals",
       StatusDoesNotEqual <$> c .: "does_not_equal",
+      StatusEqualsAny <$> c .: "equals",
+      StatusDoesNotEqualAny <$> c .: "does_not_equal",
       StatusIsEmpty <$ flagKey c "is_empty",
       StatusIsNotEmpty <$ flagKey c "is_not_empty"
     ]
 
 -- | Unique ID filter conditions.
 data UniqueIdCondition
-  = UniqueIdEquals Natural
-  | UniqueIdDoesNotEqual Natural
-  | UniqueIdGreaterThan Natural
-  | UniqueIdGreaterThanOrEqualTo Natural
-  | UniqueIdLessThan Natural
-  | UniqueIdLessThanOrEqualTo Natural
+  = UniqueIdEquals Scientific
+  | UniqueIdDoesNotEqual Scientific
+  | UniqueIdGreaterThan Scientific
+  | UniqueIdGreaterThanOrEqualTo Scientific
+  | UniqueIdLessThan Scientific
+  | UniqueIdLessThanOrEqualTo Scientific
+  | UniqueIdIsEmpty
+  | UniqueIdIsNotEmpty
   deriving stock (Eq, Show, Generic)
 
 uniqueIdConditionToValue :: UniqueIdCondition -> Aeson.Value
@@ -511,6 +578,8 @@ uniqueIdConditionToValue = \case
   UniqueIdGreaterThanOrEqualTo v -> Aeson.object ["greater_than_or_equal_to" .= v]
   UniqueIdLessThan v -> Aeson.object ["less_than" .= v]
   UniqueIdLessThanOrEqualTo v -> Aeson.object ["less_than_or_equal_to" .= v]
+  UniqueIdIsEmpty -> Aeson.object ["is_empty" .= True]
+  UniqueIdIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
 
 parseUniqueIdCondition :: Value -> Parser UniqueIdCondition
 parseUniqueIdCondition = Aeson.withObject "UniqueIdCondition" $ \c ->
@@ -520,24 +589,67 @@ parseUniqueIdCondition = Aeson.withObject "UniqueIdCondition" $ \c ->
       UniqueIdGreaterThan <$> c .: "greater_than",
       UniqueIdGreaterThanOrEqualTo <$> c .: "greater_than_or_equal_to",
       UniqueIdLessThan <$> c .: "less_than",
-      UniqueIdLessThanOrEqualTo <$> c .: "less_than_or_equal_to"
+      UniqueIdLessThanOrEqualTo <$> c .: "less_than_or_equal_to",
+      UniqueIdIsEmpty <$ flagKey c "is_empty",
+      UniqueIdIsNotEmpty <$ flagKey c "is_not_empty"
     ]
 
 -- | Verification filter condition.
--- The Text is one of @\"verified\"@, @\"expired\"@, or @\"none\"@.
 data VerificationCondition
-  = VerificationStatus Text
+  = VerificationStatus VerificationState
+  | VerificationDoesNotEqual VerificationState
   deriving stock (Eq, Show, Generic)
 
+-- | Verification states used by verification filters.
+data VerificationState
+  = VerificationVerified
+  | VerificationExpired
+  | VerificationNone
+  | -- | A state this library does not know yet; holds the raw string.
+    UnknownVerificationState Text
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON VerificationState where
+  toJSON =
+    Aeson.String . \case
+      VerificationVerified -> "verified"
+      VerificationExpired -> "expired"
+      VerificationNone -> "none"
+      UnknownVerificationState t -> t
+
+instance FromJSON VerificationState where
+  parseJSON = Aeson.withText "VerificationState" $ \case
+    "verified" -> pure VerificationVerified
+    "expired" -> pure VerificationExpired
+    "none" -> pure VerificationNone
+    other -> pure (UnknownVerificationState other)
+
 verificationConditionToValue :: VerificationCondition -> Aeson.Value
-verificationConditionToValue (VerificationStatus v) =
-  Aeson.object ["status" .= v]
+verificationConditionToValue = \case
+  VerificationStatus v -> Aeson.object ["status" .= v]
+  VerificationDoesNotEqual v -> Aeson.object ["does_not_equal" .= v]
 
 parseVerificationCondition :: Value -> Parser VerificationCondition
 parseVerificationCondition = Aeson.withObject "VerificationCondition" $ \c ->
   asum
-    [ VerificationStatus <$> c .: "status"
+    [ VerificationStatus <$> c .: "status",
+      VerificationDoesNotEqual <$> c .: "does_not_equal"
     ]
+
+-- | Relative date keywords accepted wherever a date filter takes a date string.
+data RelativeDate = Today | Tomorrow | Yesterday | OneWeekAgo | OneWeekFromNow | OneMonthAgo | OneMonthFromNow
+  deriving stock (Eq, Show, Generic, Enum, Bounded)
+
+-- | Render for use with 'DateAfter', 'DateBefore', 'DateEquals', 'DateOnOrAfter' and 'DateOnOrBefore'.
+relativeDate :: RelativeDate -> Text
+relativeDate = \case
+  Today -> "today"
+  Tomorrow -> "tomorrow"
+  Yesterday -> "yesterday"
+  OneWeekAgo -> "one_week_ago"
+  OneWeekFromNow -> "one_week_from_now"
+  OneMonthAgo -> "one_month_ago"
+  OneMonthFromNow -> "one_month_from_now"
 
 -- | Formula filter condition, wrapping a condition by the formula's return type.
 data FormulaCondition
@@ -617,9 +729,12 @@ instance FromJSON SortDirection where
 data Sort
   = PropertySort Text SortDirection
   | TimestampSort TimestampType SortDirection
+  | -- | A sort this library does not model (including unknown directions); the raw JSON is kept.
+    UnknownSort Value
   deriving stock (Eq, Show, Generic)
 
 instance ToJSON Sort where
+  toJSON (UnknownSort v) = v
   toJSON (PropertySort propName dir) =
     Aeson.object
       [ "property" .= propName,
@@ -632,8 +747,11 @@ instance ToJSON Sort where
       ]
 
 instance FromJSON Sort where
-  parseJSON = Aeson.withObject "Sort" $ \o ->
-    asum
-      [ PropertySort <$> o .: "property" <*> o .: "direction",
-        TimestampSort <$> (o .: "timestamp" >>= parseTimestampType) <*> o .: "direction"
-      ]
+  parseJSON v = case v of
+    Object o ->
+      asum
+        [ PropertySort <$> o .: "property" <*> o .: "direction",
+          TimestampSort <$> (o .: "timestamp" >>= parseTimestampType) <*> o .: "direction",
+          pure (UnknownSort v)
+        ]
+    _ -> pure (UnknownSort v)
