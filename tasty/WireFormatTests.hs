@@ -279,7 +279,8 @@ requestEncodingTests =
                 startCursor = Nothing,
                 pageSize = Just 5,
                 inTrash = Nothing,
-                filterProperties = Just ["title", "Xy12"]
+                filterProperties = Just ["title", "Xy12"],
+                resultType = Nothing
               }
       assertFilterPropertiesInQuery req,
     testCase "queryDatabase sends filter_properties as repeated query parameters" $ do
@@ -304,7 +305,8 @@ requestEncodingTests =
             startCursor = Nothing,
             pageSize = Nothing,
             inTrash = Nothing,
-            filterProperties = Just ["title"]
+            filterProperties = Just ["title"],
+            resultType = Nothing
           } of
         Aeson.Object o -> KeyMap.lookup "filter_properties" o @?= Nothing
         other -> assertFailure ("expected object, got " <> show other),

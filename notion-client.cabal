@@ -114,6 +114,7 @@ test-suite tasty
   other-modules:
     AsyncTaskTests
     CommentTests
+    DataSourceSearchTests
     FakeNotion
     HelpersTests
     MeetingNotesTests

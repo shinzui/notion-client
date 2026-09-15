@@ -4,12 +4,19 @@ slug: type-data-source-database-and-search-results-and-close-query-and-filter-ga
 title: "Type Data Source, Database, and Search Results and Close Query and Filter Gaps"
 kind: exec-plan
 created_at: 2026-09-14T18:46:51Z
+intention: intention_01m2jjvjgpef9tyyp50524jfwq
 master_plan: "docs/masterplans/1-reach-parity-with-the-official-notion-js-sdk-on-the-published-rest-api.md"
 provenance:
   created_by:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:51Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T14:46:36Z
+      mode: "implement"
+      note: "Implementing EP-5 milestones"
 ---
 
 # Type Data Source, Database, and Search Results and Close Query and Filter Gaps
@@ -43,11 +50,11 @@ The proof is a new `tasty` test module, `tasty/DataSourceSearchTests.hs`. It dec
 
 ## Progress
 
-- [ ] Preconditions verified: EP-1 (`filter_properties` query parameter, tolerant `NumberFormat`) and EP-2 (`ListOf.requestStatus`) are merged.
-- [ ] Test module `tasty/DataSourceSearchTests.hs` created and wired into `notion-client.cabal` and `tasty/Main.hs`.
-- [ ] Milestone 1: `DatabaseType`, `CreateDatabaseType`, optional `CreateDatabase.title` and `InitialDataSource.properties`.
-- [ ] Milestone 1: `PartialPageObject`, `PartialDataSourceObject`, `PartialDatabaseObject`, `PageOrDataSource`, `QueryResultType`, `_QueryDataSource`.
-- [ ] Milestone 1: `queryDataSource` returns `ListOf PageOrDataSource`; `Methods`, effectful package, example and tests updated; M1 tests pass.
+- [x] (2026-09-15) Preconditions verified: EP-1 (`filter_properties` query parameter, tolerant `NumberFormat`) and EP-2 (`ListOf.requestStatus`) are merged.
+- [x] (2026-09-15) Test module `tasty/DataSourceSearchTests.hs` created and wired into `notion-client.cabal` and `tasty/Main.hs`.
+- [x] (2026-09-15) Milestone 1: `DatabaseType`, `CreateDatabaseType`, optional `CreateDatabase.title` and `InitialDataSource.properties`.
+- [x] (2026-09-15) Milestone 1: `PartialPageObject` (reused from EP-4), `PartialDataSourceObject`, `PartialDatabaseObject`, `PageOrDataSource`, `QueryResultType`, `_QueryDataSource`.
+- [x] (2026-09-15) Milestone 1: `queryDataSource` returns `ListOf PageOrDataSource`; `Methods`, effectful package, example and tests updated; M1 tests pass.
 - [ ] Milestone 2: `SearchSort` and `SearchFilter` sum types; `search` returns `ListOf PageOrDataSource`; `SearchResult`/`parseSearchResults` removed; call sites and effectful package updated; M2 tests pass.
 - [ ] Milestone 3: property schema `schemaDescription`, `SelectOption.description`, relation `relationDatabaseId`, optional dual-property fields, `LocationSchema`, `LastVisitedTimeSchema`, `UnknownSchema`, status without groups, empty id omitted.
 - [ ] Milestone 3: `PropertyUpdate`/`OptionUpdate`/`OptionTarget` for `UpdateDataSource`; call sites updated; M3 tests pass.

@@ -130,7 +130,7 @@ data Notion :: Effect where
   RetrieveDataSource :: DataSourceID -> Notion m DataSourceObject
   CreateDataSource :: DataSources.CreateDataSource -> Notion m DataSourceObject
   UpdateDataSource :: DataSourceID -> DataSources.UpdateDataSource -> Notion m DataSourceObject
-  QueryDataSource :: DataSourceID -> DataSources.QueryDataSource -> Notion m (ListOf PageObject)
+  QueryDataSource :: DataSourceID -> DataSources.QueryDataSource -> Notion m (ListOf DataSources.PageOrDataSource)
   ListDataSourceTemplates ::
     DataSourceID ->
     Maybe Text ->
@@ -258,7 +258,7 @@ queryDataSource ::
   (Notion :> es) =>
   DataSourceID ->
   DataSources.QueryDataSource ->
-  Eff es (ListOf PageObject)
+  Eff es (ListOf DataSources.PageOrDataSource)
 queryDataSource dsId q = send (QueryDataSource dsId q)
 
 -- | See 'Notion.V1.Methods'.'Notion.V1.listDataSourceTemplates'.

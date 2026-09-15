@@ -72,7 +72,8 @@ runDatabaseDemo methods databaseIdStr = do
             startCursor = Nothing,
             pageSize = Just 5,
             inTrash = Nothing,
-            filterProperties = Nothing
+            filterProperties = Nothing,
+            resultType = Nothing
           }
   dsResults <-
     runTest (Text.pack "Querying data source") $
@@ -256,7 +257,8 @@ runDatabaseDemo methods databaseIdStr = do
               startCursor = cursor,
               pageSize = Just 2, -- small page size to exercise pagination
               inTrash = Nothing,
-              filterProperties = Nothing
+              filterProperties = Nothing,
+              resultType = Nothing
             }
   putStrLn $ "Total pages collected via paginateAll: " <> show (Vector.length allPages)
 

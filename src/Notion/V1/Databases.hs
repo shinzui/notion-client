@@ -3,6 +3,9 @@ module Notion.V1.Databases
   ( -- * Main types
     DatabaseID,
     DatabaseObject (..),
+    PartialDatabaseObject (..),
+    DatabaseType (..),
+    CreateDatabaseType (..),
     DataSource (..),
     InitialDataSource (..),
     CreateDatabase (..),
@@ -16,6 +19,7 @@ where
 
 import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?))
+import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
@@ -60,6 +64,8 @@ data DatabaseObject = DatabaseObject
     url :: Text,
     parent :: Parent,
     isInline :: Maybe Bool,
+    -- | The kind of typed database (@tasks@, @wiki@, ...), if any.
+    databaseType :: Maybe DatabaseType,
     inTrash :: Maybe Bool,
     isLocked :: Maybe Bool,
     publicUrl :: Maybe Text,
@@ -86,6 +92,7 @@ instance FromJSON DatabaseObject where
       url <- o .: "url"
       parent <- o .: "parent"
       isInline <- o .:? "is_inline"
+      databaseType <- o .:? "database_type"
       inTrash <- (fmap Just (o .: "in_trash")) <|> (fmap Just (o .: "is_archived")) <|> (fmap Just (o .: "archived")) <|> pure Nothing
       isLocked <- o .:? "is_locked"
       publicUrl <- o .:? "public_url"
@@ -94,10 +101,72 @@ instance FromJSON DatabaseObject where
       return DatabaseObject {..}
     _ -> fail "Expected object for DatabaseObject"
 
+-- | @{"object":"database","id":...}@
+--
+-- The minimal database shape Notion returns when the integration cannot see the full object.
+newtype PartialDatabaseObject = PartialDatabaseObject {id :: DatabaseID}
+  deriving stock (Generic, Show)
+
+instance FromJSON PartialDatabaseObject where
+  parseJSON = Aeson.withObject "PartialDatabaseObject" $ \o -> PartialDatabaseObject <$> o .: "id"
+
+-- | The kind of typed database, or an unrecognised value.
+data DatabaseType
+  = TasksDatabase
+  | ProjectsDatabase
+  | SprintsDatabase
+  | DocsDatabase
+  | WikiDatabase
+  | MeetingsDatabase
+  | MeetingNotesDatabase
+  | SkillsDatabase
+  | GithubPrsDatabase
+  | -- | A database type this library does not know yet; holds the raw string.
+    UnknownDatabaseType Text
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON DatabaseType where
+  parseJSON = Aeson.withText "DatabaseType" $ \case
+    "tasks" -> pure TasksDatabase
+    "projects" -> pure ProjectsDatabase
+    "sprints" -> pure SprintsDatabase
+    "docs" -> pure DocsDatabase
+    "wiki" -> pure WikiDatabase
+    "meetings" -> pure MeetingsDatabase
+    "meeting_notes" -> pure MeetingNotesDatabase
+    "skills" -> pure SkillsDatabase
+    "github_prs" -> pure GithubPrsDatabase
+    other -> pure (UnknownDatabaseType other)
+
+instance ToJSON DatabaseType where
+  toJSON =
+    Aeson.String . \case
+      TasksDatabase -> "tasks"
+      ProjectsDatabase -> "projects"
+      SprintsDatabase -> "sprints"
+      DocsDatabase -> "docs"
+      WikiDatabase -> "wiki"
+      MeetingsDatabase -> "meetings"
+      MeetingNotesDatabase -> "meeting_notes"
+      SkillsDatabase -> "skills"
+      GithubPrsDatabase -> "github_prs"
+      UnknownDatabaseType t -> t
+
+-- | Typed database kinds accepted by @POST \/v1\/databases@.
+data CreateDatabaseType = CreateTasksDatabase | CreateProjectsDatabase | CreateSkillsDatabase
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON CreateDatabaseType where
+  toJSON =
+    Aeson.String . \case
+      CreateTasksDatabase -> "tasks"
+      CreateProjectsDatabase -> "projects"
+      CreateSkillsDatabase -> "skills"
+
 -- | Initial data source configuration for database creation.
 -- Contains the property schema for the database's first data source.
 newtype InitialDataSource = InitialDataSource
-  { properties :: Map Text PropertySchema
+  { properties :: Maybe (Map Text PropertySchema)
   }
   deriving stock (Generic, Show)
 
@@ -110,12 +179,15 @@ instance ToJSON InitialDataSource where
 -- rather than a top-level @properties@ field.
 data CreateDatabase = CreateDatabase
   { parent :: Parent,
-    title :: Vector RichText,
+    -- | When omitted for a typed database, Notion names it after the type.
+    title :: Maybe (Vector RichText),
     initialDataSource :: Maybe InitialDataSource,
     icon :: Maybe Icon,
     cover :: Maybe Cover,
     description :: Maybe (Vector RichText),
-    isInline :: Maybe Bool
+    isInline :: Maybe Bool,
+    -- | Create a typed database. Cannot be combined with 'initialDataSource'.
+    databaseType :: Maybe CreateDatabaseType
   }
   deriving stock (Generic, Show)
 

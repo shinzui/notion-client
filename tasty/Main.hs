@@ -11,6 +11,7 @@ import Data.Map qualified as Map
 import Data.Scientific (Scientific)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
+import DataSourceSearchTests qualified
 import HelpersTests qualified
 import MeetingNotesTests qualified
 import Notion.V1
@@ -179,6 +180,7 @@ tests = do
         OAuthTests.tests,
         HelpersTests.tests,
         ViewTests.tests,
+        DataSourceSearchTests.tests,
         basicIntegration,
         markdownE2E,
         pageE2E,
@@ -1292,7 +1294,7 @@ testListTemplates methods@Methods {listDataSourceTemplates} dbIdText = do
 testQueryDataSource :: Methods -> Text.Text -> Assertion
 testQueryDataSource methods@Methods {queryDataSource} dbIdText = do
   dsId <- getFirstDataSourceId methods dbIdText
-  let queryReq = DataSources.QueryDataSource {filter = Nothing, sorts = Nothing, startCursor = Nothing, pageSize = Just 5, inTrash = Nothing, filterProperties = Nothing}
+  let queryReq = DataSources.QueryDataSource {filter = Nothing, sorts = Nothing, startCursor = Nothing, pageSize = Just 5, inTrash = Nothing, filterProperties = Nothing, resultType = Nothing}
   result <- queryDataSource dsId queryReq
   -- Just verify the endpoint responds and returns valid structure
   assertBool "Query should return results list" (hasMore result || Vector.null (results result) || not (Vector.null (results result)))

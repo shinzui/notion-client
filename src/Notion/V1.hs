@@ -259,7 +259,7 @@ data Methods = Methods
     retrieveDataSource :: DataSourceID -> IO DataSourceObject,
     createDataSource :: DataSources.CreateDataSource -> IO DataSourceObject,
     updateDataSource :: DataSourceID -> DataSources.UpdateDataSource -> IO DataSourceObject,
-    queryDataSource :: DataSourceID -> DataSources.QueryDataSource -> IO (ListOf PageObject),
+    queryDataSource :: DataSourceID -> DataSources.QueryDataSource -> IO (ListOf DataSources.PageOrDataSource),
     -- | List templates available for a data source
     listDataSourceTemplates ::
       DataSourceID ->
