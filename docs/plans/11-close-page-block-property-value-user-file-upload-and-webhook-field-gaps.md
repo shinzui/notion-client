@@ -63,10 +63,10 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
 - [x] Milestone 2: `PropertyItemList` with `next_url` and rollup summary. (2026-09-15)
 - [x] Milestone 2: `CustomEmojiRef` in `Common.hs`; `LinkMention`, `CustomEmojiMention`, `UserMention` carrying `UserValue`. EP-1's two mention fallback tests already used made-up types (`future_mention`, `future_emoji`), so they needed no change. (2026-09-15)
 - [x] Milestone 2: tests green (337 tests). (2026-09-15)
-- [ ] Milestone 3: `CustomEmojiIcon` carries `CustomEmojiRef` (id, name, url); EP-1's custom-emoji icon tests updated.
-- [ ] Milestone 3: `NoticonColor` on `NativeIcon`; `ObjectType` additions with `UnknownObjectType` fallback; `PageMarkdown.object`.
-- [ ] Milestone 3: `FileUploadObject.uploadUrl`, `completeUrl`, typed `createdBy`; typed `FileUploadMode` on `CreateFileUpload`.
-- [ ] Milestone 3: bot user `{}` decode test; tests green.
+- [x] Milestone 3: `CustomEmojiIcon` carries `CustomEmojiRef` (id, name, url); EP-1's custom-emoji icon tests updated (the decode test now expects the `name` and `url` its fixture already carried). (2026-09-15)
+- [x] Milestone 3: `NoticonColor` on `NativeIcon`; `ObjectType` additions with `UnknownObjectType` fallback; `PageMarkdown.object`. (2026-09-15)
+- [x] Milestone 3: `FileUploadObject.uploadUrl`, `completeUrl`, typed `createdBy`; typed `FileUploadMode` on `CreateFileUpload`. (2026-09-15)
+- [x] Milestone 3: bot user `{}` decode test (passed without a decoder change); tests green (344 tests). (2026-09-15)
 - [ ] Milestone 4: webhook event types and entity types; `workspaceName`, `apiVersion`.
 - [ ] Milestone 4: `WebhookEventData` typed per event family with raw fallback.
 - [ ] Milestone 4: tests green; CHANGELOG `## Unreleased` entries complete.

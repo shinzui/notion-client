@@ -20,7 +20,7 @@ import Notion.V1.BlockContent
     MeetingNotesStatus (..),
   )
 import Notion.V1.Blocks (BlockObject (..))
-import Notion.V1.Common (Color (..), Icon (..), Parent (..), UUID (..))
+import Notion.V1.Common (Color (..), CustomEmojiRef (..), Icon (..), Parent (..), UUID (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases qualified as Databases
 import Notion.V1.Pages (PagePosition (..))
@@ -83,9 +83,9 @@ commonTests =
         other -> assertFailure ("expected UnknownParent, got " <> show other),
     testCase "Custom emoji icon decodes nested object" $ do
       i <- decodeOrFail "{\"type\":\"custom_emoji\",\"custom_emoji\":{\"id\":\"bbbbbbbb-0000-4000-8000-000000000002\",\"name\":\"sakura\",\"url\":\"https://example.com/sakura.png\"}}"
-      i @?= CustomEmojiIcon (UUID "bbbbbbbb-0000-4000-8000-000000000002"),
+      i @?= CustomEmojiIcon (CustomEmojiRef (UUID "bbbbbbbb-0000-4000-8000-000000000002") (Just "sakura") (Just "https://example.com/sakura.png")),
     testCase "Custom emoji icon encodes nested object" $
-      Aeson.toJSON (CustomEmojiIcon (UUID "bbbbbbbb-0000-4000-8000-000000000002"))
+      Aeson.toJSON (CustomEmojiIcon (CustomEmojiRef (UUID "bbbbbbbb-0000-4000-8000-000000000002") Nothing Nothing))
         @?= Aeson.object
           [ "type" Aeson..= ("custom_emoji" :: String),
             "custom_emoji" Aeson..= Aeson.object ["id" Aeson..= ("bbbbbbbb-0000-4000-8000-000000000002" :: String)]

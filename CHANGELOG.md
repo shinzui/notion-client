@@ -57,6 +57,11 @@
 * `RollupArrayResult` holds typed `PropertyValue`s; `RollupResult` gains `RollupUnknownResult` and `PropertyValue` gains `UnknownPropertyValue`
 * `PaginatedPropertyItems` holds a `PropertyItemList` record with `nextUrl`, `propertyId` and the rollup summary
 * `UserMention` holds a `UserValue` (partial or full user) instead of a bare ID; `MentionContent` gains `LinkMention` and `CustomEmojiMention`
+* `CustomEmojiIcon`'s field is `customEmoji :: CustomEmojiRef` (ID, name and URL) instead of `customEmojiId :: UUID`
+* `NativeIcon.iconColor` is `Maybe NoticonColor`
+* `ObjectType` gains `FileUploadObjectType`, `PageMarkdownObjectType`, `AsyncTaskObjectType`, `GroupObjectType` and `UnknownObjectType`; its JSON instances are hand-written
+* `PageMarkdown` gains `object`
+* `FileUploadObject.createdBy` is a typed `FileUploadCreator`, and `CreateFileUpload.mode` is `Maybe FileUploadMode`
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
@@ -89,6 +94,7 @@
 * `CustomEmojiRef` in `Notion.V1.Common`, `LinkMentionValue` in `Notion.V1.RichText`, and `UserValue`, `GroupObject` and `PeopleEntry` in `Notion.V1.Users`
 * Smart constructors `placeValue`, `verifiedValue`, `unverifiedValue` and `peopleEntriesValue`
 * `Eq` instances on `UserObject` and the other user types
+* `FileUploadObject.uploadUrl` and `completeUrl`
 * Page create and update omit `properties` when the map is empty, so trash-only or markdown-only requests send just those keys
 * New module `Notion.V1.DataSourceRows` with `iterateAllDataSourceRows`, `collectAllDataSourceRows` and `foldAllDataSourceRows`, which read every row of a data source past Notion's per-query result limit
 
@@ -108,6 +114,7 @@
 * Data source queries on wiki databases (which return child data sources and partial objects) no longer fail to decode
 * Search no longer silently drops partial or undecodable results
 * Unknown property types no longer fail data source decoding
+* Custom-emoji icons keep the emoji's `name` and `url` when decoded
 * Page property values of unknown types, and rollup array values without an `id`, no longer fail page decoding
 * `verifySignature` accepts upper- or lowercase hex and rejects headers without the `sha256=` prefix, of the wrong length, or with non-hex characters
 

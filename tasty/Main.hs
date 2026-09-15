@@ -20,7 +20,7 @@ import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (.
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentAttachment (..), CommentAttachmentRequest (..), CommentContent (..), CommentDisplayName (..), CommentDisplayNameRequest (..), CommentResponse (..), CommentTarget (..), CreateComment (..))
 import Notion.V1.Comments qualified as Comments
-import Notion.V1.Common (Color (..), Cover (..), ExternalFile (..), Icon (..), Parent (..), UUID (..))
+import Notion.V1.Common (Color (..), Cover (..), CustomEmojiRef (..), ExternalFile (..), Icon (..), NoticonColor (..), Parent (..), UUID (..))
 import Notion.V1.CustomEmojis (CustomEmoji (..))
 import Notion.V1.DataSources (DataSourceObject (..))
 import Notion.V1.DataSources qualified as DataSources
@@ -833,7 +833,7 @@ testSerializeTemplateById = do
 
 testNativeIconRoundTrip :: Assertion
 testNativeIconRoundTrip = do
-  let icon = NativeIcon {iconName = "check", iconColor = Just "green"}
+  let icon = NativeIcon {iconName = "check", iconColor = Just NoticonGreen}
       json = Aeson.toJSON icon
   case json of
     Aeson.Object o -> do
@@ -847,7 +847,7 @@ testNativeIconRoundTrip = do
   case Aeson.fromJSON json of
     Aeson.Success (NativeIcon n c) -> do
       assertEqual "name round-trip" "check" n
-      assertEqual "color round-trip" (Just "green") c
+      assertEqual "color round-trip" (Just NoticonGreen) c
     Aeson.Success _ -> assertFailure "Expected NativeIcon"
     Aeson.Error err -> assertFailure $ "Decode failed: " <> err
 
@@ -858,13 +858,13 @@ testNativeIconReadShape = do
   case Aeson.eitherDecode payload of
     Right (NativeIcon n c) -> do
       assertEqual "name" "clipping" n
-      assertEqual "color" (Just "lightgray") c
+      assertEqual "color" (Just NoticonLightgray) c
     Right _ -> assertFailure "Expected NativeIcon"
     Left err -> assertFailure $ "Decode failed: " <> err
 
 testCustomEmojiIconRoundTrip :: Assertion
 testCustomEmojiIconRoundTrip = do
-  let icon = CustomEmojiIcon {customEmojiId = UUID "emoji-abc-123"}
+  let icon = CustomEmojiIcon {customEmoji = CustomEmojiRef (UUID "emoji-abc-123") Nothing Nothing}
       json = Aeson.toJSON icon
   case json of
     Aeson.Object o -> do
@@ -876,8 +876,8 @@ testCustomEmojiIconRoundTrip = do
         (KeyMap.lookup "custom_emoji" o)
     _ -> assertFailure "Expected JSON object"
   case Aeson.fromJSON json of
-    Aeson.Success (CustomEmojiIcon eid) ->
-      assertEqual "id round-trip" (UUID "emoji-abc-123") eid
+    Aeson.Success (CustomEmojiIcon ref) ->
+      assertEqual "id round-trip" (CustomEmojiRef (UUID "emoji-abc-123") Nothing Nothing) ref
     Aeson.Success _ -> assertFailure "Expected CustomEmojiIcon"
     Aeson.Error err -> assertFailure $ "Decode failed: " <> err
 

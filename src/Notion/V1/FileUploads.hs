@@ -10,6 +10,9 @@ module Notion.V1.FileUploads
     -- * Supporting types
     NumberOfParts (..),
     FileImportResult (..),
+    FileUploadCreator (..),
+    FileUploadCreatorType (..),
+    FileUploadMode (..),
 
     -- * Smart constructors
     mkSinglePartUpload,
@@ -142,11 +145,15 @@ data FileUploadObject = FileUploadObject
     contentLength :: Maybe Natural,
     createdTime :: POSIXTime,
     lastEditedTime :: POSIXTime,
-    createdBy :: Value,
+    createdBy :: FileUploadCreator,
     inTrash :: Bool,
     expiryTime :: Maybe POSIXTime,
     numberOfParts :: Maybe NumberOfParts,
-    fileImportResult :: Maybe FileImportResult
+    fileImportResult :: Maybe FileImportResult,
+    -- | URL to send the file content to, while the upload is pending.
+    uploadUrl :: Maybe Text,
+    -- | URL that completes a multi-part upload, while the upload is pending.
+    completeUrl :: Maybe Text
   }
   deriving stock (Generic, Show)
 
@@ -171,6 +178,8 @@ instance FromJSON FileUploadObject where
         Just str -> Just <$> parseISO8601 str
       numberOfParts <- o .:? "number_of_parts"
       fileImportResult <- o .:? "file_import_result"
+      uploadUrl <- o .:? "upload_url"
+      completeUrl <- o .:? "complete_url"
       pure FileUploadObject {..}
     _ -> fail "Expected object for FileUploadObject"
 
@@ -191,10 +200,64 @@ instance ToJSON FileUploadObject where
         <> maybe [] (\et -> ["expiry_time" .= posixToISO8601 et]) expiryTime
         <> maybe [] (\np -> ["number_of_parts" .= np]) numberOfParts
         <> maybe [] (\fir -> ["file_import_result" .= fir]) fileImportResult
+        <> maybe [] (\u -> ["upload_url" .= u]) uploadUrl
+        <> maybe [] (\u -> ["complete_url" .= u]) completeUrl
+
+-- | Kind of creator of a file upload.
+data FileUploadCreatorType
+  = CreatorPerson
+  | CreatorBot
+  | CreatorAgent
+  | -- | A creator type this library does not know yet; holds the raw string.
+    UnknownCreatorType Text
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON FileUploadCreatorType where
+  parseJSON = Aeson.withText "FileUploadCreatorType" $ \case
+    "person" -> pure CreatorPerson
+    "bot" -> pure CreatorBot
+    "agent" -> pure CreatorAgent
+    other -> pure (UnknownCreatorType other)
+
+instance ToJSON FileUploadCreatorType where
+  toJSON = \case
+    CreatorPerson -> String "person"
+    CreatorBot -> String "bot"
+    CreatorAgent -> String "agent"
+    UnknownCreatorType t -> String t
+
+-- | Who created a file upload: @{"id": ..., "type": "person" | "bot" | "agent"}@.
+data FileUploadCreator = FileUploadCreator
+  { id :: UUID,
+    type_ :: FileUploadCreatorType
+  }
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON FileUploadCreator where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON FileUploadCreator where
+  toJSON = genericToJSON aesonOptions
+
+-- | How the file content will be sent.
+data FileUploadMode
+  = -- | One request with the whole file (the default)
+    SinglePart
+  | -- | Several parts, then a complete call
+    MultiPart
+  | -- | Notion imports the file from a public HTTPS URL
+    ExternalUrl
+  deriving stock (Eq, Generic, Show)
+
+instance ToJSON FileUploadMode where
+  toJSON = \case
+    SinglePart -> String "single_part"
+    MultiPart -> String "multi_part"
+    ExternalUrl -> String "external_url"
 
 -- | Request body for creating a file upload
 data CreateFileUpload = CreateFileUpload
-  { mode :: Maybe Text,
+  { mode :: Maybe FileUploadMode,
     filename :: Maybe Text,
     contentType :: Maybe Text,
     numberOfParts :: Maybe Natural,
@@ -247,7 +310,7 @@ mkMultiPartUpload ::
   CreateFileUpload
 mkMultiPartUpload fname parts ct =
   CreateFileUpload
-    { mode = Just "multi_part",
+    { mode = Just MultiPart,
       filename = Just fname,
       contentType = ct,
       numberOfParts = Just parts,
@@ -263,7 +326,7 @@ mkExternalUrlUpload ::
   CreateFileUpload
 mkExternalUrlUpload url fname =
   CreateFileUpload
-    { mode = Just "external_url",
+    { mode = Just ExternalUrl,
       filename = fname,
       contentType = Nothing,
       numberOfParts = Nothing,

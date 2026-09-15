@@ -5,6 +5,7 @@ module ObjectFieldTests (tests) where
 
 import Control.Exception (Exception, throwIO, try)
 import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (parseEither)
 import Data.ByteString.Char8 qualified as B8
 import Data.ByteString.Lazy qualified as LBS
@@ -28,13 +29,15 @@ import Notion.V1.BlockContent
     trashBlockUpdate,
   )
 import Notion.V1.Clearable (Clearable (..))
-import Notion.V1.Common (CustomEmojiRef (..), UUID (..))
+import Notion.V1.Common (CustomEmojiRef (..), Icon (..), NoticonColor (..), ObjectType (..), UUID (..))
+import Notion.V1.FileUploads qualified as FU
 import Notion.V1.Pages
   ( CreatePage (..),
     InsertContentRequest (..),
     InsertPosition (..),
     MovePage (..),
     MovePageParent (..),
+    PageMarkdown (..),
     PropertyItemList (..),
     PropertyItemResponse (..),
     UpdatePage (..),
@@ -52,7 +55,7 @@ import Notion.V1.PropertyValue
     unverifiedValue,
   )
 import Notion.V1.RichText (LinkMentionValue (..), MentionContent (..), RichText (..), RichTextContent (..))
-import Notion.V1.Users (GroupObject (..), PeopleEntry (..), UserObject (..), UserValue (..))
+import Notion.V1.Users (GroupObject (..), PeopleEntry (..), UserObject (..), UserType (..), UserValue (..))
 import Servant.Client qualified as Client
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -63,7 +66,7 @@ tests =
     "Object Field Gaps"
     [ testGroup "Page and block requests" pageBlockRequestTests,
       testGroup "Property values and mentions" propertyValueMentionTests,
-      testGroup "Users, file uploads, and object types" [],
+      testGroup "Users, file uploads, and object types" userFileUploadObjectTypeTests,
       testGroup "Webhooks" []
     ]
 
@@ -306,4 +309,59 @@ propertyValueMentionTests =
         other -> assertFailure ("expected a full user mention, got " <> show other)
       partial <- decodeMention "{\"type\":\"user\",\"user\":{\"object\":\"user\",\"id\":\"u10\"}}"
       partial @?= UserMention (PartialUser (UUID "u10"))
+  ]
+
+------------------------------------------------------------------------------
+-- Milestone 3: users, file uploads, icons and object types
+
+userFileUploadObjectTypeTests :: [TestTree]
+userFileUploadObjectTypeTests =
+  [ testCase "custom emoji icon keeps name and url" $ do
+      let fixture = "{\"type\":\"custom_emoji\",\"custom_emoji\":{\"id\":\"e2\",\"name\":\"sakura\",\"url\":\"https://example.com/sakura.png\"}}"
+      i <- decodeOrFail fixture
+      i @?= CustomEmojiIcon (CustomEmojiRef (UUID "e2") (Just "sakura") (Just "https://example.com/sakura.png"))
+      i `encodesTo` fixture,
+    testCase "native icon with an unknown color" $ do
+      i <- decodeOrFail "{\"type\":\"icon\",\"icon\":{\"name\":\"pizza\",\"color\":\"teal\"}}"
+      i @?= NativeIcon "pizza" (Just (UnknownNoticonColor "teal")),
+    testCase "ObjectType new and unknown values" $ do
+      let known =
+            [ (FileUploadObjectType, "file_upload"),
+              (PageMarkdownObjectType, "page_markdown"),
+              (AsyncTaskObjectType, "async_task"),
+              (GroupObjectType, "group"),
+              (DataSource, "data_source")
+            ]
+      mapM_
+        ( \(ot, str) -> do
+            decoded <- decodeOrFail ("\"" <> str <> "\"")
+            decoded @?= ot
+            Aeson.toJSON ot @?= Aeson.String str
+        )
+        known
+      unknown <- decodeOrFail "\"meeting_room\""
+      unknown @?= UnknownObjectType "meeting_room",
+    testCase "PageMarkdown decodes object, with or without the key" $ do
+      md <- decodeOrFail "{\"object\":\"page_markdown\",\"id\":\"p1\",\"markdown\":\"# hi\",\"truncated\":false,\"unknown_block_ids\":[]}"
+      let PageMarkdown {object} = md
+      object @?= PageMarkdownObjectType
+      legacy <- decodeOrFail "{\"id\":\"p1\",\"markdown\":\"# hi\",\"truncated\":false,\"unknown_block_ids\":[]}"
+      let PageMarkdown {object = legacyObject} = legacy
+      legacyObject @?= PageMarkdownObjectType,
+    testCase "file upload with URLs and an agent creator" $ do
+      fu <-
+        decodeOrFail
+          "{\"object\":\"file_upload\",\"id\":\"fu1\",\"created_time\":\"2026-09-14T10:00:00.000Z\",\"last_edited_time\":\"2026-09-14T10:00:00.000Z\",\"created_by\":{\"id\":\"a1\",\"type\":\"agent\"},\"in_trash\":false,\"archived\":false,\"expiry_time\":null,\"status\":\"pending\",\"filename\":null,\"content_type\":null,\"content_length\":null,\"upload_url\":\"https://api.notion.com/v1/file_uploads/fu1/send\",\"complete_url\":\"https://api.notion.com/v1/file_uploads/fu1/complete\"}"
+      let FU.FileUploadObject {createdBy, uploadUrl, completeUrl} = fu
+      createdBy @?= FU.FileUploadCreator (UUID "a1") FU.CreatorAgent
+      uploadUrl @?= Just "https://api.notion.com/v1/file_uploads/fu1/send"
+      completeUrl @?= Just "https://api.notion.com/v1/file_uploads/fu1/complete",
+    testCase "CreateFileUpload encodes a typed mode" $
+      case Aeson.toJSON (FU.mkMultiPartUpload "動画.mp4" 3 Nothing) of
+        Aeson.Object o -> KeyMap.lookup "mode" o @?= Just (Aeson.String "multi_part")
+        other -> assertFailure ("expected object, got " <> show other),
+    testCase "bot user with an empty bot object decodes" $ do
+      u <- decodeOrFail "{\"object\":\"user\",\"id\":\"b1\",\"type\":\"bot\",\"name\":\"Kaizen Bot\",\"avatar_url\":null,\"bot\":{}}"
+      let UserObject {type_} = u
+      type_ @?= Bot
   ]

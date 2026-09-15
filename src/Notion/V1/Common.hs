@@ -8,6 +8,7 @@ module Notion.V1.Common
     ParentID,
     Color (..),
     Icon (..),
+    NoticonColor (..),
     Cover (..),
     File (..),
     ExternalFile (..),
@@ -38,13 +39,41 @@ data ObjectType
   | User
   | Comment
   | View
+  | -- | @file_upload@
+    FileUploadObjectType
+  | -- | @page_markdown@
+    PageMarkdownObjectType
+  | -- | @async_task@
+    AsyncTaskObjectType
+  | -- | @group@
+    GroupObjectType
+  | -- | An object type this library does not know yet; holds the raw string.
+    UnknownObjectType Text
   deriving stock (Eq, Show, Generic)
 
+objectTypeNames :: [(ObjectType, Text)]
+objectTypeNames =
+  [ (Database, "database"),
+    (DataSource, "data_source"),
+    (Page, "page"),
+    (Block, "block"),
+    (User, "user"),
+    (Comment, "comment"),
+    (View, "view"),
+    (FileUploadObjectType, "file_upload"),
+    (PageMarkdownObjectType, "page_markdown"),
+    (AsyncTaskObjectType, "async_task"),
+    (GroupObjectType, "group")
+  ]
+
 instance FromJSON ObjectType where
-  parseJSON = genericParseJSON aesonOptions
+  parseJSON = withText "ObjectType" $ \t ->
+    pure (fromMaybe (UnknownObjectType t) (lookup t (map swap objectTypeNames)))
 
 instance ToJSON ObjectType where
-  toJSON = genericToJSON aesonOptions
+  toJSON = \case
+    UnknownObjectType t -> String t
+    o -> String (fromMaybe "" (lookup o objectTypeNames))
 
 -- | Parent object that can be a database, data source, page, block, or workspace
 data Parent
@@ -173,9 +202,10 @@ data Icon
   | FileIcon {file :: File}
   | ExternalIcon {external :: ExternalFile}
   | -- | Native icon specified by name and optional color
-    NativeIcon {iconName :: Text, iconColor :: Maybe Text}
-  | -- | Custom emoji icon specified by ID
-    CustomEmojiIcon {customEmojiId :: UUID}
+    NativeIcon {iconName :: Text, iconColor :: Maybe NoticonColor}
+  | -- | Custom emoji icon. Responses carry the emoji's name and URL; requests
+    -- need only its ID.
+    CustomEmojiIcon {customEmoji :: CustomEmojiRef}
   | -- | File upload icon referenced by upload ID
     FileUploadIcon {fileUploadId :: UUID}
   | -- | An icon kind this library does not model yet; holds the raw icon object.
@@ -196,9 +226,9 @@ instance FromJSON Icon where
         "custom_emoji" -> do
           mInner <- o .:? "custom_emoji"
           case mInner of
-            Just inner -> CustomEmojiIcon <$> inner .: "id"
+            Just inner -> CustomEmojiIcon <$> parseJSON inner
             -- Shape written by notion-client <= 0.7.0.2; still accepted when reading.
-            Nothing -> CustomEmojiIcon <$> o .: "id"
+            Nothing -> (\i -> CustomEmojiIcon (CustomEmojiRef i Nothing Nothing)) <$> o .: "id"
         "file_upload" -> do
           uploadObj <- o .: "file_upload"
           FileUploadIcon <$> uploadObj .: "id"
@@ -214,10 +244,49 @@ instance ToJSON Icon where
       [ "type" .= ("icon" :: Text),
         "icon" .= object (["name" .= name] <> maybe [] (\c -> ["color" .= c]) color)
       ]
-  toJSON (CustomEmojiIcon eid) =
-    object ["type" .= ("custom_emoji" :: Text), "custom_emoji" .= object ["id" .= eid]]
+  toJSON (CustomEmojiIcon ref) =
+    object ["type" .= ("custom_emoji" :: Text), "custom_emoji" .= ref]
   toJSON (FileUploadIcon uid) = object ["type" .= ("file_upload" :: Text), "file_upload" .= object ["id" .= uid]]
   toJSON (UnknownIcon v) = v
+
+-- | Color variant of a Notion native icon.
+data NoticonColor
+  = NoticonGray
+  | NoticonLightgray
+  | NoticonBrown
+  | NoticonYellow
+  | NoticonOrange
+  | NoticonGreen
+  | NoticonBlue
+  | NoticonPurple
+  | NoticonPink
+  | NoticonRed
+  | -- | A color this library does not know yet; holds the raw string.
+    UnknownNoticonColor Text
+  deriving stock (Eq, Generic, Show)
+
+noticonColorNames :: [(NoticonColor, Text)]
+noticonColorNames =
+  [ (NoticonGray, "gray"),
+    (NoticonLightgray, "lightgray"),
+    (NoticonBrown, "brown"),
+    (NoticonYellow, "yellow"),
+    (NoticonOrange, "orange"),
+    (NoticonGreen, "green"),
+    (NoticonBlue, "blue"),
+    (NoticonPurple, "purple"),
+    (NoticonPink, "pink"),
+    (NoticonRed, "red")
+  ]
+
+instance FromJSON NoticonColor where
+  parseJSON = withText "NoticonColor" $ \t ->
+    pure (fromMaybe (UnknownNoticonColor t) (lookup t (map swap noticonColorNames)))
+
+instance ToJSON NoticonColor where
+  toJSON = \case
+    UnknownNoticonColor t -> String t
+    c -> String (fromMaybe "" (lookup c noticonColorNames))
 
 -- | Reference to a workspace custom emoji. Responses always include 'name'
 -- and 'url'; requests may send only the ID.

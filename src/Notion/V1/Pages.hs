@@ -300,7 +300,8 @@ type PageProperties = Map Text PropertyValue
 --
 -- Contains the page content rendered as Notion-flavored enhanced markdown.
 data PageMarkdown = PageMarkdown
-  { id :: PageID,
+  { object :: ObjectType,
+    id :: PageID,
     markdown :: Text,
     truncated :: Bool,
     unknownBlockIds :: Vector UUID
@@ -308,7 +309,13 @@ data PageMarkdown = PageMarkdown
   deriving stock (Generic, Show)
 
 instance FromJSON PageMarkdown where
-  parseJSON = genericParseJSON aesonOptions
+  parseJSON = Aeson.withObject "PageMarkdown" $ \o -> do
+    object <- fromMaybe PageMarkdownObjectType <$> o .:? "object"
+    id <- o .: "id"
+    markdown <- o .: "markdown"
+    truncated <- o .: "truncated"
+    unknownBlockIds <- o .: "unknown_block_ids"
+    pure PageMarkdown {..}
 
 instance ToJSON PageMarkdown where
   toJSON = genericToJSON aesonOptions
