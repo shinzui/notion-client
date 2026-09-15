@@ -55,7 +55,7 @@ The proof is a new `tasty` test module, `tasty/DataSourceSearchTests.hs`. It dec
 - [x] (2026-09-15) Milestone 1: `DatabaseType`, `CreateDatabaseType`, optional `CreateDatabase.title` and `InitialDataSource.properties`.
 - [x] (2026-09-15) Milestone 1: `PartialPageObject` (reused from EP-4), `PartialDataSourceObject`, `PartialDatabaseObject`, `PageOrDataSource`, `QueryResultType`, `_QueryDataSource`.
 - [x] (2026-09-15) Milestone 1: `queryDataSource` returns `ListOf PageOrDataSource`; `Methods`, effectful package, example and tests updated; M1 tests pass.
-- [ ] Milestone 2: `SearchSort` and `SearchFilter` sum types; `search` returns `ListOf PageOrDataSource`; `SearchResult`/`parseSearchResults` removed; call sites and effectful package updated; M2 tests pass.
+- [x] (2026-09-15) Milestone 2: `SearchSort` and `SearchFilter` sum types; `search` returns `ListOf PageOrDataSource`; `SearchResult`/`parseSearchResults` removed; call sites and effectful package updated; M2 tests pass.
 - [ ] Milestone 3: property schema `schemaDescription`, `SelectOption.description`, relation `relationDatabaseId`, optional dual-property fields, `LocationSchema`, `LastVisitedTimeSchema`, `UnknownSchema`, status without groups, empty id omitted.
 - [ ] Milestone 3: `PropertyUpdate`/`OptionUpdate`/`OptionTarget` for `UpdateDataSource`; call sites updated; M3 tests pass.
 - [ ] Milestone 4: new filter constructors (verification `does_not_equal`, array values, `unique_id` empty checks with `Scientific`, `RelativeDate`), unknown fallbacks.

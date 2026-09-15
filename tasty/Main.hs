@@ -50,7 +50,7 @@ import Notion.V1.Properties qualified as Props
 import Notion.V1.PropertyValue qualified as PV
 import Notion.V1.RichText (Annotations (..), Date (..), MentionContent (..), RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Notion.V1.RichText qualified as RT
-import Notion.V1.Search (SearchRequest (..), SearchResult (..), dataSourceFilter, pageFilter, parseSearchResults)
+import Notion.V1.Search (PageOrDataSource (..), SearchRequest (..), dataSourceFilter, pageFilter)
 import Notion.V1.Users (BotUser (..), UserObject (..), WorkspaceLimits (..))
 import Notion.V1.Views (Clearable (..), CreateView (..), UpdateView (..), ViewObject (..), ViewType (..))
 import Notion.V1.Views qualified as Views
@@ -1023,22 +1023,22 @@ testSearchPages :: Methods -> Assertion
 testSearchPages Methods {search} = do
   let params = SearchRequest {query = Nothing, sort = Nothing, filter = Just pageFilter, startCursor = Nothing, pageSize = Just 3}
   result <- search params
-  let typed = parseSearchResults result
-  -- All results should be PageResult
-  Vector.forM_ typed $ \r ->
+  -- All results should be full or partial pages
+  Vector.forM_ (results result) $ \r ->
     case r of
       PageResult _ -> pure ()
-      DataSourceResult _ -> assertFailure "Expected only page results with page filter"
+      PartialPageResult _ -> pure ()
+      _ -> assertFailure "Expected only page results with page filter"
 
 testSearchDataSources :: Methods -> Assertion
 testSearchDataSources Methods {search} = do
   let params = SearchRequest {query = Nothing, sort = Nothing, filter = Just dataSourceFilter, startCursor = Nothing, pageSize = Just 3}
   result <- search params
-  let typed = parseSearchResults result
-  Vector.forM_ typed $ \r ->
+  Vector.forM_ (results result) $ \r ->
     case r of
       DataSourceResult _ -> pure ()
-      PageResult _ -> assertFailure "Expected only data source results with data source filter"
+      PartialDataSourceResult _ -> pure ()
+      _ -> assertFailure "Expected only data source results with data source filter"
 
 testListCustomEmojis :: Methods -> Assertion
 testListCustomEmojis Methods {listCustomEmojis} = do

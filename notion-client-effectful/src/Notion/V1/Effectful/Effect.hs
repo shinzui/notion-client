@@ -90,7 +90,6 @@ module Notion.V1.Effectful.Effect
   )
 where
 
-import Data.Aeson (Value)
 import Data.Text (Text)
 import Effectful (Dispatch (..), DispatchOf, Eff, Effect, (:>))
 import Effectful.Dispatch.Dynamic (send)
@@ -109,7 +108,7 @@ import Notion.V1.FileUploads qualified as FileUploads
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.MeetingNotes qualified as MeetingNotes
 import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PartialPageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
-import Notion.V1.Search (SearchRequest)
+import Notion.V1.Search (PageOrDataSource, SearchRequest)
 import Notion.V1.Users (UserID, UserObject)
 import Notion.V1.Views (ViewObject)
 import Notion.V1.Views qualified as Views
@@ -164,7 +163,7 @@ data Notion :: Effect where
   ListUsers :: Maybe Natural -> Maybe Text -> Notion m (ListOf UserObject)
   RetrieveMyUser :: Notion m UserObject
   -- Search
-  Search :: SearchRequest -> Notion m (ListOf Value)
+  Search :: SearchRequest -> Notion m (ListOf PageOrDataSource)
   -- Comments
   CreateComment :: Comments.CreateComment -> Notion m CommentResponse
   ListComments :: Maybe BlockID -> Maybe Text -> Maybe Natural -> Notion m (ListOf CommentObject)
@@ -374,7 +373,7 @@ retrieveMyUser = send RetrieveMyUser
 -- ── Search ────────────────────────────────────────────────────────
 
 -- | See 'Notion.V1.Methods'.'Notion.V1.search'.
-search :: (Notion :> es) => SearchRequest -> Eff es (ListOf Value)
+search :: (Notion :> es) => SearchRequest -> Eff es (ListOf PageOrDataSource)
 search = send . Search
 
 -- ── Comments ──────────────────────────────────────────────────────

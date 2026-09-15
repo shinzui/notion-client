@@ -8,9 +8,13 @@ module Notion.V1.Search
     SearchFilter (..),
     SearchObjectType (..),
 
-    -- * Response parsing
-    SearchResult (..),
-    parseSearchResults,
+    -- * Results
+    SearchResult,
+    PageOrDataSource (..),
+    PartialPageObject (..),
+    PartialDataSourceObject (..),
+    pageResults,
+    dataSourceResults,
 
     -- * Convenience constructors
     pageFilter,
@@ -21,12 +25,11 @@ module Notion.V1.Search
   )
 where
 
+import Data.Aeson ((.=))
 import Data.Aeson qualified as Aeson
-import Data.Vector qualified as Vector
 import Notion.Prelude
-import Notion.V1.DataSources (DataSourceObject)
-import Notion.V1.ListOf (ListOf (..))
-import Notion.V1.Pages (PageObject)
+import Notion.V1.DataSources (PageOrDataSource (..), PartialDataSourceObject (..), PartialPageObject (..), dataSourceResults, pageResults)
+import Notion.V1.ListOf (ListOf)
 
 -- | Search request
 data SearchRequest = SearchRequest
@@ -62,14 +65,16 @@ instance ToJSON SearchSortDirection where
   toJSON = genericToJSON aesonOptions
 
 -- | Search sort
-data SearchSort = SearchSort
-  { direction :: SearchSortDirection,
-    timestamp :: Text
-  }
+data SearchSort
+  = -- | @{"timestamp":"last_edited_time","direction":...}@
+    SearchByLastEditedTime SearchSortDirection
+  | -- | @{"property":"relevance"}@
+    SearchByRelevance
   deriving stock (Generic, Show)
 
 instance ToJSON SearchSort where
-  toJSON = genericToJSON aesonOptions
+  toJSON (SearchByLastEditedTime dir) = Aeson.object ["timestamp" .= ("last_edited_time" :: Text), "direction" .= dir]
+  toJSON SearchByRelevance = Aeson.object ["property" .= ("relevance" :: Text)]
 
 -- | Object types supported by the search filter.
 -- In API version 2025-09-03, the search API filters by @page@ or @data_source@.
@@ -89,53 +94,31 @@ instance FromJSON SearchObjectType where
     other -> fail $ "Unknown search object type: " <> unpack other
 
 -- | Search filter
-data SearchFilter = SearchFilter
-  { value :: SearchObjectType,
-    property :: Text
-  }
+data SearchFilter
+  = -- | @{"property":"object","value":...,"in_trash"?:...}@
+    SearchObjectFilter SearchObjectType (Maybe Bool)
+  | -- | @{"in_trash":...}@
+    SearchInTrashFilter Bool
   deriving stock (Generic, Show)
 
 instance ToJSON SearchFilter where
-  toJSON = genericToJSON aesonOptions
+  toJSON (SearchObjectFilter v mTrash) =
+    Aeson.object $ ["property" .= ("object" :: Text), "value" .= v] <> maybe [] (\t -> ["in_trash" .= t]) mTrash
+  toJSON (SearchInTrashFilter t) = Aeson.object ["in_trash" .= t]
 
 -- | Create a filter to search only for pages
 pageFilter :: SearchFilter
-pageFilter = SearchFilter {value = SearchPage, property = "object"}
+pageFilter = SearchObjectFilter SearchPage Nothing
 
 -- | Create a filter to search only for data sources
 dataSourceFilter :: SearchFilter
-dataSourceFilter = SearchFilter {value = SearchDataSource, property = "object"}
+dataSourceFilter = SearchObjectFilter SearchDataSource Nothing
+
+-- | A search result: the same union as a data source query result.
+type SearchResult = PageOrDataSource
 
 -- | Servant API
 type API =
   "search"
     :> ReqBody '[JSON] SearchRequest
-    :> Post '[JSON] (ListOf Aeson.Value)
-
--- * Response parsing
-
--- | A search result can be either a page or a data source
-data SearchResult
-  = PageResult PageObject
-  | DataSourceResult DataSourceObject
-  deriving stock (Show)
-
-instance FromJSON SearchResult where
-  parseJSON v = do
-    obj <- Aeson.parseJSON v
-    objectType <- obj Aeson..: "object"
-    case objectType of
-      "page" -> PageResult <$> Aeson.parseJSON v
-      "data_source" -> DataSourceResult <$> Aeson.parseJSON v
-      other -> fail $ "Unknown object type in search result: " <> other
-
--- | Parse raw search results into typed 'SearchResult' values.
--- Results that fail to parse are silently dropped.
-parseSearchResults :: ListOf Aeson.Value -> Vector SearchResult
-parseSearchResults listOf =
-  Vector.mapMaybe parseOne (results listOf)
-  where
-    parseOne :: Aeson.Value -> Maybe SearchResult
-    parseOne v = case Aeson.fromJSON v of
-      Aeson.Success r -> Just r
-      Aeson.Error _ -> Nothing
+    :> Post '[JSON] (ListOf PageOrDataSource)

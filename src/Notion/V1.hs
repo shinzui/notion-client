@@ -332,7 +332,7 @@ data Methods = Methods
       IO (ListOf UserObject),
     retrieveMyUser :: IO UserObject,
     -- \* Search
-    search :: SearchRequest -> IO (ListOf Value),
+    search :: SearchRequest -> IO (ListOf Search.PageOrDataSource),
     -- \* Comments
 
     -- | Create a comment on a page or block, or a reply in a discussion.

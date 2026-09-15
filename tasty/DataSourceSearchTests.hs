@@ -9,7 +9,8 @@ import Data.Vector qualified as Vector
 import Notion.V1.Common (Parent (..))
 import Notion.V1.DataSources
 import Notion.V1.Databases (CreateDatabase (..), CreateDatabaseType (..), DatabaseObject (..), DatabaseType (..), InitialDataSource (..), PartialDatabaseObject (..))
-import Notion.V1.ListOf (ListOf (..))
+import Notion.V1.ListOf (IncompleteReason (..), ListOf (..), RequestStatus (..), RequestStatusType (..))
+import Notion.V1.Search (SearchFilter (..), SearchObjectType (..), SearchSort (..), SearchSortDirection (..))
 import Test.Tasty
 import Test.Tasty.HUnit
 import Prelude hiding (id)
@@ -18,7 +19,8 @@ tests :: TestTree
 tests =
   testGroup
     "EP-5 Data sources, databases, search, filters"
-    [ milestone1Tests
+    [ milestone1Tests,
+      milestone2Tests
     ]
 
 -- ---------------------------------------------------------------------
@@ -190,4 +192,29 @@ milestone1Tests =
       testCase "PartialDatabaseObject decodes" $ do
         PartialDatabaseObject {id = dbId} <- decodeOrFail "{\"object\":\"database\",\"id\":\"db-2\"}"
         dbId @?= "db-2"
+    ]
+
+-- ---------------------------------------------------------------------
+-- Milestone 2
+-- ---------------------------------------------------------------------
+
+milestone2Tests :: TestTree
+milestone2Tests =
+  testGroup
+    "Milestone 2"
+    [ testCase "SearchSort relevance encodes" $
+        Aeson.toJSON SearchByRelevance @?= Aeson.object ["property" Aeson..= ("relevance" :: Text.Text)],
+      testCase "SearchSort last_edited_time encodes" $
+        Aeson.toJSON (SearchByLastEditedTime Descending)
+          @?= Aeson.object ["timestamp" Aeson..= ("last_edited_time" :: Text.Text), "direction" Aeson..= ("descending" :: Text.Text)],
+      testCase "SearchFilter object filter with in_trash" $
+        Aeson.toJSON (SearchObjectFilter SearchPage (Just True))
+          @?= Aeson.object ["property" Aeson..= ("object" :: Text.Text), "value" Aeson..= ("page" :: Text.Text), "in_trash" Aeson..= True],
+      testCase "SearchFilter standalone in_trash" $
+        Aeson.toJSON (SearchInTrashFilter False) @?= Aeson.object ["in_trash" Aeson..= False],
+      testCase "Search response decodes typed results" $ do
+        list <- fromValueOrFail @(ListOf PageOrDataSource) (queryResponse everyResultKind Nothing True)
+        Vector.length (results list) @?= 5
+        map resultKind (Vector.toList (results list)) @?= ["page", "partial page", "data_source", "partial data_source", "unknown"]
+        requestStatus list @?= Just RequestStatus {type_ = RequestIncomplete, incompleteReason = Just QueryResultLimitReached}
     ]

@@ -39,7 +39,8 @@ import DatabaseDemo (runDatabaseDemo)
 import FileUploadDemo (runFileUploadDemo)
 import MarkdownDemo (runMarkdownDemo)
 import Notion.V1 (Methods (..), getClientEnv, makeMethods)
-import Notion.V1.Search (SearchRequest (..), SearchResult (..), SearchSort (..), SearchSortDirection (..), dataSourceFilter, pageFilter, parseSearchResults)
+import Notion.V1.ListOf (ListOf (..))
+import Notion.V1.Search (PageOrDataSource (..), SearchRequest (..), SearchSort (..), SearchSortDirection (..), dataSourceFilter, pageFilter)
 import PageDemo (runPageDemo)
 import System.Environment qualified as Environment
 import TemplateDemo (runTemplateDemo)
@@ -107,7 +108,7 @@ main = do
   let searchParams =
         SearchRequest
           { query = Nothing,
-            sort = Just (SearchSort {direction = Descending, timestamp = Text.pack "last_edited_time"}),
+            sort = Just (SearchByLastEditedTime Descending),
             filter = Nothing,
             startCursor = Nothing,
             pageSize = Just 5
@@ -116,12 +117,15 @@ main = do
     runTest (Text.pack "Searching (all objects, sorted by last_edited_time)") $
       search methods searchParams
 
-  let typedResults = parseSearchResults rawResults
+  let typedResults = results rawResults
   putStrLn $ "  Found " <> show (Vector.length typedResults) <> " typed results"
   Vector.forM_ typedResults $ \result ->
     case result of
       PageResult _ -> putStrLn "  - page"
+      PartialPageResult _ -> putStrLn "  - partial page"
       DataSourceResult _ -> putStrLn "  - data_source"
+      PartialDataSourceResult _ -> putStrLn "  - partial data_source"
+      UnknownResult _ -> putStrLn "  - unknown"
 
   -- Search filtered to pages only
   let pageSearchParams =
@@ -135,7 +139,7 @@ main = do
   pageResults <-
     runTest (Text.pack "Searching (pages only)") $
       search methods pageSearchParams
-  let typedPageResults = parseSearchResults pageResults
+  let typedPageResults = results pageResults
   putStrLn $ "  Found " <> show (Vector.length typedPageResults) <> " pages"
 
   -- Search filtered to data sources only
@@ -150,7 +154,7 @@ main = do
   dsResults <-
     runTest (Text.pack "Searching (data sources only)") $
       search methods dsSearchParams
-  let typedDsResults = parseSearchResults dsResults
+  let typedDsResults = results dsResults
   putStrLn $ "  Found " <> show (Vector.length typedDsResults) <> " data sources"
 
   -- All done
