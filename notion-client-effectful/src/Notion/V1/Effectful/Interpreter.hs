@@ -31,6 +31,7 @@ import Notion.V1.Effectful.Effect
         CreateDataSource,
         CreateDatabase,
         CreateFileUpload,
+        CreateMeetingNote,
         CreatePage,
         CreatePageAsync,
         CreateView,
@@ -154,6 +155,8 @@ runNotion methods = interpret $ \_ -> \case
     runIO (Notion.listFileUploads methods statusFilter cursor pageSize)
   -- Async Tasks
   RetrieveAsyncTask tid -> runIO (Notion.retrieveAsyncTask methods tid)
+  -- Meeting Notes
+  CreateMeetingNote req -> runIO (Notion.createMeetingNote methods req)
 
 -- | Run an 'IO' action, funneling any thrown 'NotionError' through
 -- the 'Error' effect.

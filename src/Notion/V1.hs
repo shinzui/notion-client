@@ -97,6 +97,7 @@ import Notion.V1.Databases qualified as Databases
 import Notion.V1.FileUploads (FileUploadID, FileUploadObject, FileUploadStatus)
 import Notion.V1.FileUploads qualified as FileUploads
 import Notion.V1.ListOf (ListOf (..))
+import Notion.V1.MeetingNotes qualified as MeetingNotes
 import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
 import Notion.V1.Pages qualified as Pages
 import Notion.V1.Search (SearchRequest)
@@ -202,6 +203,7 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
                  :<|> listFileUploads_
                )
         :<|> retrieveAsyncTask
+        :<|> createMeetingNote
       ) =
         Client.hoistClient
           @API
@@ -385,7 +387,11 @@ data Methods = Methods
     -- \* Async tasks
 
     -- | Retrieve a background task; see 'Notion.V1.AsyncTasks.waitForAsyncTask'.
-    retrieveAsyncTask :: AsyncTaskID -> IO AsyncTask
+    retrieveAsyncTask :: AsyncTaskID -> IO AsyncTask,
+    -- \* Meeting notes
+
+    -- | Create a meeting note from an uploaded recording or an existing media block.
+    createMeetingNote :: MeetingNotes.CreateMeetingNote -> IO MeetingNotes.CreateMeetingNoteResponse
   }
 
 -- | Servant API
@@ -403,4 +409,5 @@ type API =
            :<|> CustomEmojis.API
            :<|> FileUploads.API
            :<|> AsyncTasks.API
+           :<|> MeetingNotes.API
        )

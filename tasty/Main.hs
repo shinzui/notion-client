@@ -12,6 +12,7 @@ import Data.Scientific (Scientific)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import HelpersTests qualified
+import MeetingNotesTests qualified
 import Notion.V1
 import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), SyncedFrom (..), blockContentType, bookmarkBlock, bulletedListItemBlock, calloutBlock, codeBlock, dividerBlock, headingBlock, imageBlock, mkRichText, numberedListItemBlock, paragraphBlock, quoteBlock, textBlock, toDoBlock, toggleBlock, withChildren)
 import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (..))
@@ -170,6 +171,7 @@ tests = do
         fileUploadTests,
         CommentTests.tests,
         AsyncTaskTests.tests,
+        MeetingNotesTests.tests,
         WireFormatTests.tests,
         RuntimeTests.tests,
         OAuthTests.tests,

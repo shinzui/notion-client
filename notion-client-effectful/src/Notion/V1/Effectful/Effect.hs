@@ -81,6 +81,9 @@ module Notion.V1.Effectful.Effect
 
     -- * Async Tasks
     retrieveAsyncTask,
+
+    -- * Meeting Notes
+    createMeetingNote,
   )
 where
 
@@ -101,6 +104,7 @@ import Notion.V1.Databases (CreateDatabase, DatabaseID, DatabaseObject, QueryDat
 import Notion.V1.FileUploads (FileUploadID, FileUploadObject, FileUploadStatus)
 import Notion.V1.FileUploads qualified as FileUploads
 import Notion.V1.ListOf (ListOf)
+import Notion.V1.MeetingNotes qualified as MeetingNotes
 import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, PropertyItemResponse, UpdatePage, UpdatePageMarkdown)
 import Notion.V1.Search (SearchRequest)
 import Notion.V1.Users (UserID, UserObject)
@@ -194,6 +198,8 @@ data Notion :: Effect where
     Notion m (ListOf FileUploadObject)
   -- Async Tasks
   RetrieveAsyncTask :: AsyncTaskID -> Notion m AsyncTask
+  -- Meeting Notes
+  CreateMeetingNote :: MeetingNotes.CreateMeetingNote -> Notion m MeetingNotes.CreateMeetingNoteResponse
 
 type instance DispatchOf Notion = 'Dynamic
 
@@ -479,3 +485,12 @@ listFileUploads statusFilter startCursor pageSize =
 -- 'Notion.V1.AsyncTasks.waitForAsyncTask' to poll from 'Eff'.
 retrieveAsyncTask :: (Notion :> es) => AsyncTaskID -> Eff es AsyncTask
 retrieveAsyncTask = send . RetrieveAsyncTask
+
+-- ── Meeting Notes ─────────────────────────────────────────────────
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.createMeetingNote'.
+createMeetingNote ::
+  (Notion :> es) =>
+  MeetingNotes.CreateMeetingNote ->
+  Eff es MeetingNotes.CreateMeetingNoteResponse
+createMeetingNote = send . CreateMeetingNote

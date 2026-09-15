@@ -50,8 +50,8 @@ You can see it working in three ways: the new unit tests in `cabal test` decode 
 - [x] (2026-09-15) Milestone 2: Create `src/Notion/V1/AsyncTasks.hs` (`AsyncTask`, status union, `AsyncOr`, `AllowAsync`, `waitForAsyncTask`) and expose it in `notion-client.cabal`.
 - [x] (2026-09-15) Milestone 2: Add `retrieveAsyncTask`, `createPageAsync`, `updatePageMarkdownAsync` routes, `Methods` fields and effectful constructors.
 - [x] (2026-09-15) Milestone 2: Add `tasty/AsyncTaskTests.hs` (decoding, `AsyncOr`, `AllowAsync` encoding, polling loop); tests pass.
-- [ ] Milestone 3: Create `src/Notion/V1/MeetingNotes.hs` with `MeetingNotesContent`, `MeetingNoteBlock`, `CreateMeetingNote`, `CreateMeetingNoteResponse` and the create route.
-- [ ] Milestone 3: Add `createMeetingNote` to `Methods`, the top-level `API`, and the effectful package; add create tests to `tasty/MeetingNotesTests.hs`.
+- [x] (2026-09-15) Milestone 3: Create `src/Notion/V1/MeetingNotes.hs` with `MeetingNotesContent`, `MeetingNoteBlock`, `CreateMeetingNote`, `CreateMeetingNoteResponse` and the create route.
+- [x] (2026-09-15) Milestone 3: Add `createMeetingNote` to `Methods`, the top-level `API`, and the effectful package; add create tests to `tasty/MeetingNotesTests.hs`.
 - [ ] Milestone 4: Add the meeting-notes filter/sort DSL, `QueryMeetingNotes`, `QueryMeetingNotesResponse` and the query route.
 - [ ] Milestone 4: Add `queryMeetingNotes` to `Methods` and the effectful package; add query tests; tests pass.
 - [ ] Final: CHANGELOG `## Unreleased` entries written; live checks run (or recorded as skipped); Outcomes & Retrospective filled.
@@ -112,6 +112,14 @@ You can see it working in three ways: the new unit tests in `cabal test` decode 
   Rationale: The nine planned tests do not show that the flag reaches the wire or that the 202 response union decodes.
   Date: 2026-09-15
 
+- Decision: `Notion.V1.MeetingNotes` re-exports EP-1's `MeetingNotesStatus (..)`, `MeetingNotesChildren (..)`, `MeetingCalendarEvent (..)` and `MeetingRecording (..)`.
+  Rationale: Users pattern-matching on a `MeetingNotesContent` need those constructors; re-exporting the very same types (not copies) lets them import one module and cannot cause a name collision with `Notion.V1.BlockContent`.
+  Date: 2026-09-15
+
+- Decision: Keep `createMeetingNote` on a plain `Post '[JSON]` route (status 200 only) and do not live-test it.
+  Rationale: The JS SDK types describe a synchronous block response, and creating a meeting note consumes a real recording that cannot be cleanly undone (see Idempotence and Recovery). If Notion turns out to answer 201 or 202, the fix is the same as for the async page routes: switch to a `UVerb` accepting that status.
+  Date: 2026-09-15
+
 - Decision: The meeting-notes query response gets its own record `QueryMeetingNotesResponse {results, hasMore}`, not `ListOf`.
   Rationale: The response has no `object: "list"` and no `next_cursor` (`src/api-endpoints/meeting-notes.ts` lines 368–392), and the MasterPlan's Integration Points assign this record to EP-3.
   Date: 2026-09-14
@@ -129,6 +137,7 @@ You can see it working in three ways: the new unit tests in `cabal test` decode 
 
 - Milestone 1 (2026-09-15): comment retrieve/update/delete and the restructured `CreateComment` are in. `cabal test` went from 198 to 207 passing tests: the eight planned `Comment mutation (EP-3)` tests plus one network-free route test using `FakeNotion`. The live comment lifecycle passes.
 - Milestone 2 (2026-09-15): `Notion.V1.AsyncTasks`, `retrieveAsyncTask`, `createPageAsync` and `updatePageMarkdownAsync` are in. 11 `Async tasks (EP-3)` tests pass (the nine planned plus two request-level tests), for 218 in total. Live checks created a markdown page asynchronously, updated its markdown asynchronously, waited for both tasks and trashed the page. The live check found the 202 status problem that no offline test could reveal.
+- Milestone 3 (2026-09-15): `Notion.V1.MeetingNotes` with `createMeetingNote` is in; 7 create tests pass (225 in total). Not exercised live, by design.
 
 
 ## Context and Orientation
