@@ -83,7 +83,7 @@ import Notion.V1.Client
     stderrLogger,
     withRetries,
   )
-import Notion.V1.Comments (CommentObject)
+import Notion.V1.Comments (CommentContent, CommentObject, CommentResponse)
 import Notion.V1.Comments qualified as Comments
 import Notion.V1.Common (ParentID, UUID)
 import Notion.V1.CustomEmojis (CustomEmoji)
@@ -179,6 +179,9 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
         :<|> search_
         :<|> ( createComment
                  :<|> listComments_
+                 :<|> retrieveComment
+                 :<|> updateComment
+                 :<|> deleteComment
                )
         :<|> ( createView
                  :<|> retrieveView
@@ -308,7 +311,9 @@ data Methods = Methods
     -- \* Search
     search :: SearchRequest -> IO (ListOf Value),
     -- \* Comments
-    createComment :: Comments.CreateComment -> IO CommentObject,
+
+    -- | Create a comment on a page or block, or a reply in a discussion.
+    createComment :: Comments.CreateComment -> IO CommentResponse,
     -- | List comments on a block or page. To list comments on a page, use the page ID
     -- as the block_id parameter (pages are blocks in Notion).
     listComments ::
@@ -319,6 +324,10 @@ data Methods = Methods
       Maybe Natural ->
       -- \^ page_size
       IO (ListOf CommentObject),
+    retrieveComment :: Comments.CommentID -> IO CommentResponse,
+    -- | Replace a comment's content with rich text or Markdown.
+    updateComment :: Comments.CommentID -> CommentContent -> IO CommentResponse,
+    deleteComment :: Comments.CommentID -> IO CommentResponse,
     -- \* Views
     createView :: Views.CreateView -> IO ViewObject,
     retrieveView :: Views.ViewID -> IO ViewObject,

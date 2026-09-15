@@ -14,7 +14,7 @@ import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
 import Notion.V1.Blocks qualified as Blocks
-import Notion.V1.Comments (CommentObject (..), CreateComment (..))
+import Notion.V1.Comments (CommentContent (..), CommentObject (..), CommentResponse (..), commentResponseId, mkCreateComment, mkReplyComment)
 import Notion.V1.Common (Icon (..), Parent (..), UUID (..))
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
@@ -318,22 +318,15 @@ runDatabaseDemo methods databaseIdStr = do
       -- Create the parent reference using the typed Parent constructor
       commentParent = PageParent {pageId = newPageId}
 
-      -- Create the comment request
-      createCommentRequest =
-        CreateComment
-          { parent = commentParent,
-            richText = commentRichText,
-            discussionId = Nothing -- Creates a new discussion thread
-          }
+      -- Create the comment request (a new discussion thread on the page)
+      createCommentRequest = mkCreateComment commentParent (CommentRichText commentRichText)
 
   -- Create the comment
   newComment <-
     runTest (Text.pack "Creating comment on page") $
       createComment methods createCommentRequest
 
-  let CommentObject {id = commentId, discussionId = discId} = newComment
-  putStrLn $ "Comment created with ID: " <> show commentId
-  putStrLn $ "Discussion ID: " <> show discId
+  putStrLn $ "Comment created with ID: " <> show (commentResponseId newComment)
 
   -- Add a reply to the same discussion thread
   let -- Create reply rich text using typed RichText
@@ -347,19 +340,16 @@ runDatabaseDemo methods databaseIdStr = do
               content = TextContentWrapper (TextContent {content = "This is a reply in the same discussion thread.", link = Nothing})
             }
 
-      -- Reply to existing discussion by providing discussion_id
-      replyRequest =
-        CreateComment
-          { parent = commentParent,
-            richText = replyRichText,
-            discussionId = Just discId -- Reply to the same discussion
-          }
-
-  _replyComment <-
-    runTest (Text.pack "Adding reply to discussion") $
-      createComment methods replyRequest
-
-  putStrLn "Reply added to discussion"
+  -- Reply to the existing discussion by its discussion_id (no parent)
+  case newComment of
+    FullComment CommentObject {discussionId = discId} -> do
+      putStrLn $ "Discussion ID: " <> show discId
+      _replyComment <-
+        runTest (Text.pack "Adding reply to discussion") $
+          createComment methods (mkReplyComment discId (CommentRichText replyRichText))
+      putStrLn "Reply added to discussion"
+    PartialComment _ ->
+      putStrLn "Notion returned a partial comment without a discussion ID; skipping reply"
 
   -- List all comments on the page
   allComments <-

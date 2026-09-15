@@ -34,6 +34,7 @@ import Notion.V1.Effectful.Effect
         CreatePage,
         CreateView,
         DeleteBlock,
+        DeleteComment,
         DeleteView,
         ListBlockChildren,
         ListComments,
@@ -47,6 +48,7 @@ import Notion.V1.Effectful.Effect
         QueryDatabase,
         QueryView,
         RetrieveBlock,
+        RetrieveComment,
         RetrieveDataSource,
         RetrieveDatabase,
         RetrieveFileUpload,
@@ -60,6 +62,7 @@ import Notion.V1.Effectful.Effect
         Search,
         SendFileUploadContent,
         UpdateBlock,
+        UpdateComment,
         UpdateDataSource,
         UpdateDatabase,
         UpdatePage,
@@ -122,6 +125,9 @@ runNotion methods = interpret $ \_ -> \case
   CreateComment req -> runIO (Notion.createComment methods req)
   ListComments bid cursor pageSize ->
     runIO (Notion.listComments methods bid cursor pageSize)
+  RetrieveComment cid -> runIO (Notion.retrieveComment methods cid)
+  UpdateComment cid content -> runIO (Notion.updateComment methods cid content)
+  DeleteComment cid -> runIO (Notion.deleteComment methods cid)
   -- Views
   CreateView req -> runIO (Notion.createView methods req)
   RetrieveView vid -> runIO (Notion.retrieveView methods vid)

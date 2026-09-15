@@ -24,6 +24,9 @@
 * Minimum `servant-client` is now 0.20.2; new dependencies `base64-bytestring`, `http-client`, `http-types`, `mtl`, `random` and `servant-client-core`
 * `CreatePage.position` changes from `Maybe Blocks.Position` to `Maybe PagePosition`
 * The exported Servant `API` types of `Notion.V1`, `Notion.V1.DataSources` and `Notion.V1.Databases` gain a `QueryParams "filter_properties" Text` segment on the query routes (only affects code deriving its own client from them; the `Methods` record is unchanged)
+* `CreateComment` is restructured: `target :: CommentTarget` (parent or discussion) and `content :: CommentContent` (rich text or Markdown) replace `parent`, `discussionId` and `richText`; `attachments` now holds `CommentAttachmentRequest` and `displayName` holds `CommentDisplayNameRequest`. Use `mkCreateComment` / `mkReplyComment`
+* `createComment` returns `CommentResponse` (full or partial comment) instead of `CommentObject`
+* `Methods` and the effectful `Notion` GADT gain `retrieveComment`, `updateComment` and `deleteComment`
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
@@ -36,6 +39,7 @@
 * `Notion.V1.Helpers`: `extractNotionId`, `extractPageId`, `extractDatabaseId`, `extractBlockId`
 * `paginateFoldM` and `paginateForM_` in `Notion.V1.Pagination`
 * Runtime building blocks for non-Servant requests: `RequestContext`, `standardHeaders`, `responseTimeoutFor`, `withRetries`, `buildRequestError` and `notionErrorFromResponse`
+* Retrieve, update (rich text or Markdown) and delete comments; create comments with Markdown, discussion replies, file-upload attachments and display names
 
 ### Bug Fixes
 * Decode the `default_background` color — previously any rich text or block using it failed the whole response

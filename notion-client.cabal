@@ -107,6 +107,7 @@ test-suite tasty
   hs-source-dirs: tasty
   main-is: Main.hs
   other-modules:
+    CommentTests
     FakeNotion
     HelpersTests
     OAuthTests

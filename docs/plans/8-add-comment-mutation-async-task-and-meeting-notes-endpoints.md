@@ -5,11 +5,18 @@ title: "Add Comment Mutation, Async Task, and Meeting Notes Endpoints"
 kind: exec-plan
 created_at: 2026-09-14T18:46:51Z
 master_plan: "docs/masterplans/1-reach-parity-with-the-official-notion-js-sdk-on-the-published-rest-api.md"
+intention: intention_01m2jjvjgpef9tyyp50524jfwq
 provenance:
   created_by:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:51Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T13:53:35Z
+      mode: "implement"
+      note: "Implementing milestones 1-4"
 ---
 
 # Add Comment Mutation, Async Task, and Meeting Notes Endpoints
@@ -35,11 +42,11 @@ You can see it working in three ways: the new unit tests in `cabal test` decode 
 
 ## Progress
 
-- [ ] Milestone 1: Add `CommentResponse`, `CommentContent`, `CommentTarget`, request-only attachment and display-name types to `src/Notion/V1/Comments.hs`.
-- [ ] Milestone 1: Restructure `CreateComment`; add `mkCreateComment` and `mkReplyComment`.
-- [ ] Milestone 1: Add retrieve/update/delete comment routes, `Methods` fields and effectful constructors; change `createComment` to return `CommentResponse`.
-- [ ] Milestone 1: Update existing call sites (`tasty/Main.hs`, `notion-client-example/DatabaseDemo.hs`, `notion-client-example/PageDemo.hs`).
-- [ ] Milestone 1: Add `tasty/CommentTests.hs`, register it, extend live `testCommentLifecycle`; `cabal build all` and `cabal test` pass.
+- [x] (2026-09-15) Milestone 1: Add `CommentResponse`, `CommentContent`, `CommentTarget`, request-only attachment and display-name types to `src/Notion/V1/Comments.hs`.
+- [x] (2026-09-15) Milestone 1: Restructure `CreateComment`; add `mkCreateComment` and `mkReplyComment`.
+- [x] (2026-09-15) Milestone 1: Add retrieve/update/delete comment routes, `Methods` fields and effectful constructors; change `createComment` to return `CommentResponse`.
+- [x] (2026-09-15) Milestone 1: Update existing call sites (`tasty/Main.hs`, `notion-client-example/DatabaseDemo.hs`, `notion-client-example/PageDemo.hs`).
+- [x] (2026-09-15) Milestone 1: Add `tasty/CommentTests.hs`, register it, extend live `testCommentLifecycle`; `cabal build all` and `cabal test` pass.
 - [ ] Milestone 2: Create `src/Notion/V1/AsyncTasks.hs` (`AsyncTask`, status union, `AsyncOr`, `AllowAsync`, `waitForAsyncTask`) and expose it in `notion-client.cabal`.
 - [ ] Milestone 2: Add `retrieveAsyncTask`, `createPageAsync`, `updatePageMarkdownAsync` routes, `Methods` fields and effectful constructors.
 - [ ] Milestone 2: Add `tasty/AsyncTaskTests.hs` (decoding, `AsyncOr`, `AllowAsync` encoding, polling loop); tests pass.
@@ -52,7 +59,9 @@ You can see it working in three ways: the new unit tests in `cabal test` decode 
 
 ## Surprises & Discoveries
 
-(None yet.)
+- EP-1 and EP-2 had both landed before this plan started (2026-09-15). `APIErrorCode` exists in `src/Notion/V1/Error.hs`, and the four meeting-notes payload types exist in `src/Notion/V1/BlockContent.hs`, so no fallback paths were needed. `makeMethods` is now a wrapper over `makeMethodsWithEnv`, whose `where` block holds the pattern binding this plan extends.
+- EP-2's `tasty/FakeNotion.hs` records request paths *without* the base URL prefix: a call to `GET /v1/comments/{id}` is recorded as `/comments/{id}`. Evidence from the first run of the route test: `but got: [("GET","/comments/2b0c5f7e-...")...]`.
+- The live `Page E2E` comment lifecycle (token present on 2026-09-15) passed with the new retrieve, Markdown update and delete steps, so the routes and the `{markdown}` PATCH body are accepted by Notion.
 
 
 ## Decision Log
@@ -85,6 +94,10 @@ You can see it working in three ways: the new unit tests in `cabal test` decode 
   Rationale: EP-1 (`docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md`) fully types the meeting-notes block payload while fixing its crashing decoder. The coordinator's cross-plan review (2026-09-14) found that the first draft of this plan defined identically named types (`MeetingNotesChildren`), which would collide for users importing both modules. Milestones 3 and 4 therefore hard-depend on EP-1. Milestones 1 and 2 do not.
   Date: 2026-09-14
 
+- Decision: Add a ninth test to `tasty/CommentTests.hs` that drives `retrieveComment`, `updateComment` and `deleteComment` through EP-2's `FakeNotion` and checks the HTTP method and path of each request.
+  Rationale: The eight planned tests cover only JSON shapes; a wrong `Capture` or verb would compile and pass them. `FakeNotion` makes the route check free of network access.
+  Date: 2026-09-15
+
 - Decision: The meeting-notes query response gets its own record `QueryMeetingNotesResponse {results, hasMore}`, not `ListOf`.
   Rationale: The response has no `object: "list"` and no `next_cursor` (`src/api-endpoints/meeting-notes.ts` lines 368–392), and the MasterPlan's Integration Points assign this record to EP-3.
   Date: 2026-09-14
@@ -100,7 +113,7 @@ You can see it working in three ways: the new unit tests in `cabal test` decode 
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+- Milestone 1 (2026-09-15): comment retrieve/update/delete and the restructured `CreateComment` are in. `cabal test` went from 198 to 207 passing tests: the eight planned `Comment mutation (EP-3)` tests plus one network-free route test using `FakeNotion`. The live comment lifecycle passes.
 
 
 ## Context and Orientation

@@ -55,6 +55,9 @@ module Notion.V1.Effectful.Effect
     -- * Comments
     createComment,
     listComments,
+    retrieveComment,
+    updateComment,
+    deleteComment,
 
     -- * Views
     createView,
@@ -82,7 +85,7 @@ import Effectful (Dispatch (..), DispatchOf, Eff, Effect, (:>))
 import Effectful.Dispatch.Dynamic (send)
 import Notion.V1.Blocks (BlockID, BlockObject)
 import Notion.V1.Blocks qualified as Blocks
-import Notion.V1.Comments (CommentObject)
+import Notion.V1.Comments (CommentObject, CommentResponse)
 import Notion.V1.Comments qualified as Comments
 import Notion.V1.Common (ParentID, UUID)
 import Notion.V1.CustomEmojis (CustomEmoji)
@@ -148,8 +151,11 @@ data Notion :: Effect where
   -- Search
   Search :: SearchRequest -> Notion m (ListOf Value)
   -- Comments
-  CreateComment :: Comments.CreateComment -> Notion m CommentObject
+  CreateComment :: Comments.CreateComment -> Notion m CommentResponse
   ListComments :: Maybe BlockID -> Maybe Text -> Maybe Natural -> Notion m (ListOf CommentObject)
+  RetrieveComment :: Comments.CommentID -> Notion m CommentResponse
+  UpdateComment :: Comments.CommentID -> Comments.CommentContent -> Notion m CommentResponse
+  DeleteComment :: Comments.CommentID -> Notion m CommentResponse
   -- Views
   CreateView :: Views.CreateView -> Notion m ViewObject
   RetrieveView :: Views.ViewID -> Notion m ViewObject
@@ -340,7 +346,7 @@ search = send . Search
 -- ── Comments ──────────────────────────────────────────────────────
 
 -- | See 'Notion.V1.Methods'.'Notion.V1.createComment'.
-createComment :: (Notion :> es) => Comments.CreateComment -> Eff es CommentObject
+createComment :: (Notion :> es) => Comments.CreateComment -> Eff es CommentResponse
 createComment = send . CreateComment
 
 -- | See 'Notion.V1.Methods'.'Notion.V1.listComments'.
@@ -351,6 +357,22 @@ listComments ::
   Maybe Natural ->
   Eff es (ListOf CommentObject)
 listComments bid startCursor pageSize = send (ListComments bid startCursor pageSize)
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.retrieveComment'.
+retrieveComment :: (Notion :> es) => Comments.CommentID -> Eff es CommentResponse
+retrieveComment = send . RetrieveComment
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.updateComment'.
+updateComment ::
+  (Notion :> es) =>
+  Comments.CommentID ->
+  Comments.CommentContent ->
+  Eff es CommentResponse
+updateComment cid content = send (UpdateComment cid content)
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.deleteComment'.
+deleteComment :: (Notion :> es) => Comments.CommentID -> Eff es CommentResponse
+deleteComment = send . DeleteComment
 
 -- ── Views ─────────────────────────────────────────────────────────
 

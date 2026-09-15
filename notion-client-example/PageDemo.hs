@@ -13,7 +13,7 @@ import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
 import Notion.V1.BlockContent (BlockContent, CodeLanguage (..), calloutBlock, codeBlock, mkRichText, quoteBlock)
 import Notion.V1.Blocks qualified as Blocks
-import Notion.V1.Comments (CommentObject (..), CreateComment (..))
+import Notion.V1.Comments (CommentContent (..), CommentObject (..), CommentResponse (..), commentResponseId, mkCreateComment)
 import Notion.V1.Common (Icon (..), Parent (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
@@ -68,21 +68,19 @@ runPageDemo methods pageIdStr = do
         blockCommentParent = BlockParent {blockId = firstBlockId}
 
         -- Create the comment request for the block
-        createBlockCommentRequest =
-          CreateComment
-            { parent = blockCommentParent,
-              richText = blockCommentRichText,
-              discussionId = Nothing -- Creates a new discussion thread on the block
-            }
+        -- Creates a new discussion thread on the block
+        createBlockCommentRequest = mkCreateComment blockCommentParent (CommentRichText blockCommentRichText)
 
     -- Create the comment on the block
     blockComment <-
       runTest (Text.pack "Creating comment on block") $
         createComment methods createBlockCommentRequest
 
-    let CommentObject {id = blockCommentId, discussionId = blockDiscId} = blockComment
-    putStrLn $ "Block comment created with ID: " <> show blockCommentId
-    putStrLn $ "Block discussion ID: " <> show blockDiscId
+    putStrLn $ "Block comment created with ID: " <> show (commentResponseId blockComment)
+    case blockComment of
+      FullComment CommentObject {discussionId = blockDiscId} ->
+        putStrLn $ "Block discussion ID: " <> show blockDiscId
+      PartialComment _ -> pure ()
 
     -- List comments on the block
     blockComments <-

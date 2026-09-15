@@ -1,5 +1,6 @@
 module Main where
 
+import CommentTests qualified
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -14,7 +15,7 @@ import Notion.V1
 import Notion.V1.BlockContent (BlockContent (..), CodeLanguage (..), FileSource (..), SyncedFrom (..), blockContentType, bookmarkBlock, bulletedListItemBlock, calloutBlock, codeBlock, dividerBlock, headingBlock, imageBlock, mkRichText, numberedListItemBlock, paragraphBlock, quoteBlock, textBlock, toDoBlock, toggleBlock, withChildren)
 import Notion.V1.Blocks (AppendBlockChildren (..), BlockObject (..), Position (..))
 import Notion.V1.Blocks qualified as Blocks
-import Notion.V1.Comments (CommentAttachment (..), CommentDisplayName (..), CommentObject (..), CreateComment (..))
+import Notion.V1.Comments (CommentAttachment (..), CommentAttachmentRequest (..), CommentContent (..), CommentDisplayName (..), CommentDisplayNameRequest (..), CommentResponse (..), CommentTarget (..), CreateComment (..))
 import Notion.V1.Comments qualified as Comments
 import Notion.V1.Common (Color (..), Cover (..), ExternalFile (..), Icon (..), Parent (..), UUID (..))
 import Notion.V1.CustomEmojis (CustomEmoji (..))
@@ -166,6 +167,7 @@ tests = do
         jsonSerializationTests,
         propertyValueTests,
         fileUploadTests,
+        CommentTests.tests,
         WireFormatTests.tests,
         RuntimeTests.tests,
         OAuthTests.tests,
@@ -1166,7 +1168,7 @@ testPageBlockLifecycle methods@Methods {createPage, appendBlockChildren, listBlo
 
 -- | Create page, add comments (page-level and block-level), list them.
 testCommentLifecycle :: Methods -> Text.Text -> Assertion
-testCommentLifecycle methods@Methods {createComment, listComments, appendBlockChildren} parentPageId = do
+testCommentLifecycle methods@Methods {createComment, listComments, appendBlockChildren, retrieveComment, updateComment, deleteComment} parentPageId = do
   -- Create a test page
   page <- createTestPage methods parentPageId "Comment Lifecycle E2E Test"
   let PageObject {id = pageId} = page
@@ -1179,28 +1181,20 @@ testCommentLifecycle methods@Methods {createComment, listComments, appendBlockCh
 
   -- Create a page-level comment
   let pageComment =
-        CreateComment
-          { parent = PageParent {pageId},
-            richText = Vector.singleton (mkTypedRichText "This is a page-level comment from E2E tests."),
-            discussionId = Nothing,
-            attachments = Nothing,
-            displayName = Nothing
-          }
+        Comments.mkCreateComment
+          PageParent {pageId}
+          (CommentRichText (Vector.singleton (mkTypedRichText "This is a page-level comment from E2E tests.")))
   comment1 <- createComment pageComment
-  let CommentObject {id = comment1Id} = comment1
+  let comment1Id = Comments.commentResponseId comment1
   assertBool "Comment should have an ID" (show comment1Id /= "")
 
   -- Create a block-level comment (a discussion on a specific block)
   let blockComment =
-        CreateComment
-          { parent = BlockParent {blockId},
-            richText = Vector.singleton (mkTypedRichText "This is a block-level comment from E2E tests."),
-            discussionId = Nothing,
-            attachments = Nothing,
-            displayName = Nothing
-          }
+        Comments.mkCreateComment
+          BlockParent {blockId}
+          (CommentRichText (Vector.singleton (mkTypedRichText "This is a block-level comment from E2E tests.")))
   comment2 <- createComment blockComment
-  let CommentObject {id = comment2Id} = comment2
+  let comment2Id = Comments.commentResponseId comment2
   assertBool "Block comment should have an ID" (show comment2Id /= "")
 
   -- List comments on the page
@@ -1210,6 +1204,23 @@ testCommentLifecycle methods@Methods {createComment, listComments, appendBlockCh
   -- List comments on the block
   blockComments <- listComments (Just blockId) Nothing Nothing
   assertBool "Should have at least 1 block comment" (not $ Vector.null (results blockComments))
+
+  -- Retrieve a single comment
+  retrieved <- retrieveComment comment1Id
+  assertEqual "Retrieved comment id" comment1Id (Comments.commentResponseId retrieved)
+
+  -- Edit the comment with Markdown
+  edited <- updateComment comment1Id (CommentMarkdown "Edited by **E2E** tests.")
+  case edited of
+    FullComment Comments.CommentObject {richText} ->
+      assertBool
+        "Edited comment text"
+        (any (\RichText {plainText} -> "Edited by" `Text.isInfixOf` plainText) richText)
+    PartialComment _ -> pure ()
+
+  -- Delete the block comment; listing afterwards must still succeed
+  _ <- deleteComment comment2Id
+  _ <- listComments (Just blockId) Nothing Nothing
 
   -- Clean up
   trashPage methods pageId
@@ -1662,28 +1673,10 @@ testSerializeCreateComment :: Assertion
 testSerializeCreateComment = do
   let req =
         CreateComment
-          { parent = PageParent {pageId = UUID "p-1"},
-            richText = Vector.singleton (mkPlainRichText "Hello"),
-            discussionId = Nothing,
-            attachments =
-              Just
-                ( Vector.singleton
-                    CommentAttachment
-                      { name = Just "file.pdf",
-                        type_ = Just "external",
-                        category = Nothing,
-                        external = Just (ExternalFile {url = "https://example.com/file.pdf"}),
-                        file = Nothing
-                      }
-                ),
-            displayName =
-              Just
-                CommentDisplayName
-                  { type_ = "user",
-                    emoji = Just "🎉",
-                    displayName = Just "Bot",
-                    resolvedName = Nothing
-                  }
+          { target = CommentOnParent PageParent {pageId = UUID "p-1"},
+            content = CommentRichText (Vector.singleton (mkPlainRichText "Hello")),
+            attachments = Just (Vector.singleton (CommentAttachmentRequest (UUID "fu-1"))),
+            displayName = Just (DisplayAsCustom "Sato Kenji")
           }
       json = Aeson.toJSON req
   case json of
