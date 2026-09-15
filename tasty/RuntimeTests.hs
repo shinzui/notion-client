@@ -1,19 +1,25 @@
 -- | Tests for the client runtime: configuration, errors and retries.
 module RuntimeTests (tests) where
 
-import Control.Exception (SomeException, fromException, toException, try)
+import Control.Exception (SomeException, fromException, throwIO, toException, try)
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy.Char8 qualified as L8
-import Data.IORef (readIORef)
+import Data.IORef (modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Time.Calendar (fromGregorian)
+import Data.Time.Clock (UTCTime (..), secondsToDiffTime)
 import FakeNotion
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types qualified as HTTP
 import Notion.V1
 import Notion.V1.Client (applyTimeout)
+import Notion.V1.Common (UUID (..))
 import Notion.V1.Error
 import Notion.V1.ListOf (IncompleteReason (..), ListOf (..), RequestStatus (..), RequestStatusType (..))
+import Notion.V1.Retry (canRetry, parseRetryAfter, retryDelay, validateRequestPath)
+import Notion.V1.Search (SearchRequest (..))
 import Servant.Client (ClientEnv (..), ClientError (..))
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -23,7 +29,9 @@ tests =
   testGroup
     "Runtime"
     [ testGroup "Configuration" configurationTests,
-      testGroup "Errors" errorTests
+      testGroup "Errors" errorTests,
+      testGroup "Retry policy" retryPolicyTests,
+      testGroup "Retry loop" retryLoopTests
     ]
 
 -- | A bot user fixture (made-up name).
@@ -163,3 +171,148 @@ errorTests =
       _ -> False
     fromExceptionOf :: SomeException -> Maybe RequestTimeoutError
     fromExceptionOf = fromException
+
+------------------------------------------------------------------------------
+-- Retries
+
+retryPolicyTests :: [TestTree]
+retryPolicyTests =
+  [ testCase "canRetry follows the JS SDK rules" $ do
+      canRetry HTTP.methodPost RateLimited @?= True
+      canRetry HTTP.methodPost ServiceOverload @?= True
+      canRetry HTTP.methodPost InternalServerError @?= False
+      canRetry HTTP.methodGet InternalServerError @?= True
+      canRetry HTTP.methodDelete ServiceUnavailable @?= True
+      canRetry HTTP.methodPatch ServiceUnavailable @?= False
+      canRetry HTTP.methodGet GatewayTimeout @?= False
+      canRetry HTTP.methodGet (UnknownErrorCode "x") @?= False
+      canRetry HTTP.methodGet ObjectNotFound @?= False,
+    testCase "parseRetryAfter reads seconds and HTTP dates" $ do
+      let now = UTCTime (fromGregorian 2015 10 21) (secondsToDiffTime (7 * 3600 + 27 * 60 + 30))
+      parseRetryAfter now "120" @?= Just 120
+      parseRetryAfter now "0" @?= Just 0
+      parseRetryAfter now " 7" @?= Just 7
+      parseRetryAfter now "1.5" @?= Just 1
+      parseRetryAfter now "Wed, 21 Oct 2015 07:28:00 GMT" @?= Just 30
+      parseRetryAfter now "Wed, 21 Oct 2015 07:00:00 GMT" @?= Just 0
+      parseRetryAfter now "soon" @?= Nothing
+      parseRetryAfter now "" @?= Nothing,
+    testCase "retryDelay uses back-off with jitter and caps retry-after" $ do
+      retryDelay defaultRetryOptions 0 0 Nothing @?= 0.5
+      retryDelay defaultRetryOptions 1 0.5 Nothing @?= 2
+      retryDelay defaultRetryOptions 10 0.9 Nothing @?= 60
+      retryDelay defaultRetryOptions 0 0 (Just 120) @?= 60
+      retryDelay defaultRetryOptions 0 0 (Just 5) @?= 5,
+    testCase "validateRequestPath rejects path traversal" $ do
+      validateRequestPath "/pages/5c6a28216bb14a7eb6e1c50111515c3d" @?= Right ()
+      validateRequestPath "/pages/.." @?= Left (InvalidPathParameterError "/pages/..")
+      validateRequestPath "/pages/%2E%2E" @?= Left (InvalidPathParameterError "/pages/%2E%2E")
+      validateRequestPath "/pages/%252e%252e" @?= Right ()
+  ]
+
+-- | Retries with millisecond delays so the tests run quickly.
+fastRetryConfig :: ClientConfig
+fastRetryConfig =
+  defaultClientConfig {retryOptions = defaultRetryOptions {initialRetryDelay = 0.001, maxRetryDelay = 0.01}}
+
+errorReply :: Int -> Text -> FakeReply
+errorReply status code =
+  jsonReply status $
+    "{\"object\":\"error\",\"status\":"
+      <> L8.pack (show status)
+      <> ",\"code\":\""
+      <> L8.pack (Text.unpack code)
+      <> "\",\"message\":\"scripted failure\"}"
+
+rateLimitedReply :: FakeReply
+rateLimitedReply =
+  FakeReply
+    429
+    [("Content-Type", "application/json"), ("Retry-After", "0")]
+    "{\"object\":\"error\",\"status\":429,\"code\":\"rate_limited\",\"message\":\"You have been rate limited. Please try again in a few minutes.\"}"
+
+emptyListJson :: L8.ByteString
+emptyListJson = "{\"object\":\"list\",\"results\":[],\"next_cursor\":null,\"has_more\":false}"
+
+emptySearch :: SearchRequest
+emptySearch = SearchRequest {query = Nothing, sort = Nothing, filter = Nothing, startCursor = Nothing, pageSize = Nothing}
+
+-- | Run a call against a scripted fake and return the result and request count.
+runScripted :: ClientConfig -> [FakeReply] -> (Methods -> IO a) -> IO (Either SomeException a, Int)
+runScripted config script call = do
+  (env, recorded) <- fakeClientEnv script
+  result <- try (call (makeMethodsWithEnv config env "secret_tanaka"))
+  n <- length <$> readIORef recorded
+  pure (result, n)
+
+expectCode :: APIErrorCode -> Either SomeException a -> Assertion
+expectCode expected = \case
+  Left ex | Just NotionError {code} <- fromException ex -> code @?= expected
+  Left ex -> assertFailure ("expected NotionError, got " <> show ex)
+  Right _ -> assertFailure "expected a failure"
+
+retryLoopTests :: [TestTree]
+retryLoopTests =
+  [ testCase "GET retried after 429 then succeeds" $ do
+      (result, n) <- runScripted fastRetryConfig [rateLimitedReply, jsonReply 200 userJson] retrieveMyUser
+      either (assertFailure . show) (const (pure ())) result
+      n @?= 2,
+    testCase "POST retried after 529" $ do
+      (result, n) <- runScripted fastRetryConfig [errorReply 529 "service_overload", jsonReply 200 emptyListJson] (`search` emptySearch)
+      either (assertFailure . show) (const (pure ())) result
+      n @?= 2,
+    testCase "POST not retried on 500" $ do
+      (result, n) <- runScripted fastRetryConfig [errorReply 500 "internal_server_error", jsonReply 200 emptyListJson] (`search` emptySearch)
+      expectCode InternalServerError result
+      n @?= 1,
+    testCase "GET retried on 503 until maxRetries then throws" $ do
+      (result, n) <- runScripted fastRetryConfig (replicate 3 (errorReply 503 "service_unavailable")) retrieveMyUser
+      expectCode ServiceUnavailable result
+      n @?= 3,
+    testCase "noRetries disables retries" $ do
+      (result, n) <- runScripted defaultClientConfig {retryOptions = noRetries} [rateLimitedReply, jsonReply 200 userJson] retrieveMyUser
+      expectCode RateLimited result
+      n @?= 1,
+    testCase "withRetries wraps a plain IO action" $ do
+      calls <- newIORef (0 :: Int)
+      let failWith status = do
+            modifyIORef' calls (+ 1)
+            count <- readIORef calls
+            if count == 1
+              then throwIO (notionErrorFromResponse status [("Retry-After", "0")] (rateLimitedBodyFor status))
+              else pure ("ok" :: Text)
+      r <- withRetries fastRetryConfig HTTP.methodPost "/sessions" (failWith HTTP.status429)
+      r @?= "ok"
+      readIORef calls >>= (@?= 2)
+      calls2 <- newIORef (0 :: Int)
+      let alwaysFail = modifyIORef' calls2 (+ 1) >> throwIO (notionErrorFromResponse HTTP.status500 [] (rateLimitedBodyFor HTTP.status500))
+      r2 <- try @NotionError (withRetries fastRetryConfig HTTP.methodPost "/sessions" (alwaysFail :: IO Text))
+      either (\NotionError {code} -> code @?= InternalServerError) (const (assertFailure "expected failure")) r2
+      readIORef calls2 >>= (@?= 1),
+    testCase "HTML 429 is not retried" $ do
+      (result, n) <- runScripted fastRetryConfig [FakeReply 429 [("Content-Type", "text/html")] "<html/>", jsonReply 200 userJson] retrieveMyUser
+      case result of
+        Left ex | Just (_ :: UnknownHTTPResponseError) <- fromException ex -> pure ()
+        other -> assertFailure ("expected UnknownHTTPResponseError, got " <> either show (const "success") other)
+      n @?= 1,
+    testCase "logger sees retry lines" $ do
+      logged <- newIORef []
+      let config = fastRetryConfig {logger = Just (\_ msg _ -> modifyIORef' logged (<> [msg])), logLevel = LogDebug}
+      (result, _) <- runScripted config [rateLimitedReply, jsonReply 200 userJson] retrieveMyUser
+      either (assertFailure . show) (const (pure ())) result
+      messages <- readIORef logged
+      Prelude.filter (`elem` ["request start", "request fail", "retrying request", "request success"]) messages
+        @?= ["request start", "request fail", "retrying request", "request success"],
+    testCase "path traversal rejected before sending" $ do
+      (result, n) <- runScripted fastRetryConfig [jsonReply 200 userJson] (`retrievePage` UUID "..")
+      case result of
+        Left ex | Just (_ :: InvalidPathParameterError) <- fromException ex -> pure ()
+        other -> assertFailure ("expected InvalidPathParameterError, got " <> either show (const "success") other)
+      n @?= 0
+  ]
+  where
+    rateLimitedBodyFor status =
+      let HTTP.Status {HTTP.statusCode = c} = status
+          codeText :: L8.ByteString
+          codeText = if c == 429 then "rate_limited" else "internal_server_error"
+       in "{\"object\":\"error\",\"status\":" <> L8.pack (show c) <> ",\"code\":\"" <> codeText <> "\",\"message\":\"scripted failure\"}"

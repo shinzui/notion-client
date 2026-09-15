@@ -53,9 +53,9 @@ It is visible through new unit tests in the `tasty` suite that run without netwo
 - [x] Milestone 2: Rewrite `src/Notion/V1/Error.hs` (`APIErrorCode`, extended `NotionError`, `HttpErrorResponse`, `UnknownHTTPResponseError`, `RequestTimeoutError`, `InvalidPathParameterError`, `buildRequestError`, `notionErrorFromResponse`, `fromClientError`). (2026-09-15)
 - [x] Milestone 2: Convert errors in the runtime; add `RequestStatus` to `src/Notion/V1/ListOf.hs`; fix `requestStatus` in existing test fixtures and the example app. (2026-09-15)
 - [x] Milestone 2: Error and `RequestStatus` tests in `tasty/RuntimeTests.hs`; `cabal test` green. (2026-09-15)
-- [ ] Milestone 3: Create `src/Notion/V1/Retry.hs` (pure `canRetry`, `parseRetryAfter`, `retryDelay`, `validateRequestPath`).
-- [ ] Milestone 3: Add `withRetries`, logging and the path guard to the middleware in `src/Notion/V1/Client.hs`.
-- [ ] Milestone 3: Pure retry tests and fake-server retry tests; `cabal test` green.
+- [x] Milestone 3: Create `src/Notion/V1/Retry.hs` (pure `canRetry`, `parseRetryAfter`, `retryDelay`, `validateRequestPath`). (2026-09-15)
+- [x] Milestone 3: Add `withRetries`, logging and the path guard to the middleware in `src/Notion/V1/Client.hs`. (2026-09-15)
+- [x] Milestone 3: Pure retry tests and fake-server retry tests; `cabal test` green. (2026-09-15)
 - [ ] Milestone 4: Create `src/Notion/V1/OAuth.hs` (types, Servant API, `OAuthMethods`, `makeOAuthMethods`, `makeOAuthMethodsWith`) and `tasty/OAuthTests.hs`.
 - [ ] Milestone 4: Create `src/Notion/V1/Helpers.hs` (`extractNotionId` family) and `tasty/HelpersTests.hs`; add `paginateFoldM`/`paginateForM_` to `src/Notion/V1/Pagination.hs`.
 - [ ] Milestone 4: Update `README.md`, `notion-client-example/DatabaseDemo.hs`, effectful docs, and `CHANGELOG.md`; `cabal build all && cabal test` green.
@@ -66,6 +66,9 @@ It is visible through new unit tests in the `tasty` suite that run without netwo
 - The servant-client resolved in the Nix shell is 0.20.3.0, so `ClientEnv.middleware` is available and the fallback in Idempotence and Recovery was not needed. In `servant-client/src/Servant/Client/Internal/HttpClient.hs`, `performRequest` calls `makeClientRequest` *outside* `catchConnectionError`, so an exception thrown from a custom `makeClientRequest` escapes as a plain `IO` exception. That is why EP-1's `captureRequest` helper in `tasty/WireFormatTests.hs` keeps working unchanged under the new middleware; all 27 of its tests passed after Milestone 1.
 - `Network.HTTP.Client.ResponseTimeout` has no `Eq` instance, so "applyTimeout sets responseTimeout" compares `show` output instead of using `@?=` on the values.
 - tasty's `-p` pattern containing `||` must be passed through `cabal test` as two `--test-option=` arguments; `--test-options='-p /A/ || /B/'` splits on spaces and fails with ``Invalid argument `||'``.
+- Retrying a multipart upload is safe. servant-client builds a fresh http-client request for every attempt through `makeClientRequest`. `convertBody` turns a `RequestBodySource` into `RequestBodyStreamChunked` with a new popper that re-runs `unSourceT sourceIO` (`servant-client/src/Servant/Client/Internal/HttpClient.hs`, `convertBody`). A retried `sendFileUploadContent` therefore regenerates its body instead of reusing a consumed stream, and the `RequestBodySource` exclusion anticipated in Idempotence and Recovery is not needed.
+- `Notion.V1` must re-export `withRetries`, as the interface contract for plan 14 requires. `tasty/RuntimeTests.hs` failed to compile until it did (`Variable not in scope: withRetries`).
+- One of four full `cabal test` runs after Milestone 3 reported `1 out of 181 tests failed (35.59s)`, with the live `NOTION_TOKEN` E2E groups enabled. It did not recur in the next three runs (`All 181 tests passed`), and the network-free runtime tests are deterministic, so it was most likely a transient live-API failure. The failing test name was not captured.
 
 
 ## Decision Log

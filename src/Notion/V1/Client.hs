@@ -31,28 +31,47 @@ module Notion.V1.Client
     applyTimeout,
     responseTimeoutFor,
     runClientWith,
+    withRetries,
   )
 where
 
+import Control.Concurrent (threadDelay)
+import Control.Exception (SomeException, fromException)
 import Control.Exception qualified as Exception
+import Control.Monad (unless, when)
+import Control.Monad.Error.Class (throwError)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Reader (ask)
 import Data.Aeson qualified as Aeson
+import Data.ByteString.Builder (toLazyByteString)
 import Data.ByteString.Lazy qualified as LBS
+import Data.Foldable (toList)
 import Data.Sequence qualified as Seq
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Text.IO qualified as Text.IO
-import Data.Time.Clock (NominalDiffTime)
+import Data.Time.Clock (NominalDiffTime, getCurrentTime)
 import Data.Version (showVersion)
 import Network.HTTP.Client qualified as HTTP
-import Network.HTTP.Types (Header)
+import Network.HTTP.Types (Header, Method)
 import Notion.Prelude hiding (ByteString)
-import Notion.V1.Error (fromClientError)
-import Notion.V1.Retry (RetryOptions (..), defaultRetryOptions, noRetries)
+import Notion.V1.Error
+  ( HttpErrorResponse (..),
+    NotionError (..),
+    RequestTimeoutError,
+    UnknownHTTPResponseError (..),
+    apiErrorCodeText,
+    fromClientError,
+    lookupHeader,
+    unknownResponseMessage,
+  )
+import Notion.V1.Retry (RetryOptions (..), canRetry, defaultRetryOptions, noRetries, parseRetryAfter, retryDelay, validateRequestPath)
 import Paths_notion_client qualified
 import Servant.Client (BaseUrl (..), ClientEnv (..), ClientM, Scheme (..))
 import Servant.Client qualified as Client
-import Servant.Client.Core (Request, RequestF (..), Response)
+import Servant.Client.Core (Request, RequestF (..), Response, ResponseF (..))
 import System.IO (stderr)
+import System.Random (randomRIO)
 
 -- | Severity of a log message.
 data LogLevel = LogDebug | LogInfo | LogWarn | LogError
@@ -185,10 +204,99 @@ configureClientEnv config env =
       middleware = \app -> notionMiddleware config (middleware env app)
     }
 
--- | Servant middleware that adds the @User-Agent@ header.
+-- | Servant middleware implementing the runtime for every request: rejects path
+-- traversal, adds the @User-Agent@ header, converts failures into this
+-- library's exceptions, retries per 'retryOptions', and logs.
 notionMiddleware :: ClientConfig -> (Request -> ClientM Response) -> Request -> ClientM Response
-notionMiddleware ClientConfig {userAgent} app req =
-  app req {requestHeaders = requestHeaders req <> Seq.fromList (userAgentHeader userAgent)}
+notionMiddleware config@ClientConfig {userAgent} app req0 = do
+  let path = Text.decodeUtf8Lenient (LBS.toStrict (toLazyByteString (requestPath req0)))
+      method = requestMethod req0
+      req = req0 {requestHeaders = requestHeaders req0 <> Seq.fromList (userAgentHeader userAgent)}
+      methodField = ("method", String (Text.decodeUtf8Lenient method))
+  either (liftIO . Exception.throwIO) pure (validateRequestPath path)
+  liftIO $ logWith config LogInfo "request start" [methodField, ("path", String path)]
+  env <- ask
+  result <- liftIO $ withRetries config method path $ do
+    r <- Client.runClientM (app req) env
+    case r of
+      Right resp -> pure (Right resp)
+      Left clientErr -> do
+        let ex = fromClientError clientErr
+        case classify ex of
+          Nothing -> pure (Left clientErr)
+          Just notRetried -> do
+            -- NotionError is logged by withRetries; the others are never retried.
+            unless (isNotionError ex) $
+              logWith config LogWarn "request fail" [methodField, ("path", String path), ("message", String notRetried)]
+            Exception.throwIO ex
+  case result of
+    Left clientErr -> throwError clientErr
+    Right resp -> do
+      liftIO $
+        logWith
+          config
+          LogInfo
+          "request success"
+          [ methodField,
+            ("path", String path),
+            ("requestId", maybe Null String (lookupHeader "x-notion-request-id" (toList (responseHeaders resp))))
+          ]
+      pure resp
+  where
+    isNotionError ex = case fromException ex of
+      Just (_ :: NotionError) -> True
+      Nothing -> False
+    -- A description for exceptions this library throws, Nothing for other client errors.
+    classify :: SomeException -> Maybe Text
+    classify ex
+      | Just NotionError {message} <- fromException ex = Just message
+      | Just (e :: UnknownHTTPResponseError) <- fromException ex = Just (unknownResponseMessage e)
+      | Just (_ :: RequestTimeoutError) <- fromException ex = Just "Request to Notion API has timed out"
+      | otherwise = Nothing
+
+-- | Run an action that signals API failures by throwing 'NotionError', retrying
+-- per 'retryOptions'. @method@ and @path@ are used for the retry rule and log
+-- lines. Other exceptions propagate immediately. Usable outside Servant, for
+-- example before opening a streaming response.
+withRetries :: ClientConfig -> Method -> Text -> IO a -> IO a
+withRetries config@ClientConfig {retryOptions} method path action = go 0
+  where
+    go attempt = do
+      result <- Exception.try action
+      case result of
+        Right a -> pure a
+        Left err@NotionError {code, message, requestId, response} -> do
+          logWith
+            config
+            LogWarn
+            "request fail"
+            [ ("code", String (apiErrorCodeText code)),
+              ("message", String message),
+              ("attempt", Aeson.toJSON attempt),
+              ("requestId", maybe Null String requestId)
+            ]
+          case response of
+            Just HttpErrorResponse {errorBody} ->
+              logWith config LogDebug "failed response body" [("body", String (Text.decodeUtf8Lenient (LBS.toStrict errorBody)))]
+            Nothing -> pure ()
+          when (attempt >= maxRetries retryOptions || not (canRetry method code)) $
+            Exception.throwIO err
+          now <- getCurrentTime
+          jitter <- randomRIO (0, 0.999999)
+          let retryAfter = parseRetryAfter now =<< (lookup "retry-after" . errorHeaders =<< response)
+              delay = retryDelay retryOptions attempt jitter retryAfter
+              delayMs = round (delay * 1000) :: Integer
+          logWith
+            config
+            LogInfo
+            "retrying request"
+            [ ("method", String (Text.decodeUtf8Lenient method)),
+              ("path", String path),
+              ("attempt", Aeson.toJSON (attempt + 1)),
+              ("delayMs", Aeson.toJSON delayMs)
+            ]
+          threadDelay (fromInteger (delayMs * 1000))
+          go (attempt + 1)
 
 -- | Run a client action in an already configured environment, throwing failures
 -- as exceptions.

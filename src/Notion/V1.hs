@@ -48,6 +48,7 @@ module Notion.V1
     requestContextFor,
     standardHeaders,
     responseTimeoutFor,
+    withRetries,
 
     -- * Servant
     API,
@@ -80,6 +81,7 @@ import Notion.V1.Client
     runClientWith,
     standardHeaders,
     stderrLogger,
+    withRetries,
   )
 import Notion.V1.Comments (CommentObject)
 import Notion.V1.Comments qualified as Comments
