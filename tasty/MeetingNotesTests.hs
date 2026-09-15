@@ -1,11 +1,14 @@
 -- | Meeting-notes create and query endpoints (EP-3).
 module MeetingNotesTests (tests) where
 
-import Data.Aeson (Value)
+import Data.Aeson (Value, (.=))
 import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy qualified as LBS
+import Data.Text (Text)
 import Data.Vector qualified as Vector
 import Notion.V1.Common (UUID (..))
+import Notion.V1.Filter (SortDirection (..))
 import Notion.V1.MeetingNotes
 import Notion.V1.RichText (RichText (..))
 import Test.Tasty
@@ -21,7 +24,14 @@ tests =
       testCase "Minimal payload decodes" testMinimalPayload,
       testCase "CreateMeetingNote from file upload" testCreateFromFileUpload,
       testCase "CreateMeetingNote from block has no parent" testCreateFromBlock,
-      testCase "Language codes" testLanguageCodes
+      testCase "Language codes" testLanguageCodes,
+      testCase "Empty query encodes to {}" testEmptyQuery,
+      testCase "Attendees filter matches the JS SDK test" testAttendeesFilter,
+      testCase "Nested combinators, title and date point" testNestedFilter,
+      testCase "Date range condition" testDateRange,
+      testCase "Sort and limit" testSortAndLimit,
+      testCase "Raw node passes through" testRawNode,
+      testCase "Decode query response" testDecodeQueryResponse
     ]
 
 blockWithPayload :: LBS.ByteString -> LBS.ByteString
@@ -115,3 +125,80 @@ testLanguageCodes :: Assertion
 testLanguageCodes =
   map Aeson.toJSON [LanguageZhCN, LanguageZhTW, LanguageNo, LanguageOther "tl"]
     @?= map Aeson.String ["zh-CN", "zh-TW", "no", "tl"]
+
+-- | A value nested inside JSON objects, looked up by key path.
+lookupPath :: [Aeson.Key] -> Value -> Maybe Value
+lookupPath [] v = Just v
+lookupPath (k : ks) (Aeson.Object o) = KeyMap.lookup k o >>= lookupPath ks
+lookupPath _ _ = Nothing
+
+-- | The encoded condition of a property filter node.
+conditionOf :: MeetingNotesPropertyFilter -> Maybe Value
+conditionOf = lookupPath ["filter"] . Aeson.toJSON
+
+testEmptyQuery :: Assertion
+testEmptyQuery = Aeson.toJSON emptyQueryMeetingNotes @?= Aeson.object []
+
+testAttendeesFilter :: Assertion
+testAttendeesFilter = do
+  let QueryMeetingNotes {sort, limit} = emptyQueryMeetingNotes
+      query =
+        QueryMeetingNotes
+          { filter = Just (mnAnd [mnAttendeesInclude (UUID "a1b2c3d4-e5f6-7890-abcd-ef1234567890")]),
+            sort,
+            limit
+          }
+  expected <-
+    decodeValue
+      "{\"filter\":{\"operator\":\"and\",\"filters\":[{\"property\":\"attendees\",\
+      \\"filter\":{\"operator\":\"person_contains\",\"value\":[{\"type\":\"exact\",\
+      \\"value\":{\"table\":\"notion_user\",\"id\":\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\"}}]}}]}}"
+  Aeson.toJSON query @?= expected
+
+testNestedFilter :: Assertion
+testNestedFilter = do
+  let datePoint =
+        MNProperty
+          ( MNCreatedTime
+              ( MNDateIsOnOrAfter
+                  (MeetingNotesDatePoint MNExact (MNDatePointSpec (MeetingNotesDateSpec True "2026-09-01" (Just "09:30") (Just "Asia/Tokyo"))))
+              )
+          )
+      f = mnOr [mnTitleContains "standup", MNNested (mnAnd [datePoint, MNProperty (MNTitle MNTextIsNotEmpty)])]
+  title <- decodeValue "{\"property\":\"title\",\"filter\":{\"operator\":\"string_contains\",\"value\":{\"type\":\"exact\",\"value\":\"standup\"}}}"
+  spec <- decodeValue "{\"type\":\"datetime\",\"start_date\":\"2026-09-01\",\"start_time\":\"09:30\",\"time_zone\":\"Asia/Tokyo\"}"
+  notEmpty <- decodeValue "{\"property\":\"title\",\"filter\":{\"operator\":\"is_not_empty\"}}"
+  let nested = Aeson.object ["operator" .= ("and" :: Text), "filters" .= [Aeson.toJSON datePoint, notEmpty]]
+  Aeson.toJSON f @?= Aeson.object ["operator" .= ("or" :: Text), "filters" .= [title, nested]]
+  lookupPath ["filter", "value", "value"] (Aeson.toJSON datePoint) @?= Just spec
+  lookupPath ["filter", "operator"] (Aeson.toJSON datePoint) @?= Just (Aeson.String "date_is_on_or_after")
+
+testDateRange :: Assertion
+testDateRange = do
+  relative <- decodeValue "{\"type\":\"relative\",\"value\":\"custom\",\"direction\":\"past\",\"unit\":\"week\",\"count\":2}"
+  (conditionOf (MNLastEditedTime (MNDateIsWithin (MeetingNotesDateRange MNRelative (MNDateRangeText "custom") (Just MNPast) (Just MNWeek) (Just 2)))) >>= lookupPath ["value"])
+    @?= Just relative
+  -- mnCreatedWithinPast produces the shape Notion accepted in a live check
+  within <- decodeValue "{\"operator\":\"date_is_within\",\"value\":{\"type\":\"relative\",\"value\":\"custom\",\"direction\":\"past\",\"unit\":\"year\",\"count\":1}}"
+  lookupPath ["filter"] (Aeson.toJSON (mnCreatedWithinPast 1 MNYear)) @?= Just within
+  exact <- decodeValue "{\"type\":\"exact\",\"value\":{\"type\":\"daterange\",\"start_date\":\"2026-09-01\"}}"
+  (conditionOf (MNLastEditedTime (MNDateIsWithin (MeetingNotesDateRange MNExact (MNDateRangeSpec "2026-09-01" Nothing) Nothing Nothing Nothing))) >>= lookupPath ["value"])
+    @?= Just exact
+
+testSortAndLimit :: Assertion
+testSortAndLimit = do
+  expected <- decodeValue "{\"sort\":[{\"property\":\"created_time\",\"direction\":\"descending\"}],\"limit\":10}"
+  Aeson.toJSON (QueryMeetingNotes Nothing (Just [MeetingNotesSort MNPropCreatedTime Descending]) (Just 10)) @?= expected
+
+testRawNode :: Assertion
+testRawNode = do
+  let raw = Aeson.object ["property" .= ("title" :: Text)]
+  lookupPath ["filters"] (Aeson.toJSON (mnAnd [MNRawNode raw])) @?= Just (Aeson.toJSON [raw])
+
+testDecodeQueryResponse :: Assertion
+testDecodeQueryResponse =
+  case Aeson.eitherDecode ("{\"results\":[" <> blockFixture <> "],\"has_more\":false}") of
+    Right QueryMeetingNotesResponse {results, hasMore} -> do
+      Vector.length results @?= 1
+      hasMore @?= False
+    Left err -> assertFailure err

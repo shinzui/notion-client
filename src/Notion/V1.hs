@@ -203,7 +203,9 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
                  :<|> listFileUploads_
                )
         :<|> retrieveAsyncTask
-        :<|> createMeetingNote
+        :<|> ( createMeetingNote
+                 :<|> queryMeetingNotes
+               )
       ) =
         Client.hoistClient
           @API
@@ -391,7 +393,9 @@ data Methods = Methods
     -- \* Meeting notes
 
     -- | Create a meeting note from an uploaded recording or an existing media block.
-    createMeetingNote :: MeetingNotes.CreateMeetingNote -> IO MeetingNotes.CreateMeetingNoteResponse
+    createMeetingNote :: MeetingNotes.CreateMeetingNote -> IO MeetingNotes.CreateMeetingNoteResponse,
+    -- | Query meeting notes with a filter, sort and limit. Not paginated.
+    queryMeetingNotes :: MeetingNotes.QueryMeetingNotes -> IO MeetingNotes.QueryMeetingNotesResponse
   }
 
 -- | Servant API

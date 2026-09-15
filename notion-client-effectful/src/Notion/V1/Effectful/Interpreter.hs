@@ -48,6 +48,7 @@ import Notion.V1.Effectful.Effect
         MovePage,
         QueryDataSource,
         QueryDatabase,
+        QueryMeetingNotes,
         QueryView,
         RetrieveAsyncTask,
         RetrieveBlock,
@@ -157,6 +158,7 @@ runNotion methods = interpret $ \_ -> \case
   RetrieveAsyncTask tid -> runIO (Notion.retrieveAsyncTask methods tid)
   -- Meeting Notes
   CreateMeetingNote req -> runIO (Notion.createMeetingNote methods req)
+  QueryMeetingNotes req -> runIO (Notion.queryMeetingNotes methods req)
 
 -- | Run an 'IO' action, funneling any thrown 'NotionError' through
 -- the 'Error' effect.

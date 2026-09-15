@@ -84,6 +84,7 @@ module Notion.V1.Effectful.Effect
 
     -- * Meeting Notes
     createMeetingNote,
+    queryMeetingNotes,
   )
 where
 
@@ -200,6 +201,7 @@ data Notion :: Effect where
   RetrieveAsyncTask :: AsyncTaskID -> Notion m AsyncTask
   -- Meeting Notes
   CreateMeetingNote :: MeetingNotes.CreateMeetingNote -> Notion m MeetingNotes.CreateMeetingNoteResponse
+  QueryMeetingNotes :: MeetingNotes.QueryMeetingNotes -> Notion m MeetingNotes.QueryMeetingNotesResponse
 
 type instance DispatchOf Notion = 'Dynamic
 
@@ -494,3 +496,10 @@ createMeetingNote ::
   MeetingNotes.CreateMeetingNote ->
   Eff es MeetingNotes.CreateMeetingNoteResponse
 createMeetingNote = send . CreateMeetingNote
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.queryMeetingNotes'.
+queryMeetingNotes ::
+  (Notion :> es) =>
+  MeetingNotes.QueryMeetingNotes ->
+  Eff es MeetingNotes.QueryMeetingNotesResponse
+queryMeetingNotes = send . QueryMeetingNotes
