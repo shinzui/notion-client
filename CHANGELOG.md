@@ -28,6 +28,11 @@
 * `createComment` returns `CommentResponse` (full or partial comment) instead of `CommentObject`
 * `Methods` and the effectful `Notion` GADT gain `retrieveComment`, `updateComment`, `deleteComment`, `createPageAsync`, `updatePageMarkdownAsync`, `retrieveAsyncTask`, `createMeetingNote` and `queryMeetingNotes`
 * The exported Servant `API` types of `Notion.V1` and `Notion.V1.Pages` gain the async page routes, `AsyncTasks.API` and `MeetingNotes.API`
+* Remove `queryView`, `QueryView` and the `POST /v1/views/{view_id}/query` route (Notion never served it; it returned 400 `invalid_request_url`). Use `createViewQuery` / `getViewQueryResults` / `deleteViewQuery` or `Notion.V1.ViewQueries.queryAllViewPages`. The effectful `queryView` / `QueryView` are removed too
+* `ViewType` gains `UnknownViewType Text`
+* `ViewObject`: `parent` is now `Maybe Parent`, `filter` is `Maybe ViewFilter`, `sorts` is `Maybe (Vector ViewSort)`, `quickFilters` is `Maybe (Map Text QuickFilter)`, `configuration` is `Maybe ViewConfig`
+* `CreateView`: `filter`, `sorts`, `quickFilters`, `configuration` and `position` are typed; new fields `createDatabase_` (wire `create_database`) and `placement`
+* `UpdateView`: `filter`, `sorts` (now property sorts only) and `quickFilters` are `Clearable`, so they can be cleared with `null`; `configuration` is `Maybe ViewConfig`
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
@@ -43,6 +48,12 @@
 * Retrieve, update (rich text or Markdown) and delete comments; create comments with Markdown, discussion replies, file-upload attachments and display names
 * New `Notion.V1.AsyncTasks` module: `AsyncTask`, `retrieveAsyncTask`, `waitForAsyncTask`, and `allow_async` page creation / markdown update via `createPageAsync` and `updatePageMarkdownAsync` (which accept Notion's `202 Accepted` responses)
 * New `Notion.V1.MeetingNotes` module: `createMeetingNote` from an uploaded recording or an existing media block, and `queryMeetingNotes` with a typed filter and sort DSL, both with a typed `MeetingNoteBlock` response
+* View query endpoints: `createViewQuery` (`POST /v1/views/{view_id}/queries`), `getViewQueryResults` (`GET /v1/views/{view_id}/queries/{query_id}`) and `deleteViewQuery` (`DELETE /v1/views/{view_id}/queries/{query_id}`), plus the `queryAllViewPages` helper in `Notion.V1.ViewQueries`
+* `PartialPageObject` in `Notion.V1.Pages` for results that carry only a page ID
+* Typed view configuration (`Notion.V1.ViewConfig`, re-exported by `Notion.V1.Views`) for table, board, calendar, timeline, gallery, list, map, form, chart and dashboard views, including group-by, property, subtask, cover, timeline and chart settings; unknown shapes and values are preserved as raw JSON or text
+* `Notion.V1.Clearable` for request fields that distinguish "leave unchanged" (`Unset`) from "clear with null" (`Clear`)
+* `FromJSON` instances for `Filter`, `PropertyCondition` and its condition types, `Sort` and `SortDirection`; `ToJSON PropertyCondition`
+* `CreateView` supports `position` (`ViewPositionStart` / `ViewPositionEnd` / `ViewPositionAfterView`), dashboard widget `placement`, and `create_database`
 
 ### Bug Fixes
 * Decode the `default_background` color — previously any rich text or block using it failed the whole response

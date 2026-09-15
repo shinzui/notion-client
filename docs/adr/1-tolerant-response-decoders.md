@@ -35,6 +35,15 @@ The matching `ToJSON` instance re-emits the raw value unchanged, so a decoded re
 Decoders still fail on structurally wrong input (for example, a non-object where an object is
 required); the fallback is only for unrecognised discriminator values.
 
+One refinement (2026-09-15, from `docs/plans/9-add-view-queries-and-typed-view-configuration.md`)
+applies to values nested inside a larger response whose typed model is known to be incomplete.
+Examples are view configurations (`ViewConfig`, `GroupByConfig`, `FormulaSubGroupBy`) and view
+filters, sorts and quick filters. For these, the fallback also catches a failed typed parse of a
+recognised discriminator (`typed <|> pure (Unknown… v)`). That way one unmodelled field shape
+cannot fail the whole view. Tests for such types assert the typed constructor of nested values,
+not only a byte-for-byte round trip, because a broken typed decoder would still round-trip
+through the fallback.
+
 When a later change types a value that was previously falling back, it adds a new constructor
 and keeps the fallback. Tests for the fallback use made-up discriminators, so they keep
 exercising it after new kinds are typed.

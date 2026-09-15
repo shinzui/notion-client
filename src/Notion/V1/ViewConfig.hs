@@ -1,5 +1,5 @@
 -- | Typed view configuration: the layout settings of table, board, calendar,
--- timeline, gallery and list views.
+-- timeline, gallery, list, map, form, chart and dashboard views.
 --
 -- One set of types serves both responses and requests. Fields Notion accepts
 -- as @null@ (to clear a setting) are 'Clearable'. Response-only convenience
@@ -17,6 +17,14 @@ module Notion.V1.ViewConfig
     ListViewConfig (..),
     TimelinePreference (..),
     TimelineArrowsBy (..),
+    MapViewConfig (..),
+    FormViewConfig (..),
+    ChartViewConfig (..),
+    ChartAggregation (..),
+    ChartReferenceLine (..),
+    DashboardViewConfig (..),
+    DashboardRow (..),
+    DashboardWidget (..),
 
     -- * Shared pieces
     ViewPropertyConfig (..),
@@ -61,6 +69,19 @@ module Notion.V1.ViewConfig
     CardLayout (..),
     CalendarRange (..),
     TimelineZoomLevel (..),
+    ViewHeight (..),
+    SubmissionPermission (..),
+    ChartType (..),
+    ChartSort (..),
+    ChartColorTheme (..),
+    LegendPosition (..),
+    AxisLabels (..),
+    GridLines (..),
+    GroupStyle (..),
+    DonutLabels (..),
+    ChartAggregator (..),
+    ReferenceLineColor (..),
+    DashStyle (..),
   )
 where
 
@@ -74,6 +95,8 @@ import Data.Scientific (Scientific)
 import Data.Tuple (swap)
 import Notion.Prelude
 import Notion.V1.Clearable (Clearable (..))
+import Notion.V1.Common (UUID)
+import Prelude hiding (id)
 
 -- =====================================================================
 -- Helpers
@@ -599,6 +622,400 @@ instance ToJSON TimelineZoomLevel where
     UnknownTimelineZoomLevel t -> String t
     known -> enumToJSON timelineZoomLevelTable known
 
+-- | Height of a map or chart view.
+data ViewHeight
+  = HeightSmall
+  | HeightMedium
+  | HeightLarge
+  | HeightExtraLarge
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownViewHeight Text
+  deriving stock (Eq, Show, Generic)
+
+viewHeightTable :: [(Text, ViewHeight)]
+viewHeightTable =
+  [ ("small", HeightSmall),
+    ("medium", HeightMedium),
+    ("large", HeightLarge),
+    ("extra_large", HeightExtraLarge)
+  ]
+
+instance FromJSON ViewHeight where
+  parseJSON = parseEnum "ViewHeight" viewHeightTable UnknownViewHeight
+
+instance ToJSON ViewHeight where
+  toJSON = \case
+    UnknownViewHeight t -> String t
+    known -> enumToJSON viewHeightTable known
+
+-- | What a form submitter may do with their submission.
+data SubmissionPermission
+  = SubmissionNone
+  | SubmissionCommentOnly
+  | SubmissionReader
+  | SubmissionReadAndWrite
+  | SubmissionEditor
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownSubmissionPermission Text
+  deriving stock (Eq, Show, Generic)
+
+submissionPermissionTable :: [(Text, SubmissionPermission)]
+submissionPermissionTable =
+  [ ("none", SubmissionNone),
+    ("comment_only", SubmissionCommentOnly),
+    ("reader", SubmissionReader),
+    ("read_and_write", SubmissionReadAndWrite),
+    ("editor", SubmissionEditor)
+  ]
+
+instance FromJSON SubmissionPermission where
+  parseJSON = parseEnum "SubmissionPermission" submissionPermissionTable UnknownSubmissionPermission
+
+instance ToJSON SubmissionPermission where
+  toJSON = \case
+    UnknownSubmissionPermission t -> String t
+    known -> enumToJSON submissionPermissionTable known
+
+-- | Kind of chart.
+data ChartType
+  = ChartColumn
+  | ChartBar
+  | ChartLine
+  | ChartDonut
+  | ChartNumber
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownChartType Text
+  deriving stock (Eq, Show, Generic)
+
+chartTypeTable :: [(Text, ChartType)]
+chartTypeTable =
+  [ ("column", ChartColumn),
+    ("bar", ChartBar),
+    ("line", ChartLine),
+    ("donut", ChartDonut),
+    ("number", ChartNumber)
+  ]
+
+instance FromJSON ChartType where
+  parseJSON = parseEnum "ChartType" chartTypeTable UnknownChartType
+
+instance ToJSON ChartType where
+  toJSON = \case
+    UnknownChartType t -> String t
+    known -> enumToJSON chartTypeTable known
+
+-- | Order of chart groups.
+data ChartSort
+  = ChartSortManual
+  | ChartSortXAscending
+  | ChartSortXDescending
+  | ChartSortYAscending
+  | ChartSortYDescending
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownChartSort Text
+  deriving stock (Eq, Show, Generic)
+
+chartSortTable :: [(Text, ChartSort)]
+chartSortTable =
+  [ ("manual", ChartSortManual),
+    ("x_ascending", ChartSortXAscending),
+    ("x_descending", ChartSortXDescending),
+    ("y_ascending", ChartSortYAscending),
+    ("y_descending", ChartSortYDescending)
+  ]
+
+instance FromJSON ChartSort where
+  parseJSON = parseEnum "ChartSort" chartSortTable UnknownChartSort
+
+instance ToJSON ChartSort where
+  toJSON = \case
+    UnknownChartSort t -> String t
+    known -> enumToJSON chartSortTable known
+
+-- | Chart color theme.
+data ChartColorTheme
+  = ThemeGray
+  | ThemeBlue
+  | ThemeYellow
+  | ThemeGreen
+  | ThemePurple
+  | ThemeTeal
+  | ThemeOrange
+  | ThemePink
+  | ThemeRed
+  | ThemeAuto
+  | ThemeColorful
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownChartColorTheme Text
+  deriving stock (Eq, Show, Generic)
+
+chartColorThemeTable :: [(Text, ChartColorTheme)]
+chartColorThemeTable =
+  [ ("gray", ThemeGray),
+    ("blue", ThemeBlue),
+    ("yellow", ThemeYellow),
+    ("green", ThemeGreen),
+    ("purple", ThemePurple),
+    ("teal", ThemeTeal),
+    ("orange", ThemeOrange),
+    ("pink", ThemePink),
+    ("red", ThemeRed),
+    ("auto", ThemeAuto),
+    ("colorful", ThemeColorful)
+  ]
+
+instance FromJSON ChartColorTheme where
+  parseJSON = parseEnum "ChartColorTheme" chartColorThemeTable UnknownChartColorTheme
+
+instance ToJSON ChartColorTheme where
+  toJSON = \case
+    UnknownChartColorTheme t -> String t
+    known -> enumToJSON chartColorThemeTable known
+
+-- | Where a chart legend is placed.
+data LegendPosition
+  = LegendOff
+  | LegendBottom
+  | LegendSide
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownLegendPosition Text
+  deriving stock (Eq, Show, Generic)
+
+legendPositionTable :: [(Text, LegendPosition)]
+legendPositionTable =
+  [ ("off", LegendOff),
+    ("bottom", LegendBottom),
+    ("side", LegendSide)
+  ]
+
+instance FromJSON LegendPosition where
+  parseJSON = parseEnum "LegendPosition" legendPositionTable UnknownLegendPosition
+
+instance ToJSON LegendPosition where
+  toJSON = \case
+    UnknownLegendPosition t -> String t
+    known -> enumToJSON legendPositionTable known
+
+-- | Which chart axes show labels.
+data AxisLabels
+  = AxisLabelsNone
+  | AxisLabelsX
+  | AxisLabelsY
+  | AxisLabelsBoth
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownAxisLabels Text
+  deriving stock (Eq, Show, Generic)
+
+axisLabelsTable :: [(Text, AxisLabels)]
+axisLabelsTable =
+  [ ("none", AxisLabelsNone),
+    ("x_axis", AxisLabelsX),
+    ("y_axis", AxisLabelsY),
+    ("both", AxisLabelsBoth)
+  ]
+
+instance FromJSON AxisLabels where
+  parseJSON = parseEnum "AxisLabels" axisLabelsTable UnknownAxisLabels
+
+instance ToJSON AxisLabels where
+  toJSON = \case
+    UnknownAxisLabels t -> String t
+    known -> enumToJSON axisLabelsTable known
+
+-- | Which chart grid lines are drawn.
+data GridLines
+  = GridLinesNone
+  | GridLinesHorizontal
+  | GridLinesVertical
+  | GridLinesBoth
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownGridLines Text
+  deriving stock (Eq, Show, Generic)
+
+gridLinesTable :: [(Text, GridLines)]
+gridLinesTable =
+  [ ("none", GridLinesNone),
+    ("horizontal", GridLinesHorizontal),
+    ("vertical", GridLinesVertical),
+    ("both", GridLinesBoth)
+  ]
+
+instance FromJSON GridLines where
+  parseJSON = parseEnum "GridLines" gridLinesTable UnknownGridLines
+
+instance ToJSON GridLines where
+  toJSON = \case
+    UnknownGridLines t -> String t
+    known -> enumToJSON gridLinesTable known
+
+-- | How grouped chart series are drawn.
+data GroupStyle
+  = GroupStyleNormal
+  | GroupStylePercent
+  | GroupStyleSideBySide
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownGroupStyle Text
+  deriving stock (Eq, Show, Generic)
+
+groupStyleTable :: [(Text, GroupStyle)]
+groupStyleTable =
+  [ ("normal", GroupStyleNormal),
+    ("percent", GroupStylePercent),
+    ("side_by_side", GroupStyleSideBySide)
+  ]
+
+instance FromJSON GroupStyle where
+  parseJSON = parseEnum "GroupStyle" groupStyleTable UnknownGroupStyle
+
+instance ToJSON GroupStyle where
+  toJSON = \case
+    UnknownGroupStyle t -> String t
+    known -> enumToJSON groupStyleTable known
+
+-- | Labels on a donut chart.
+data DonutLabels
+  = DonutLabelsNone
+  | DonutLabelsValue
+  | DonutLabelsName
+  | DonutLabelsNameAndValue
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownDonutLabels Text
+  deriving stock (Eq, Show, Generic)
+
+donutLabelsTable :: [(Text, DonutLabels)]
+donutLabelsTable =
+  [ ("none", DonutLabelsNone),
+    ("value", DonutLabelsValue),
+    ("name", DonutLabelsName),
+    ("name_and_value", DonutLabelsNameAndValue)
+  ]
+
+instance FromJSON DonutLabels where
+  parseJSON = parseEnum "DonutLabels" donutLabelsTable UnknownDonutLabels
+
+instance ToJSON DonutLabels where
+  toJSON = \case
+    UnknownDonutLabels t -> String t
+    known -> enumToJSON donutLabelsTable known
+
+-- | Aggregation applied to a chart value.
+data ChartAggregator
+  = AggCount
+  | AggCountValues
+  | AggSum
+  | AggAverage
+  | AggMedian
+  | AggMin
+  | AggMax
+  | AggRange
+  | AggUnique
+  | AggEmpty
+  | AggNotEmpty
+  | AggPercentEmpty
+  | AggPercentNotEmpty
+  | AggChecked
+  | AggUnchecked
+  | AggPercentChecked
+  | AggPercentUnchecked
+  | AggEarliestDate
+  | AggLatestDate
+  | AggDateRange
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownChartAggregator Text
+  deriving stock (Eq, Show, Generic)
+
+chartAggregatorTable :: [(Text, ChartAggregator)]
+chartAggregatorTable =
+  [ ("count", AggCount),
+    ("count_values", AggCountValues),
+    ("sum", AggSum),
+    ("average", AggAverage),
+    ("median", AggMedian),
+    ("min", AggMin),
+    ("max", AggMax),
+    ("range", AggRange),
+    ("unique", AggUnique),
+    ("empty", AggEmpty),
+    ("not_empty", AggNotEmpty),
+    ("percent_empty", AggPercentEmpty),
+    ("percent_not_empty", AggPercentNotEmpty),
+    ("checked", AggChecked),
+    ("unchecked", AggUnchecked),
+    ("percent_checked", AggPercentChecked),
+    ("percent_unchecked", AggPercentUnchecked),
+    ("earliest_date", AggEarliestDate),
+    ("latest_date", AggLatestDate),
+    ("date_range", AggDateRange)
+  ]
+
+instance FromJSON ChartAggregator where
+  parseJSON = parseEnum "ChartAggregator" chartAggregatorTable UnknownChartAggregator
+
+instance ToJSON ChartAggregator where
+  toJSON = \case
+    UnknownChartAggregator t -> String t
+    known -> enumToJSON chartAggregatorTable known
+
+-- | Color of a chart reference line.
+data ReferenceLineColor
+  = LineGray
+  | LineLightGray
+  | LineBrown
+  | LineYellow
+  | LineOrange
+  | LineGreen
+  | LineBlue
+  | LinePurple
+  | LinePink
+  | LineRed
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownReferenceLineColor Text
+  deriving stock (Eq, Show, Generic)
+
+referenceLineColorTable :: [(Text, ReferenceLineColor)]
+referenceLineColorTable =
+  [ ("gray", LineGray),
+    ("lightgray", LineLightGray),
+    ("brown", LineBrown),
+    ("yellow", LineYellow),
+    ("orange", LineOrange),
+    ("green", LineGreen),
+    ("blue", LineBlue),
+    ("purple", LinePurple),
+    ("pink", LinePink),
+    ("red", LineRed)
+  ]
+
+instance FromJSON ReferenceLineColor where
+  parseJSON = parseEnum "ReferenceLineColor" referenceLineColorTable UnknownReferenceLineColor
+
+instance ToJSON ReferenceLineColor where
+  toJSON = \case
+    UnknownReferenceLineColor t -> String t
+    known -> enumToJSON referenceLineColorTable known
+
+-- | Line style of a chart reference line.
+data DashStyle
+  = DashSolid
+  | DashDashed
+  | -- | A value this library does not know yet; holds the raw string.
+    UnknownDashStyle Text
+  deriving stock (Eq, Show, Generic)
+
+dashStyleTable :: [(Text, DashStyle)]
+dashStyleTable =
+  [ ("solid", DashSolid),
+    ("dash", DashDashed)
+  ]
+
+instance FromJSON DashStyle where
+  parseJSON = parseEnum "DashStyle" dashStyleTable UnknownDashStyle
+
+instance ToJSON DashStyle where
+  toJSON = \case
+    UnknownDashStyle t -> String t
+    known -> enumToJSON dashStyleTable known
+
 -- =====================================================================
 -- Shared pieces
 -- =====================================================================
@@ -1095,6 +1512,149 @@ instance FromJSON ListViewConfig where
 instance ToJSON ListViewConfig where
   toJSON = genericToJSON aesonOptions
 
+-- | Map view settings.
+data MapViewConfig = MapViewConfig
+  { height :: Clearable ViewHeight,
+    -- | ID of the place property the map plots
+    mapBy :: Clearable Text,
+    -- | Response only; dropped when encoding
+    mapByPropertyName :: Maybe Text,
+    properties :: Clearable (Vector ViewPropertyConfig)
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON MapViewConfig where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON MapViewConfig where
+  toJSON = dropKeys ["map_by_property_name"] . genericToJSON aesonOptions
+
+-- | Form view settings.
+data FormViewConfig = FormViewConfig
+  { isFormClosed :: Clearable Bool,
+    anonymousSubmissions :: Clearable Bool,
+    submissionPermissions :: Clearable SubmissionPermission
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON FormViewConfig where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON FormViewConfig where
+  toJSON = genericToJSON aesonOptions
+
+-- | An aggregated chart value.
+data ChartAggregation = ChartAggregation
+  { aggregator :: ChartAggregator,
+    -- | Required unless the aggregator is 'AggCount'
+    propertyId :: Maybe Text
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON ChartAggregation where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON ChartAggregation where
+  toJSON = genericToJSON aesonOptions
+
+-- | A horizontal reference line on a chart.
+data ChartReferenceLine = ChartReferenceLine
+  { -- | Always present in responses; optional in requests (Notion generates one)
+    id :: Maybe Text,
+    value :: Scientific,
+    label :: Text,
+    color :: ReferenceLineColor,
+    dashStyle :: DashStyle
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON ChartReferenceLine where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON ChartReferenceLine where
+  toJSON = genericToJSON aesonOptions
+
+-- | Chart view settings.
+data ChartViewConfig = ChartViewConfig
+  { chartType :: ChartType,
+    xAxis :: Clearable GroupByConfig,
+    yAxis :: Clearable ChartAggregation,
+    xAxisPropertyId :: Clearable Text,
+    yAxisPropertyId :: Clearable Text,
+    -- | The value shown by a number chart
+    value :: Clearable ChartAggregation,
+    sort :: Clearable ChartSort,
+    colorTheme :: Clearable ChartColorTheme,
+    height :: Clearable ViewHeight,
+    hideEmptyGroups :: Clearable Bool,
+    legendPosition :: Clearable LegendPosition,
+    showDataLabels :: Clearable Bool,
+    axisLabels :: Clearable AxisLabels,
+    gridLines :: Clearable GridLines,
+    cumulative :: Clearable Bool,
+    smoothLine :: Clearable Bool,
+    hideLineFillArea :: Clearable Bool,
+    groupStyle :: Clearable GroupStyle,
+    yAxisMin :: Clearable Scientific,
+    yAxisMax :: Clearable Scientific,
+    donutLabels :: Clearable DonutLabels,
+    hideTitle :: Clearable Bool,
+    stackBy :: Clearable GroupByConfig,
+    referenceLines :: Clearable (Vector ChartReferenceLine),
+    caption :: Clearable Text,
+    colorByValue :: Clearable Bool
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON ChartViewConfig where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON ChartViewConfig where
+  toJSON = genericToJSON aesonOptions
+
+-- | A widget on a dashboard: another view placed in a row.
+data DashboardWidget = DashboardWidget
+  { id :: Text,
+    viewId :: UUID,
+    -- | Width in grid columns (1 to 12)
+    width :: Maybe Int,
+    rowIndex :: Maybe Int
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON DashboardWidget where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON DashboardWidget where
+  toJSON = genericToJSON aesonOptions
+
+-- | A row of widgets on a dashboard.
+data DashboardRow = DashboardRow
+  { id :: Text,
+    widgets :: Vector DashboardWidget,
+    -- | Height in pixels
+    height :: Maybe Int
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON DashboardRow where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON DashboardRow where
+  toJSON = genericToJSON aesonOptions
+
+-- | Dashboard view layout. Notion returns it but does not accept it in requests.
+newtype DashboardViewConfig = DashboardViewConfig
+  { rows :: Vector DashboardRow
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance FromJSON DashboardViewConfig where
+  parseJSON = genericParseJSON aesonOptions
+
+instance ToJSON DashboardViewConfig where
+  toJSON = genericToJSON aesonOptions
+
 -- | A view's layout configuration, discriminated by @type@.
 data ViewConfig
   = TableConfig TableViewConfig
@@ -1103,6 +1663,11 @@ data ViewConfig
   | TimelineConfig TimelineViewConfig
   | GalleryConfig GalleryViewConfig
   | ListConfig ListViewConfig
+  | MapConfig MapViewConfig
+  | FormConfig FormViewConfig
+  | ChartConfig ChartViewConfig
+  | -- | Returned by Notion only; requests have no dashboard configuration.
+    DashboardConfig DashboardViewConfig
   | -- | Any other type, or a shape the typed parse rejected; sent back verbatim.
     UnknownViewConfig Value
   deriving stock (Eq, Show, Generic)
@@ -1119,6 +1684,10 @@ instance FromJSON ViewConfig where
           "timeline" -> TimelineConfig <$> parseJSON v
           "gallery" -> GalleryConfig <$> parseJSON v
           "list" -> ListConfig <$> parseJSON v
+          "map" -> MapConfig <$> parseJSON v
+          "form" -> FormConfig <$> parseJSON v
+          "chart" -> ChartConfig <$> parseJSON v
+          "dashboard" -> DashboardConfig <$> parseJSON v
           other -> fail ("unknown view configuration type: " <> unpack other)
 
 instance ToJSON ViewConfig where
@@ -1129,4 +1698,9 @@ instance ToJSON ViewConfig where
     TimelineConfig c -> withType "timeline" (toJSON c)
     GalleryConfig c -> withType "gallery" (toJSON c)
     ListConfig c -> withType "list" (toJSON c)
+    MapConfig c -> withType "map" (toJSON c)
+    FormConfig c -> withType "form" (toJSON c)
+    ChartConfig c -> withType "chart" (toJSON c)
+    -- Notion may reject a dashboard configuration in a request
+    DashboardConfig c -> withType "dashboard" (toJSON c)
     UnknownViewConfig raw -> raw

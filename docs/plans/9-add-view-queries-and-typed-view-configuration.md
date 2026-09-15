@@ -60,8 +60,9 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 - [x] Milestone 2: Added the "Filters and sorts", "View object" and "View requests" test groups; updated the literals in `tasty/Main.hs` and `ViewDemo.hs`. All 15 EP-4 tests and the live "View E2E" pass. (2026-09-15)
 - [x] Milestone 3: Created `src/Notion/V1/ViewConfig.hs` with the enum helpers, shared pieces (property config, group-by union, subtasks, cover) and table, board, calendar, timeline, gallery and list configs, plus `ViewConfig` with an `UnknownViewConfig` fallback. (2026-09-15)
 - [x] Milestone 3: Switched `ViewObject.configuration`, `CreateView.configuration` and `UpdateView.configuration` to `ViewConfig`; added the "View configuration" group (26 EP-4 tests pass). (2026-09-15)
-- [ ] Milestone 4: Add the chart, map, form and dashboard configs and their enums; extend the tests.
-- [ ] Milestone 4: Write the CHANGELOG `## Unreleased` entries, finish `ViewDemo.hs`, run the full validation, and fill in Outcomes & Retrospective.
+- [x] Milestone 4: Added the chart, map, form and dashboard configs and their enums; extended the tests (33 EP-4 tests pass). (2026-09-15)
+- [x] Milestone 4: Wrote the CHANGELOG `## Unreleased` entries, finished `ViewDemo.hs` (typed table configuration, `ViewPositionEnd`), extended the live E2E test to send a typed configuration and clear the filter, ran the full validation (`cabal build all`; `cabal test`: 264 tests pass including "View E2E"), and filled in Outcomes & Retrospective. (2026-09-15)
+- [x] ADR distillation: added `docs/adr/5-clearable-request-fields-and-shared-configuration-types.md` and amended `docs/adr/1-tolerant-response-decoders.md` with the parse-failure fallback rule for nested, partially modelled values. (2026-09-15)
 
 
 ## Surprises & Discoveries
@@ -76,6 +77,7 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 
 - A freshly retrieved table view on that database had `"filter":null,"sorts":null,"quick_filters":null,"configuration":{"type":"table"}`, so `null` really does appear in responses for these fields.
 - Views on the live test database all came back with the minimal configuration `{"type":"table"}`, which decodes as `TableConfig` with every field `Unset` or `Nothing`. Richer shapes are therefore covered by the SDK-derived fixtures, not by live data. The database also holds two "E2E Test View (Renamed)" views created on 2026-03-29, left over from an earlier run; they are not from this plan's runs.
+- The live E2E test (2026-09-15) created a table view with `configuration = TableConfig {wrapCells = Just True, …}` and `position = ViewPositionEnd`, then retrieved it. The response decoded as a typed `TableConfig` with `wrapCells = Just True`. An `UpdateView` with `filter = Clear` (wire `"filter": null`) was accepted. This confirms the `Clearable` encoding and the configuration encoder against the real API.
 - `cabal test --test-options='-p "Views (EP-4)"'` does not work: cabal splits `--test-options` on spaces and tasty rejects the fragment. Use `cabal test --test-option=--pattern=EP-4` instead.
 
 
@@ -133,6 +135,14 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
   Rationale: Because every sum type falls back to raw JSON, a broken typed decoder would still round-trip byte for byte. Checking only the outer constructor would let such a regression pass silently.
   Date: 2026-09-15
 
+- Decision: Generate the 33 string enums of `src/Notion/V1/ViewConfig.hs` with a throwaway script, and hand-write the records and sum types. The generator is not checked in.
+  Rationale: Every enum follows the identical table-plus-fallback pattern shown in Milestone 3, so generating them removed transcription errors. The output is ordinary Haskell that reads like the rest of the module and is maintained by hand from now on.
+  Date: 2026-09-15
+
+- Decision: Extend the live E2E test `testViewLifecycle` in `tasty/Main.hs` beyond the plan. It sends a typed table configuration and `position`, asserts that the retrieved configuration is typed, and clears the filter with `Clear` on update. The example program was not run live.
+  Rationale: The E2E test exercises the same requests as `ViewDemo.hs` without the example's other demos, which create pages in the workspace. It gives live evidence for the request encoders, which the fixtures cannot provide.
+  Date: 2026-09-15
+
 - Decision: Add `UnknownViewType Text` to `ViewType` in this plan.
   Rationale: The tolerant-decoding rule applies. `ViewType` currently calls `fail` on unknown strings (`src/Notion/V1/Views.hs` line 57), and the MasterPlan assigns no other plan to it.
   Date: 2026-09-14
@@ -140,7 +150,15 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+Completed 2026-09-15 in four commits, one per milestone.
+
+A Haskell user can now read a view's rows through `createViewQuery`, `getViewQueryResults` and `deleteViewQuery`, or the one-call `queryAllViewPages`. The query flow was verified against the live API, including cursor continuation from the create response. The bogus `queryView` is gone. Retrieved views expose a typed parent, filter, sorts, quick filters and configuration for all ten view types. Every sum type and enum keeps unknown values as raw JSON or text. Create and update requests accept the same typed values, plus `position`, `placement` and `create_database`, and update requests can clear fields with `Clearable`. The test suite gained 33 network-free tests in `tasty/ViewTests.hs`, and the live view E2E test now covers the query flow and typed configuration.
+
+This plan was the first of EP-4 and EP-5 to start, so it defined two shared artifacts for EP-5 to reuse: `PartialPageObject` (in `src/Notion/V1/Pages.hs`) and the `FromJSON` instances for `Filter`, `PropertyCondition`, `Sort` and `SortDirection` (in `src/Notion/V1/Filter.hs`, with `parse…Condition` helpers EP-5 can extend in place). EP-5 still owns every new filter-condition constructor. It should also consider an `UnknownFilter`-style fallback, since today a view filter the DSL cannot express survives only as `RawViewFilter`.
+
+What remains: nothing in scope. Live data on the test workspace only ever returned the minimal `{"type":"table"}` configuration, so the richer configuration shapes rest on the SDK-derived fixtures.
+
+Lessons: the plan's generic-instance approach (`genericParseJSON`/`genericToJSON aesonOptions` plus `Clearable`'s `omitField`/`omittedField`) worked on the first build with no hand-written record codecs. The weak spot of fallback-everywhere decoding is that a broken typed decoder is invisible to round-trip tests. The tests therefore assert nested typed constructors, and ADR 1 now says to do so. Commands in the plan that filter tasty tests should use `--test-option=--pattern=…`.
 
 
 ## Context and Orientation
@@ -1820,3 +1838,6 @@ At the end of Milestone 4, `ViewConfig` also has `MapConfig`, `FormConfig`, `Cha
 - Every Milestone 4 enum with `(..)`.
 
 Across plans, this plan consumes `RequestStatus` from EP-2 (`docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md`) when present. It shares ownership of the `Filter`/`Sort` `FromJSON` instances with EP-5 (`docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md`), and EP-5 may reuse `ToJSON`/`FromJSON PropertyCondition` for its own work. It must not add filter condition constructors.
+
+
+Revision 2026-09-15 (implementation): All four milestones were implemented and checked off, and the living sections were filled in. Surprises record the live verification of the query flow and of the typed configuration encoders, and the corrected tasty filter command (also fixed in Concrete Steps). The Decision Log records the shared artifacts EP-4 defined for EP-5, the helper naming, the stricter nested-constructor assertions, the enum generation and the extended E2E test. ADR 5 was added and ADR 1 amended during the distillation pass.

@@ -105,7 +105,7 @@ Prior plans in this repository that give useful background (all checked in, all 
 | 1 | Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK | docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md | None | None | Complete |
 | 2 | Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth | docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md | None | None | Complete |
 | 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | Complete |
-| 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | In Progress |
+| 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | Complete |
 | 5 | Type Data Source, Database, and Search Results and Close Query and Filter Gaps | docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md | EP-1, EP-2 | None | Not Started |
 | 6 | Close Page, Block, Property Value, User, File Upload, and Webhook Field Gaps | docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md | EP-1 | EP-3 | Not Started |
 
@@ -176,7 +176,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 **Partial objects (`PartialPageObject`, `PartialDataSourceObject`, `PartialDatabaseObject`).**
 - EP-3 set the pattern with `CommentResponse` and `CreateMeetingNoteResponse`: a full-or-partial sum type decided by a key only the full shape has. It is recorded in [docs/adr/4-full-or-partial-responses-and-request-only-types.md](../adr/4-full-or-partial-responses-and-request-only-types.md), which EP-4, EP-5 and EP-6 should follow.
-- `PartialPageObject` is a newtype `{id :: PageID}` in `src/Notion/V1/Pages.hs`, used by EP-4 (view query results) and EP-5 (query and search result unions). Whichever of the two starts first adds it with exactly that definition, and the other reuses it.
+- `PartialPageObject` is a newtype `{id :: PageID}` in `src/Notion/V1/Pages.hs`, used by EP-4 (view query results) and EP-5 (query and search result unions). **EP-4 defined it** (2026-09-15) with exactly that definition; EP-5 reuses it.
 - EP-5 owns the data-source and database partials and `PageOrDataSource`.
 - EP-6 defers partial page and block responses for other endpoints to a follow-up, which must reuse these types.
 
@@ -188,7 +188,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - EP-1 adds the 18 missing languages and an `OtherLanguage Text` fallback.
 
 **`Filter`/`Sort` FromJSON instances (`src/Notion/V1/Filter.hs`).**
-- Needed by both EP-4 (typed `ViewObject.filter`/`sorts`) and EP-5 (search sorts, filter variants). Whichever of EP-4 and EP-5 starts first adds them. The other consumes them and records that in its Decision Log.
+- Needed by both EP-4 (typed `ViewObject.filter`/`sorts`) and EP-5 (search sorts, filter variants). **EP-4 added them** (2026-09-15): `FromJSON` for `Filter`, `PropertyCondition`, every condition type, `Sort` and `SortDirection`, plus `ToJSON PropertyCondition`, built from `parsePropertyCondition`, `parseTextCondition`, `parseDateCondition` and similar helpers. EP-5 consumes them, extends those parsers in place when it adds constructors, and records that in its Decision Log.
 - EP-5 owns all new filter condition constructors: verification `does_not_equal`, string-or-array values, `unique_id` empty checks.
 
 **`PropertySchema`, `SelectOption` and `NumberFormat` (`src/Notion/V1/Properties.hs`).**
@@ -217,6 +217,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 5. The deliberate exclusion of unpublished agent routes from the core REST parity effort.
 6. Operations that may run in the background (HTTP 202, `AsyncOr`, `AsyncVerb`). **Recorded** as [docs/adr/3-background-operations-accept-200-or-202-and-return-asyncor.md](../adr/3-background-operations-accept-200-or-202-and-return-asyncor.md) (2026-09-15), from EP-3.
 7. Full-or-partial response sum types and request-only types. **Recorded** as [docs/adr/4-full-or-partial-responses-and-request-only-types.md](../adr/4-full-or-partial-responses-and-request-only-types.md) (2026-09-15), from EP-3.
+8. Three-state (`Clearable`) request fields and one type for a configuration that is read and sent back. **Recorded** as [docs/adr/5-clearable-request-fields-and-shared-configuration-types.md](../adr/5-clearable-request-fields-and-shared-configuration-types.md) (2026-09-15), from EP-4. EP-4 also amended ADR 1 with the parse-failure fallback rule for nested, partially modelled values.
 
 
 ## Progress
@@ -230,8 +231,8 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - [x] EP-3: Comment retrieve, update and delete, plus create-comment write shapes
 - [x] EP-3: Async task retrieval and `allow_async` page responses
 - [x] EP-3: Meeting notes create and query with typed filter grammar
-- [ ] EP-4: View query create, results and delete flow (removes the non-existent `queryView` route)
-- [ ] EP-4: Typed view configuration, filters and sorts
+- [x] EP-4: View query create, results and delete flow (removes the non-existent `queryView` route)
+- [x] EP-4: Typed view configuration, filters and sorts
 - [ ] EP-5: `database_type`, page-or-data-source query results, `result_type`
 - [ ] EP-5: Typed search results, sorts and filters
 - [ ] EP-5: Property schema and filter condition gaps
@@ -255,6 +256,10 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - EP-2's runtime interfaces for plan 14 landed with the names listed under Integration Points. `Notion.V1` also re-exports `withRetries`, and `Notion.V1.Client` additionally exports `defaultUserAgent`.
 - EP-3 (completed 2026-09-15) found that **Notion answers accepted background work with HTTP 202**, which servant-client's `Post '[JSON]`/`Patch '[JSON]` routes reject, because `Verb` accepts only its exact status. `FakeNotion` tests cannot catch this, because the fake middleware bypasses servant's status check. EP-3 added `AsyncVerb` (a `UVerb` accepting 200 and 202) in `src/Notion/V1/AsyncTasks.hs`. MasterPlan 2's `docs/plans/12-add-custom-agent-management-endpoints.md` planned `agents/batch` as `Post '[JSON] AsyncTask` and has been annotated. Any plan adding an endpoint that may return a non-200 success status should check it live.
 - EP-3 found that meeting-notes date filters accept only specific relative strings (documented in `Notion.V1.MeetingNotes` Haddocks). It also found that Notion validates a request body before checking whether the workspace plan includes the feature, so encoders can be validated live against a workspace without AI meeting notes. EP-3 used `APIErrorCode` directly for `AsyncTaskError.code`, so no follow-up switch is needed. `FakeNotion` records request paths without the `/v1` base-URL prefix.
+- EP-4 (completed 2026-09-15) started before EP-5, so it defined `PartialPageObject` and the `Filter`/`Sort` decoders (see Integration Points). EP-5 must reuse both. When EP-5 adds filter-condition constructors, it should extend the existing `parse…Condition` helpers rather than write new decoders. EP-4's round-trip test deliberately leaves out `UniqueIdCondition` and `VerificationCondition`, whose payloads EP-5 changes.
+- EP-4 verified the view-query flow live. All three routes return HTTP 200, so plain servant verbs are correct and no `AsyncVerb` is needed. The `next_cursor` from the create response continues to the second page. Live responses also carry a top-level `request_id`. Its live E2E test showed that `null` clears a view filter and that typed configurations are accepted.
+- EP-4 introduced `Notion.V1.Clearable` (`Unset | Clear | Set a`) for request fields that accept `null`. EP-5's property-schema updates and EP-6's partial block updates should use it rather than `Maybe (Maybe a)`. See ADR 5.
+- `cabal test --test-options='-p "…"'` does not filter tests, because cabal splits the options on spaces. Child plans should use `cabal test --test-option=--pattern=<pattern>`.
 - The first ADR, [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md), records cross-plan decision 2 below (tolerant decoders). Later plans that add fallback constructors should follow it.
 
 
@@ -308,3 +313,5 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 
 Revision 2026-09-15 (implementation of EP-3): EP-3 is marked Complete, and its three Progress items are checked. Surprises & Discoveries records the HTTP 202 finding, the meeting-notes filter grammar and `FakeNotion`'s path recording. The Integration Points section now names `AsyncVerb` as part of the `AsyncTask` interface, and the partial-objects entry points to the full-or-partial pattern. ADRs 3 and 4 were added to the ADR list. The Decision Log records why the 202 finding was propagated to MasterPlan 2's agents plan.
+
+Revision 2026-09-15 (implementation of EP-4): EP-4 is marked Complete, and its two Progress items are checked. Integration Points now record that EP-4 defined `PartialPageObject` and the `Filter`/`Sort` `FromJSON` instances, which EP-5 consumes. Surprises & Discoveries record the live view-query findings, the new `Clearable` type for EP-5 and EP-6, and the tasty filter-command gotcha. ADR 5 was added to the ADR list, and ADR 1 was amended.

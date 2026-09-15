@@ -57,8 +57,19 @@ runViewDemo methods databaseIdStr = do
             sorts = Nothing,
             quickFilters = Nothing,
             createDatabase_ = Nothing,
-            configuration = Nothing,
-            position = Nothing,
+            configuration =
+              Just
+                ( TableConfig
+                    TableViewConfig
+                      { properties = Unset,
+                        groupBy = Unset,
+                        subtasks = Unset,
+                        wrapCells = Just True,
+                        frozenColumnIndex = Nothing,
+                        showVerticalLines = Nothing
+                      }
+                ),
+            position = Just ViewPositionEnd,
             placement = Nothing
           }
 

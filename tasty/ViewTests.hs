@@ -332,6 +332,12 @@ viewConfigTests =
       testCase "timeline configuration round-trips" (roundTrip timelineFixture isTimeline),
       testCase "gallery configuration round-trips" (roundTrip galleryFixture isGallery),
       testCase "list configuration round-trips" (roundTrip listFixture isList),
+      testCase "chart configuration round-trips" (roundTrip chartFixture isChart),
+      testCase "number chart configuration round-trips" (roundTrip numberChartFixture isChart),
+      testCase "map configuration round-trips" (roundTrip mapFixture isMap),
+      testCase "form configuration round-trips" (roundTrip formFixture isForm),
+      testCase "dashboard configuration round-trips" (roundTrip dashboardFixture isDashboard),
+      testCase "map_by_property_name is decoded and dropped" testMapResponseOnly,
       testCase "response-only property_name is decoded and dropped" testResponseOnlyStripped,
       testCase "unknown configuration type is preserved" testUnknownConfig,
       testCase "unknown enum value is preserved" testUnknownEnum,
@@ -346,7 +352,7 @@ roundTrip fixture expected = do
   assertBool ("unexpected constructor: " <> show config) (expected config)
   Aeson.toJSON config @?= jsonValue fixture
 
-isTable, isBoard, isCalendar, isTimeline, isGallery, isList :: ViewConfig -> Bool
+isTable, isBoard, isCalendar, isTimeline, isGallery, isList, isChart, isMap, isForm, isDashboard :: ViewConfig -> Bool
 -- The table and board checks also require a typed (not unknown) group-by.
 isTable = \case TableConfig TableViewConfig {groupBy = Set (DateGroupBy {})} -> True; _ -> False
 isBoard = \case BoardConfig BoardViewConfig {groupBy = SelectGroupBy {}} -> True; _ -> False
@@ -354,6 +360,10 @@ isCalendar = \case CalendarConfig {} -> True; _ -> False
 isTimeline = \case TimelineConfig {} -> True; _ -> False
 isGallery = \case GalleryConfig {} -> True; _ -> False
 isList = \case ListConfig {} -> True; _ -> False
+isChart = \case ChartConfig ChartViewConfig {xAxis = x} -> case x of Set UnknownGroupBy {} -> False; _ -> True; _ -> False
+isMap = \case MapConfig {} -> True; _ -> False
+isForm = \case FormConfig {} -> True; _ -> False
+isDashboard = \case DashboardConfig DashboardViewConfig {rows} -> Vector.length rows == 1; _ -> False
 
 tableFixture :: L8.ByteString
 tableFixture =
@@ -383,6 +393,40 @@ galleryFixture = "{\"type\":\"gallery\",\"cover\":{\"type\":\"page_cover\"},\"co
 
 listFixture :: L8.ByteString
 listFixture = "{\"type\":\"list\",\"properties\":[{\"property_id\":\"title\",\"visible\":true,\"status_show_as\":\"checkbox\"}]}"
+
+chartFixture :: L8.ByteString
+chartFixture =
+  "{\"type\":\"chart\",\"chart_type\":\"column\",\
+  \\"x_axis\":{\"type\":\"select\",\"property_id\":\"s%3Bq\",\"sort\":{\"type\":\"manual\"}},\
+  \\"y_axis\":{\"aggregator\":\"sum\",\"property_id\":\"n%3Aum\"},\"sort\":\"y_descending\",\"color_theme\":\"colorful\",\
+  \\"height\":\"extra_large\",\"legend_position\":\"bottom\",\"show_data_labels\":true,\"axis_labels\":\"both\",\
+  \\"grid_lines\":\"horizontal\",\"group_style\":\"side_by_side\",\"y_axis_min\":0,\"y_axis_max\":null,\"stack_by\":null,\
+  \\"reference_lines\":[{\"id\":\"line-1\",\"value\":75.5,\"label\":\"Target\",\"color\":\"lightgray\",\"dash_style\":\"dash\"}],\
+  \\"caption\":null,\"color_by_value\":false}"
+
+numberChartFixture :: L8.ByteString
+numberChartFixture = "{\"type\":\"chart\",\"chart_type\":\"number\",\"value\":{\"aggregator\":\"count\"},\"hide_title\":true}"
+
+mapFixture :: L8.ByteString
+mapFixture = "{\"type\":\"map\",\"height\":\"large\",\"map_by\":\"l%3Boc\",\"properties\":[{\"property_id\":\"title\"}]}"
+
+formFixture :: L8.ByteString
+formFixture =
+  "{\"type\":\"form\",\"is_form_closed\":false,\"anonymous_submissions\":true,\"submission_permissions\":\"read_and_write\"}"
+
+dashboardFixture :: L8.ByteString
+dashboardFixture =
+  "{\"type\":\"dashboard\",\"rows\":[{\"id\":\"row-1\",\"widgets\":[\
+  \{\"id\":\"w-1\",\"view_id\":\"2b3c4d5e-6f70-4812-9a3b-4c5d6e7f8091\",\"width\":6,\"row_index\":0},\
+  \{\"id\":\"w-2\",\"view_id\":\"9a8b7c6d-5e4f-4321-8fed-cba987654321\",\"width\":6,\"row_index\":0}],\"height\":320}]}"
+
+testMapResponseOnly :: Assertion
+testMapResponseOnly = do
+  config <- decodeOrFail "{\"type\":\"map\",\"map_by\":\"l%3Boc\",\"map_by_property_name\":\"Office\"}"
+  case config of
+    MapConfig MapViewConfig {mapByPropertyName} -> mapByPropertyName @?= Just "Office"
+    other -> assertFailure ("expected a map configuration, got " <> show other)
+  Aeson.toJSON config @?= jsonValue "{\"type\":\"map\",\"map_by\":\"l%3Boc\"}"
 
 testResponseOnlyStripped :: Assertion
 testResponseOnlyStripped = do

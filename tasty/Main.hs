@@ -1346,8 +1346,19 @@ testViewLifecycle methods@Methods {createView, retrieveView, updateView, listVie
             sorts = Nothing,
             quickFilters = Nothing,
             createDatabase_ = Nothing,
-            configuration = Nothing,
-            position = Nothing,
+            configuration =
+              Just
+                ( Views.TableConfig
+                    Views.TableViewConfig
+                      { Views.properties = Unset,
+                        Views.groupBy = Unset,
+                        Views.subtasks = Unset,
+                        Views.wrapCells = Just True,
+                        Views.frozenColumnIndex = Nothing,
+                        Views.showVerticalLines = Nothing
+                      }
+                ),
+            position = Just Views.ViewPositionEnd,
             placement = Nothing
           }
   view <- createView createReq
@@ -1361,12 +1372,17 @@ testViewLifecycle methods@Methods {createView, retrieveView, updateView, listVie
   assertEqual "Retrieved view ID should match" viewId retrievedViewId
   let ViewObject {type_ = retrievedType} = retrieved
   assertEqual "Retrieved view type should be table" (Just TableView) retrievedType
+  let ViewObject {configuration = retrievedConfig} = retrieved
+  case retrievedConfig of
+    Just (Views.TableConfig Views.TableViewConfig {Views.wrapCells = wrap}) ->
+      assertEqual "Retrieved table configuration keeps wrap_cells" (Just True) wrap
+    other -> assertFailure ("Expected a typed table configuration, got " <> show other)
 
   -- Step 3: Update the view (rename)
   let updateReq =
         UpdateView
           { name = Just "E2E Test View (Renamed)",
-            filter = Unset,
+            filter = Clear,
             sorts = Unset,
             quickFilters = Unset,
             configuration = Nothing
