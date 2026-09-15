@@ -63,6 +63,7 @@ library
 
   exposed-modules:
     Notion.V1
+    Notion.V1.AsyncTasks
     Notion.V1.BlockContent
     Notion.V1.Blocks
     Notion.V1.Client
@@ -107,6 +108,7 @@ test-suite tasty
   hs-source-dirs: tasty
   main-is: Main.hs
   other-modules:
+    AsyncTaskTests
     CommentTests
     FakeNotion
     HelpersTests

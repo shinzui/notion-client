@@ -26,7 +26,8 @@
 * The exported Servant `API` types of `Notion.V1`, `Notion.V1.DataSources` and `Notion.V1.Databases` gain a `QueryParams "filter_properties" Text` segment on the query routes (only affects code deriving its own client from them; the `Methods` record is unchanged)
 * `CreateComment` is restructured: `target :: CommentTarget` (parent or discussion) and `content :: CommentContent` (rich text or Markdown) replace `parent`, `discussionId` and `richText`; `attachments` now holds `CommentAttachmentRequest` and `displayName` holds `CommentDisplayNameRequest`. Use `mkCreateComment` / `mkReplyComment`
 * `createComment` returns `CommentResponse` (full or partial comment) instead of `CommentObject`
-* `Methods` and the effectful `Notion` GADT gain `retrieveComment`, `updateComment` and `deleteComment`
+* `Methods` and the effectful `Notion` GADT gain `retrieveComment`, `updateComment`, `deleteComment`, `createPageAsync`, `updatePageMarkdownAsync` and `retrieveAsyncTask`
+* The exported Servant `API` types of `Notion.V1` and `Notion.V1.Pages` gain the async page routes and `AsyncTasks.API`
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
@@ -40,6 +41,7 @@
 * `paginateFoldM` and `paginateForM_` in `Notion.V1.Pagination`
 * Runtime building blocks for non-Servant requests: `RequestContext`, `standardHeaders`, `responseTimeoutFor`, `withRetries`, `buildRequestError` and `notionErrorFromResponse`
 * Retrieve, update (rich text or Markdown) and delete comments; create comments with Markdown, discussion replies, file-upload attachments and display names
+* New `Notion.V1.AsyncTasks` module: `AsyncTask`, `retrieveAsyncTask`, `waitForAsyncTask`, and `allow_async` page creation / markdown update via `createPageAsync` and `updatePageMarkdownAsync` (which accept Notion's `202 Accepted` responses)
 
 ### Bug Fixes
 * Decode the `default_background` color — previously any rich text or block using it failed the whole response

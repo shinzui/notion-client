@@ -38,13 +38,14 @@ import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Notion.Prelude
+import Notion.V1.AsyncTasks (AllowAsync, AsyncVerb)
 import Notion.V1.BlockContent (BlockContent)
 import Notion.V1.Blocks (Position)
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.PropertyValue (PropertyValue)
 import Notion.V1.Users (UserReference)
-import Servant.API (QueryParams)
+import Servant.API (QueryParams, StdMethod (PATCH, POST))
 
 -- | Page ID
 type PageID = UUID
@@ -391,4 +392,10 @@ type API =
            :> "move"
            :> ReqBody '[JSON] MovePage
            :> Post '[JSON] PageObject
+           :<|> ReqBody '[JSON] (AllowAsync CreatePage)
+           :> AsyncVerb 'POST PageObject
+           :<|> Capture "page_id" PageID
+           :> "markdown"
+           :> ReqBody '[JSON] (AllowAsync UpdatePageMarkdown)
+           :> AsyncVerb 'PATCH PageMarkdown
        )

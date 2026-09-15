@@ -36,6 +36,8 @@ module Notion.V1.Effectful.Effect
     retrievePageMarkdown,
     updatePageMarkdown,
     movePage,
+    createPageAsync,
+    updatePageMarkdownAsync,
 
     -- * Blocks
     retrieveBlock,
@@ -76,6 +78,9 @@ module Notion.V1.Effectful.Effect
     sendFileUploadContent,
     completeFileUpload,
     listFileUploads,
+
+    -- * Async Tasks
+    retrieveAsyncTask,
   )
 where
 
@@ -83,6 +88,7 @@ import Data.Aeson (Value)
 import Data.Text (Text)
 import Effectful (Dispatch (..), DispatchOf, Eff, Effect, (:>))
 import Effectful.Dispatch.Dynamic (send)
+import Notion.V1.AsyncTasks (AsyncOr, AsyncTask, AsyncTaskID)
 import Notion.V1.Blocks (BlockID, BlockObject)
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentObject, CommentResponse)
@@ -138,6 +144,8 @@ data Notion :: Effect where
   RetrievePageMarkdown :: PageID -> Maybe Bool -> Notion m PageMarkdown
   UpdatePageMarkdown :: PageID -> UpdatePageMarkdown -> Notion m PageMarkdown
   MovePage :: PageID -> MovePage -> Notion m PageObject
+  CreatePageAsync :: CreatePage -> Notion m (AsyncOr PageObject)
+  UpdatePageMarkdownAsync :: PageID -> UpdatePageMarkdown -> Notion m (AsyncOr PageMarkdown)
   -- Blocks
   RetrieveBlock :: BlockID -> Notion m BlockObject
   UpdateBlock :: BlockID -> Blocks.BlockUpdate -> Notion m BlockObject
@@ -184,6 +192,8 @@ data Notion :: Effect where
     Maybe Text ->
     Maybe Natural ->
     Notion m (ListOf FileUploadObject)
+  -- Async Tasks
+  RetrieveAsyncTask :: AsyncTaskID -> Notion m AsyncTask
 
 type instance DispatchOf Notion = 'Dynamic
 
@@ -290,6 +300,18 @@ updatePageMarkdown pid upd = send (UpdatePageMarkdown pid upd)
 -- | See 'Notion.V1.Methods'.'Notion.V1.movePage'.
 movePage :: (Notion :> es) => PageID -> MovePage -> Eff es PageObject
 movePage pid mv = send (MovePage pid mv)
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.createPageAsync'.
+createPageAsync :: (Notion :> es) => CreatePage -> Eff es (AsyncOr PageObject)
+createPageAsync = send . CreatePageAsync
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.updatePageMarkdownAsync'.
+updatePageMarkdownAsync ::
+  (Notion :> es) =>
+  PageID ->
+  UpdatePageMarkdown ->
+  Eff es (AsyncOr PageMarkdown)
+updatePageMarkdownAsync pid upd = send (UpdatePageMarkdownAsync pid upd)
 
 -- ── Blocks ────────────────────────────────────────────────────────
 
@@ -450,3 +472,10 @@ listFileUploads ::
   Eff es (ListOf FileUploadObject)
 listFileUploads statusFilter startCursor pageSize =
   send (ListFileUploads statusFilter startCursor pageSize)
+
+-- ── Async Tasks ───────────────────────────────────────────────────
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.retrieveAsyncTask'. Pass it to
+-- 'Notion.V1.AsyncTasks.waitForAsyncTask' to poll from 'Eff'.
+retrieveAsyncTask :: (Notion :> es) => AsyncTaskID -> Eff es AsyncTask
+retrieveAsyncTask = send . RetrieveAsyncTask

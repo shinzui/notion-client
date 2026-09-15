@@ -1,5 +1,6 @@
 module Main where
 
+import AsyncTaskTests qualified
 import CommentTests qualified
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
@@ -168,6 +169,7 @@ tests = do
         propertyValueTests,
         fileUploadTests,
         CommentTests.tests,
+        AsyncTaskTests.tests,
         WireFormatTests.tests,
         RuntimeTests.tests,
         OAuthTests.tests,

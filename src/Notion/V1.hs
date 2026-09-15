@@ -61,6 +61,8 @@ import Data.Text qualified as Text
 import Network.HTTP.Client (Manager)
 import Network.HTTP.Client.TLS qualified as TLS
 import Notion.Prelude
+import Notion.V1.AsyncTasks (AllowAsync (..), AsyncOr, AsyncTask, AsyncTaskID, fromAsyncUnion)
+import Notion.V1.AsyncTasks qualified as AsyncTasks
 import Notion.V1.Blocks (BlockID, BlockObject)
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Client
@@ -165,6 +167,8 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
                  :<|> retrievePageMarkdown
                  :<|> updatePageMarkdown
                  :<|> movePage
+                 :<|> createPageAsync_
+                 :<|> updatePageMarkdownAsync_
                )
         :<|> ( retrieveBlock
                  :<|> updateBlock
@@ -197,6 +201,7 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
                  :<|> completeFileUpload
                  :<|> listFileUploads_
                )
+        :<|> retrieveAsyncTask
       ) =
         Client.hoistClient
           @API
@@ -211,6 +216,10 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
 
     -- Wrap retrievePageFiltered to provide backward-compatible retrievePage
     retrievePage pid = retrievePageFiltered pid []
+
+    -- The async variants always send allow_async: true
+    createPageAsync req = fromAsyncUnion <$> createPageAsync_ (AllowAsync req)
+    updatePageMarkdownAsync pid req = fromAsyncUnion <$> updatePageMarkdownAsync_ pid (AllowAsync req)
 
     -- filter_properties is sent as repeated query parameters (see DataSources.API)
     queryDataSource dsId q@DataSources.QueryDataSource {filterProperties = props} =
@@ -287,6 +296,13 @@ data Methods = Methods
       PageID ->
       MovePage ->
       IO PageObject,
+    -- | Like 'createPage' but sends @allow_async: true@, so Notion may answer
+    -- with an async task instead of the page. Only meaningful when the
+    -- request's @markdown@ is set.
+    createPageAsync :: CreatePage -> IO (AsyncOr PageObject),
+    -- | Like 'updatePageMarkdown' but sends @allow_async: true@, so Notion may
+    -- answer with an async task instead of the result.
+    updatePageMarkdownAsync :: PageID -> UpdatePageMarkdown -> IO (AsyncOr PageMarkdown),
     -- \* Blocks
     retrieveBlock :: BlockID -> IO BlockObject,
     updateBlock :: BlockID -> Blocks.BlockUpdate -> IO BlockObject,
@@ -365,7 +381,11 @@ data Methods = Methods
       -- \^ start_cursor
       Maybe Natural ->
       -- \^ page_size
-      IO (ListOf FileUploadObject)
+      IO (ListOf FileUploadObject),
+    -- \* Async tasks
+
+    -- | Retrieve a background task; see 'Notion.V1.AsyncTasks.waitForAsyncTask'.
+    retrieveAsyncTask :: AsyncTaskID -> IO AsyncTask
   }
 
 -- | Servant API
@@ -382,4 +402,5 @@ type API =
            :<|> Views.API
            :<|> CustomEmojis.API
            :<|> FileUploads.API
+           :<|> AsyncTasks.API
        )

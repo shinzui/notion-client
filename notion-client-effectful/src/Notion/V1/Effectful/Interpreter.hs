@@ -32,6 +32,7 @@ import Notion.V1.Effectful.Effect
         CreateDatabase,
         CreateFileUpload,
         CreatePage,
+        CreatePageAsync,
         CreateView,
         DeleteBlock,
         DeleteComment,
@@ -47,6 +48,7 @@ import Notion.V1.Effectful.Effect
         QueryDataSource,
         QueryDatabase,
         QueryView,
+        RetrieveAsyncTask,
         RetrieveBlock,
         RetrieveComment,
         RetrieveDataSource,
@@ -67,6 +69,7 @@ import Notion.V1.Effectful.Effect
         UpdateDatabase,
         UpdatePage,
         UpdatePageMarkdown,
+        UpdatePageMarkdownAsync,
         UpdateView
       ),
   )
@@ -108,6 +111,8 @@ runNotion methods = interpret $ \_ -> \case
     runIO (Notion.retrievePageMarkdown methods pid includeTx)
   UpdatePageMarkdown pid req -> runIO (Notion.updatePageMarkdown methods pid req)
   MovePage pid req -> runIO (Notion.movePage methods pid req)
+  CreatePageAsync req -> runIO (Notion.createPageAsync methods req)
+  UpdatePageMarkdownAsync pid req -> runIO (Notion.updatePageMarkdownAsync methods pid req)
   -- Blocks
   RetrieveBlock bid -> runIO (Notion.retrieveBlock methods bid)
   UpdateBlock bid req -> runIO (Notion.updateBlock methods bid req)
@@ -147,6 +152,8 @@ runNotion methods = interpret $ \_ -> \case
   CompleteFileUpload fid -> runIO (Notion.completeFileUpload methods fid)
   ListFileUploads statusFilter cursor pageSize ->
     runIO (Notion.listFileUploads methods statusFilter cursor pageSize)
+  -- Async Tasks
+  RetrieveAsyncTask tid -> runIO (Notion.retrieveAsyncTask methods tid)
 
 -- | Run an 'IO' action, funneling any thrown 'NotionError' through
 -- the 'Error' effect.
