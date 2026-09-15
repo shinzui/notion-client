@@ -34,6 +34,8 @@
 * Decode unique-ID properties whose `number` is null, and formula properties with an `unsupported` result
 * `queryDataSource` and `queryDatabase` send `filterProperties` as repeated `filter_properties` query parameters instead of a JSON body field, which Notion rejected
 * `CreatePage` positions encode as `page_start`, `page_end` and `after_block`, the shapes Notion accepts for page creation
+* `WebhookEvent` decodes without `accessible_by` (it is only sent to public integrations); `accessibleBy` is empty in that case
+* `verifySignature` accepts upper- or lowercase hex and rejects headers without the `sha256=` prefix, of the wrong length, or with non-hex characters
 
 ## 0.7.0.2 (2026-06-27)
 

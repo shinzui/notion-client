@@ -43,11 +43,13 @@ module Notion.V1.Webhooks
 where
 
 import Crypto.Hash.SHA256 qualified as SHA256
-import Data.Aeson (object, (.:), (.:?), (.=))
+import Data.Aeson (object, (.!=), (.:), (.:?), (.=))
 import Data.Bits (xor, (.|.))
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Base16 qualified as Base16
+import Data.Char (isHexDigit)
+import Data.Text qualified as T
 import Data.Text.Encoding qualified as Text
 import Notion.Prelude hiding (ByteString)
 import Notion.V1.Common (UUID (..))
@@ -283,7 +285,8 @@ instance FromJSON WebhookEvent where
       integrationId <- o .: "integration_id"
       type_ <- o .: "type"
       authors <- o .: "authors"
-      accessibleBy <- o .: "accessible_by"
+      -- Only present for public integrations
+      accessibleBy <- o .:? "accessible_by" .!= mempty
       attemptNumber <- o .: "attempt_number"
       entity <- o .: "entity"
       data_ <- o .:? "data"
@@ -324,7 +327,9 @@ computeSignature verificationToken body =
 
 -- | Verify webhook signature from X-Notion-Signature header
 --
--- Uses constant-time comparison to prevent timing attacks.
+-- Uses constant-time comparison to prevent timing attacks. The header must
+-- start with @sha256=@ followed by exactly 64 hex digits; the hex digits are
+-- compared case-insensitively.
 --
 -- Example:
 --
@@ -341,10 +346,14 @@ verifySignature ::
   -- | True if signature is valid
   Bool
 verifySignature verificationToken body headerSignature =
-  constantTimeCompare expected actual
-  where
-    expected = Text.encodeUtf8 $ computeSignature verificationToken body
-    actual = Text.encodeUtf8 headerSignature
+  case T.stripPrefix "sha256=" headerSignature of
+    Nothing -> False
+    Just provided ->
+      let providedHex = T.toLower provided
+          computedHex = Base16.encode (SHA256.hmac (Text.encodeUtf8 verificationToken) body)
+       in T.length providedHex == 64
+            && T.all isHexDigit providedHex
+            && constantTimeCompare (Text.encodeUtf8 providedHex) computedHex
 
 -- | Constant-time comparison to prevent timing attacks
 constantTimeCompare :: ByteString -> ByteString -> Bool

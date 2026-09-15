@@ -8,6 +8,7 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Char8 qualified as B8
 import Data.ByteString.Lazy.Char8 qualified as L8
 import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Network.HTTP.Client qualified as HTTP
 import Notion.V1 (Methods (..), makeMethods)
@@ -27,6 +28,7 @@ import Notion.V1.Properties (NumberFormat (..))
 import Notion.V1.PropertyValue (FormulaResult (..), PropertyValue (..), UniqueIdResult (..))
 import Notion.V1.RichText (Annotations (..), MentionContent (..), RichText (..), RichTextContent (..))
 import Notion.V1.Users (BotUser (..), PersonUser (..), UserObject (..), UserOwner (..))
+import Notion.V1.Webhooks (WebhookEvent (..), computeSignature, verifySignature)
 import Servant.Client qualified as Client
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -37,7 +39,8 @@ tests =
     "WireFormat"
     [ testGroup "Common and rich text" commonTests,
       testGroup "Blocks, users and property values" blockUserPropertyTests,
-      testGroup "Request encoding" requestEncodingTests
+      testGroup "Request encoding" requestEncodingTests,
+      testGroup "Webhooks" webhookTests
     ]
 
 -- | Decode a lazy ByteString literal or fail the test with aeson's message.
@@ -313,4 +316,27 @@ requestEncodingTests =
           [ "type" Aeson..= ("after_block" :: String),
             "after_block" Aeson..= Aeson.object ["id" Aeson..= ("b1" :: String)]
           ]
+  ]
+
+------------------------------------------------------------------------------
+-- Webhooks
+
+webhookTests :: [TestTree]
+webhookTests =
+  [ testCase "WebhookEvent without accessible_by decodes" $ do
+      WebhookEvent {accessibleBy} <-
+        decodeOrFail
+          "{\"id\":\"ffffffff-0000-4000-8000-000000000006\",\"timestamp\":\"2026-09-01T12:00:00.000Z\",\"workspace_id\":\"ws-1\",\"workspace_name\":\"Sakura Studio\",\"subscription_id\":\"sub-1\",\"integration_id\":\"int-1\",\"type\":\"page.created\",\"authors\":[{\"id\":\"cccccccc-0000-4000-8000-000000000003\",\"type\":\"person\"}],\"attempt_number\":1,\"api_version\":\"2026-03-11\",\"entity\":{\"id\":\"eeeeeeee-0000-4000-8000-000000000005\",\"type\":\"page\"},\"data\":{\"parent\":{\"id\":\"space-1\",\"type\":\"space\"}}}"
+      assertBool "accessibleBy is empty" (Vector.null accessibleBy),
+    testCase "verifySignature accepts uppercase hex" $ do
+      let body = B8.pack "{\"a\":1}"
+          sig = computeSignature "tok" body
+      verifySignature "tok" body sig @?= True
+      verifySignature "tok" body ("sha256=" <> Text.toUpper (Text.drop 7 sig)) @?= True,
+    testCase "verifySignature rejects malformed signatures" $ do
+      let body = B8.pack "{\"a\":1}"
+          sig = computeSignature "tok" body
+      verifySignature "tok" body (Text.drop 7 sig) @?= False
+      verifySignature "tok" body "sha256=abc" @?= False
+      verifySignature "tok" body ("sha256=" <> Text.replicate 64 "z") @?= False
   ]

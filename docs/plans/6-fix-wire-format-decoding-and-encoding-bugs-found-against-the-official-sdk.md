@@ -54,13 +54,23 @@ This is EP-1 of the MasterPlan `docs/masterplans/1-reach-parity-with-the-officia
 - [x] Milestone 3: `filter_properties` sent as a repeated query parameter for `queryDataSource` and `queryDatabase` (`DataSources.hs`, `Databases.hs`, `V1.hs`), with `Methods` signatures unchanged. (2026-09-15)
 - [x] Milestone 3: New `PagePosition` type used by `CreatePage.position` (`src/Notion/V1/Pages.hs`). (2026-09-15)
 - [x] Milestone 3: Four Milestone-3 tests pass; `cabal build all` builds `notion-client-effectful` unchanged; CHANGELOG entries added. (2026-09-15)
-- [ ] Milestone 4: `WebhookEvent.accessibleBy` defaults to empty when absent, and `verifySignature` validates the prefix, length and hex and ignores hex case (`src/Notion/V1/Webhooks.hs`).
-- [ ] Milestone 4: Three Milestone-4 tests pass; full `cabal test` passes; CHANGELOG finalized; MasterPlan EP-1 progress rows ticked.
+- [x] Milestone 4: `WebhookEvent.accessibleBy` defaults to empty when absent, and `verifySignature` validates the prefix, length and hex and ignores hex case (`src/Notion/V1/Webhooks.hs`). (2026-09-15)
+- [x] Milestone 4: Three Milestone-4 tests pass; full `cabal test` passes; CHANGELOG finalized; MasterPlan EP-1 progress rows ticked. (2026-09-15)
 
 
 ## Surprises & Discoveries
 
-- Removing the `fail $ "... " <> unpack other` branches from the `Icon` and `MentionContent` decoders made the discriminator's type ambiguous, because `unpack` was what pinned it to `Text`. GHC reported `Ambiguous type variable ‘a0’ arising from a use of ‘.:’`. Fixed with `iconType :: Text <- o .: "type"` (and likewise `mentionType`, `tmType`). Expect the same when replacing other `fail` fallbacks in later milestones.
+- Removing the `fail $ "... " <> unpack other` branches from the `Icon` and `MentionContent` decoders made the discriminator's type ambiguous, because `unpack` was what pinned it to `Text`. GHC reported `Ambiguous type variable ‘a0’ arising from a use of ‘.:’`. Fixed with `iconType :: Text <- o .: "type"` (and likewise `mentionType`, `tmType`). Expect the same when replacing other `fail` fallbacks in later milestones. It recurred in Milestone 2 (`ownerType` in `Users.hs`, `formulaType` in `PropertyValue.hs`) and was annotated up front.
+- In `src/Notion/V1/Webhooks.hs` the qualifier `Text` already names `Data.Text.Encoding`, so the plan's `Text.stripPrefix`/`Text.toLower` did not resolve (`Not in scope: ‘Text.stripPrefix’`). Following the plan's own instruction, `Data.Text` is imported as `T` and used for those calls.
+- The request-capture technique (overriding `Client.makeClientRequest` in servant-client 0.20.3.0's `ClientEnv` and throwing a private exception) worked as described. The built request is inspectable without network access, which makes it reusable for future encoding tests.
+- Live evidence (2026-09-15, `NOTION_TEST_DATABASE_ID`'s first data source): `queryDataSource` with `filterProperties = Just ["title"]` returned 3 pages, and each page's `properties` keys were exactly `["Name"]` (the title property).
+
+```text
+pages: 3
+["Name"]
+["Name"]
+["Name"]
+```
 
 
 ## Decision Log
@@ -100,7 +110,20 @@ This is EP-1 of the MasterPlan `docs/masterplans/1-reach-parity-with-the-officia
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+Completed 2026-09-15 in four commits, one per milestone. Every defect listed in Context and Orientation is fixed.
+
+- **Decoding.** Responses that used to fail now decode: `default_background` colors, `agent_id` parents, nested custom-emoji icons, unknown mention kinds, all code languages, real meeting-notes and deprecated `transcription` blocks, people without an email, user-owned bots, open number formats, null unique-ID numbers, `unsupported` formulas, and webhook events without `accessible_by`.
+- **Requests.** `filter_properties` travels as repeated query parameters, `CreatePage` sends the page-position shapes, and webhook signature verification follows the JS SDK's rules.
+- **Tests.** `tasty/WireFormatTests.hs` holds 27 tests, all passing. The full suite passes 156 of 156, including the live E2E groups (`NOTION_TOKEN` was set). The `Methods` record did not change, and `notion-client-effectful` built without edits.
+
+What remains is outside this plan's scope. The version bump to `0.8.0.0` is the MasterPlan's release step. Typed `link_mention`/`custom_emoji` mentions and the custom-emoji icon's `name`/`url` belong to `docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md`. Page-or-data-source query results belong to `docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md`.
+
+Lessons:
+
+- Replacing `fail` branches changes type inference (see Surprises & Discoveries).
+- Capturing the built `http-client` request is a cheap, network-free way to test wire encoding.
+
+The tolerant-decoding rule this plan applied is now recorded as durable project context in [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md).
 
 
 ## Context and Orientation
@@ -117,7 +140,7 @@ The repository root is `/Users/shinzui/Keikaku/bokuno/libraries/haskell/notion-c
 
 **Tests.** The test suite is `test-suite tasty` in `notion-client.cabal` (around line 90). Its only module today is `tasty/Main.hs` (about 2300 lines). There is no `other-modules` field yet. Its `tests :: IO TestTree` ends with a top-level `testGroup "Notion Client Tests"` whose list is `[jsonParsingTests, jsonSerializationTests, propertyValueTests, fileUploadTests, basicIntegration, markdownE2E, pageE2E, databaseE2E, viewE2E]`. Integration groups are skipped unless `NOTION_TOKEN` is set. By MasterPlan rule, this plan's tests go in a new module `tasty/WireFormatTests.hs` exporting `tests :: TestTree`. That module is listed under `other-modules` of the test suite and added as one line to that list. Two existing tests in `tasty/Main.hs` assert the old, wrong shapes and must be updated: `testCustomEmojiIconRoundTrip` (around line 843) and `testBlockContentMeetingNotes` (around line 1541). Fixtures must never use the maintainer's real name; use made-up Japanese names such as "Tanaka Hanako" or "Sato Kenji".
 
-**ADRs.** This repository has no `docs/adr/` directory; no relevant ADR exists.
+**ADRs.** When this plan was written, the repository had no `docs/adr/` directory, and no relevant ADR existed. Implementation created [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md), which records the fallback-constructor rule this plan applies.
 
 The defects, the files that contain them, and the JS shapes that are correct follow. Each was verified against both codebases on 2026-09-14.
 
@@ -831,3 +854,6 @@ queryDataSource :: DataSourceID -> DataSources.QueryDataSource -> IO (ListOf Pag
 The Servant routes become `Capture "data_source_id" DataSourceID :> "query" :> QueryParams "filter_properties" Text :> ReqBody '[JSON] QueryDataSource :> Post '[JSON] (ListOf PageObject)`, and the same shape with `database_id`/`QueryDatabase`. EP-5 (`docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md`) builds on this route when it adds `result_type` and the page-or-data-source result union.
 
 At the end of Milestone 4, `Notion.V1.Webhooks` keeps `verifySignature :: Text -> ByteString -> Text -> Bool` and `computeSignature :: Text -> ByteString -> Text` with unchanged types. `WebhookEvent.accessibleBy :: Vector AccessibleBy` is empty when the field is absent.
+
+
+Revision 2026-09-15 (implementation): Implemented all four milestones. Progress, Surprises & Discoveries and Outcomes & Retrospective were filled in. The ADR note in Context and Orientation now points to the new `docs/adr/1-tolerant-response-decoders.md`. The design is unchanged, except that `Data.Text` is imported as `T` in `Webhooks.hs` because `Text` was already taken there.

@@ -92,7 +92,7 @@ Prior plans in this repository that give useful background (all checked in, all 
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 1 | Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK | docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md | None | None | In Progress |
+| 1 | Fix Wire-Format Decoding and Encoding Bugs Found Against the Official SDK | docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md | None | None | Complete |
 | 2 | Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth | docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md | None | None | Not Started |
 | 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | Not Started |
 | 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | Not Started |
@@ -199,7 +199,7 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 **Cross-plan decisions that should become ADRs** once implemented (there is no `docs/adr/` yet; create it with a plain Markdown convention, since `mori.dhall` declares no profiled ADR bundle):
 
 1. The JS SDK's generated types are the reference for the wire format, and `2026-03-11` is the pinned API version.
-2. Decoders must be tolerant: every closed enum and sum type decoded from a response has an "unknown" fallback constructor carrying the raw value.
+2. Decoders must be tolerant: every closed enum and sum type decoded from a response has an "unknown" fallback constructor carrying the raw value. **Recorded** as [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md) (2026-09-15). The directory uses plain Markdown files named `<N>-<slug>.md`.
 3. The retry policy: which errors, which methods, how `retry-after` is honored.
 4. The `notion-client-effectful` lockstep rule.
 5. The deliberate exclusion of unpublished agent routes from the core REST parity effort.
@@ -207,8 +207,8 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 
 ## Progress
 
-- [ ] EP-1: Decoder crash fixes (colors, icons, code languages, mentions, parents, users, meeting-notes block, webhooks)
-- [ ] EP-1: Encoder fixes (`filter_properties` query parameter, page `position`, custom-emoji icon request, webhook signature case)
+- [x] EP-1: Decoder crash fixes (colors, icons, code languages, mentions, parents, users, meeting-notes block, webhooks)
+- [x] EP-1: Encoder fixes (`filter_properties` query parameter, page `position`, custom-emoji icon request, webhook signature case)
 - [ ] EP-2: Configurable client (API version, base URL, timeout) with `makeMethods` preserved (it gains default retries)
 - [ ] EP-2: Retries with back-off and `retry-after`
 - [ ] EP-2: Typed error codes and `request_status` on `ListOf`
@@ -234,6 +234,10 @@ MasterPlan 2 (`docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-ss
 - `queryView` (`POST views/{id}/query`) has no JS SDK equivalent in any commit. The JS views API was added in commit 2e27ab5 with only `views/{id}/queries`, and an earlier plan here recorded a 400 from that route. EP-4 removes it (a breaking change).
 - The path-traversal guard is relevant in Haskell after all. `http-api-data` leaves `.` unencoded in URL pieces, and `UUID` has an `IsString` instance, so `retrievePage methods ".."` would request `/v1/pages/..`. EP-2 adds the guard.
 - EP-1 cannot be a patch release, because its fixes change exported field types.
+- EP-1 (completed 2026-09-15) kept the `Methods` signatures of `queryDataSource`/`queryDatabase` unchanged. Only the Servant `API` types gained `QueryParams "filter_properties" Text`, and `makeMethods` now binds `queryDataSource_`/`queryDatabase_` with two wrapper equations in its `where` block. EP-2 must carry those wrappers into its configurable constructor. EP-5 builds on the new route shape.
+- EP-1 fully typed the meeting-notes payload, as recorded in the Decision Log. The Dependency Graph's older wording ("EP-6 ... meeting notes") is superseded: EP-3 can now reuse `MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent` and `MeetingRecording` from `Notion.V1.BlockContent`.
+- EP-1 added `tasty/WireFormatTests.hs` with a `captureRequest` helper. The helper overrides servant-client's `makeClientRequest` to inspect a built HTTP request without network access, which EP-2, EP-3 and EP-5 can copy for their own encoding tests. The first `other-modules` entry of `test-suite tasty` now exists; later plans append their modules to it.
+- The first ADR, [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md), records cross-plan decision 2 below (tolerant decoders). Later plans that add fallback constructors should follow it.
 
 
 ## Decision Log
