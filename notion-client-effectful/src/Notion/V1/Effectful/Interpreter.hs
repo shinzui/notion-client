@@ -34,6 +34,7 @@ import Notion.V1.Effectful.Effect
         CreateMeetingNote,
         CreatePage,
         CreatePageAsync,
+        CreatePageFiltered,
         CreateView,
         CreateViewQuery,
         DeleteBlock,
@@ -72,6 +73,7 @@ import Notion.V1.Effectful.Effect
         UpdateDataSource,
         UpdateDatabase,
         UpdatePage,
+        UpdatePageFiltered,
         UpdatePageMarkdown,
         UpdatePageMarkdownAsync,
         UpdateView
@@ -106,9 +108,11 @@ runNotion methods = interpret $ \_ -> \case
     runIO (Notion.listDataSourceTemplates methods dsId nameFilter cursor pageSize)
   -- Pages
   CreatePage req -> runIO (Notion.createPage methods req)
+  CreatePageFiltered props req -> runIO (Notion.createPageFiltered methods props req)
   RetrievePage pid -> runIO (Notion.retrievePage methods pid)
   RetrievePageFiltered pid props -> runIO (Notion.retrievePageFiltered methods pid props)
   UpdatePage pid req -> runIO (Notion.updatePage methods pid req)
+  UpdatePageFiltered pid props req -> runIO (Notion.updatePageFiltered methods pid props req)
   RetrievePageProperty pid prop cursor size ->
     runIO (Notion.retrievePageProperty methods pid prop cursor size)
   RetrievePageMarkdown pid includeTx ->

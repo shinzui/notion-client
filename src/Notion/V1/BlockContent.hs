@@ -12,8 +12,21 @@ module Notion.V1.BlockContent
     blockContentFields,
     parseBlockContent,
 
-    -- * Block update wrapper
-    BlockUpdate (..),
+    -- * Block updates
+    BlockUpdatePayload (..),
+    BlockUpdateContent (..),
+    ParagraphUpdate (..),
+    HeadingUpdate (..),
+    TextColorUpdate (..),
+    ToDoUpdate (..),
+    CodeUpdate (..),
+    MediaUpdate (..),
+    MediaSourceUpdate (..),
+    UrlCaptionUpdate (..),
+    TableUpdate (..),
+    mkBlockUpdate,
+    trashBlockUpdate,
+    blockUpdateFromContent,
 
     -- * Supporting types
     CodeLanguage (..),
@@ -42,6 +55,7 @@ module Notion.V1.BlockContent
     bookmarkBlock,
     dividerBlock,
     imageBlock,
+    tabBlock,
 
     -- * Combinators
     withChildren,
@@ -55,7 +69,7 @@ import Data.Aeson.Types (Pair, Parser)
 import Data.Maybe (fromMaybe)
 import Data.Vector qualified as Vector
 import Notion.Prelude
-import Notion.V1.Common (Color (..), ExternalFile, File, Icon, UUID)
+import Notion.V1.Common (Color (..), ExternalFile (ExternalFile), File, Icon, UUID)
 import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 
 -- ---------------------------------------------------------------------------
@@ -634,7 +648,8 @@ data BlockContent
       }
   | -- | Audio block.
     AudioBlock
-      { audioSource :: FileSource
+      { audioSource :: FileSource,
+        caption :: Vector RichText
       }
   | -- | File attachment block.
     FileBlock
@@ -654,7 +669,8 @@ data BlockContent
       }
   | -- | Embed block.
     EmbedBlock
-      { url :: Text
+      { url :: Text,
+        caption :: Vector RichText
       }
   | -- | Link to another page, database, or comment.
     LinkToPageBlock
@@ -738,8 +754,9 @@ data BlockContent
       { richText :: Vector RichText,
         children :: Vector BlockContent
       }
-  | -- | Unsupported block type returned by the API.
-    UnsupportedBlock
+  | -- | Block type the API does not support; carries the underlying
+    -- @block_type@ when Notion reports it.
+    UnsupportedBlock (Maybe Text)
   | -- | Fallback for block types not yet modeled.
     UnknownBlock Text Value
   deriving stock (Eq, Generic, Show)
@@ -760,8 +777,7 @@ blockContentType = fst . blockContentFields
 
 -- | Decompose a 'BlockContent' into its JSON type name and inner content
 -- value. This is the serialization primitive used by both 'ToJSON BlockContent'
--- (full format with @\"type\"@ key) and 'ToJSON BlockUpdate' (update format
--- without @\"type\"@ key).
+-- (full format with @\"type\"@ key) and 'blockUpdateFromContent'.
 blockContentFields :: BlockContent -> (Text, Value)
 blockContentFields = \case
   ParagraphBlock {..} ->
@@ -837,7 +853,7 @@ blockContentFields = \case
   VideoBlock {..} ->
     ("video", object $ fileSourcePairs videoSource <> ["caption" .= caption])
   AudioBlock {..} ->
-    ("audio", object $ fileSourcePairs audioSource)
+    ("audio", object $ fileSourcePairs audioSource <> ["caption" .= caption])
   FileBlock {..} ->
     ( "file",
       object $
@@ -850,7 +866,7 @@ blockContentFields = \case
   BookmarkBlock {..} ->
     ("bookmark", object ["url" .= url, "caption" .= caption])
   EmbedBlock {..} ->
-    ("embed", object ["url" .= url])
+    ("embed", object ["url" .= url, "caption" .= caption])
   LinkToPageBlock {..} ->
     ("link_to_page", toJSON linkTarget)
   LinkPreviewBlock {..} ->
@@ -910,8 +926,8 @@ blockContentFields = \case
         ["rich_text" .= richText]
           <> childrenPairs children
     )
-  UnsupportedBlock ->
-    ("unsupported", object [])
+  UnsupportedBlock blockType ->
+    ("unsupported", object (maybe [] (\t -> ["block_type" .= t]) blockType))
   UnknownBlock typeName val ->
     (typeName, val)
 
@@ -1000,6 +1016,7 @@ parseBlockContent typeName val = case typeName of
     pure VideoBlock {..}
   "audio" -> parseObj $ \o -> do
     audioSource <- parseFileSource o
+    caption <- fromMaybe Vector.empty <$> o .:? "caption"
     pure AudioBlock {..}
   "file" -> parseObj $ \o -> do
     fileSource <- parseFileSource o
@@ -1016,6 +1033,7 @@ parseBlockContent typeName val = case typeName of
     pure BookmarkBlock {..}
   "embed" -> parseObj $ \o -> do
     url <- o .: "url"
+    caption <- fromMaybe Vector.empty <$> o .:? "caption"
     pure EmbedBlock {..}
   "link_to_page" -> do
     linkTarget <- Aeson.parseJSON val
@@ -1069,7 +1087,9 @@ parseBlockContent typeName val = case typeName of
     richText <- o .: "rich_text"
     children <- fromMaybe Vector.empty <$> o .:? "children"
     pure TemplateBlock {..}
-  "unsupported" -> pure UnsupportedBlock
+  "unsupported" -> case val of
+    Object o -> UnsupportedBlock <$> o .:? "block_type"
+    _ -> pure (UnsupportedBlock Nothing)
   _ -> pure (UnknownBlock typeName val)
   where
     parseMeetingNotes = parseObj $ \o -> do
@@ -1098,34 +1118,250 @@ instance ToJSON BlockContent where
      in object ["type" .= typeName, Key.fromText typeName .= inner]
 
 -- ---------------------------------------------------------------------------
--- BlockUpdate
+-- Block updates
 -- ---------------------------------------------------------------------------
 
--- | Wrapper for block content used in the update (PATCH) endpoint.
+-- | Body of @PATCH \/v1\/blocks\/{block_id}@. Every field is optional: send
+-- only 'inTrash' to trash or restore a block ('trashBlockUpdate').
 --
--- Serializes without the @\"type\"@ key — only the type-named key with inner
--- content:
---
--- @
--- { "paragraph": { "rich_text": [...] } }
--- @
-newtype BlockUpdate = BlockUpdate BlockContent
-  deriving stock (Show)
+-- Updates are a different shape from block creation: no update accepts
+-- @children@, a table update accepts only its header flags, and some block
+-- types cannot be updated at all. Build one with 'mkBlockUpdate', or convert
+-- full block content with 'blockUpdateFromContent'.
+data BlockUpdatePayload = BlockUpdatePayload
+  { -- | Named @updateContent@ so it does not clash with
+    -- 'Notion.V1.Blocks.BlockObject'\'s @content@.
+    updateContent :: Maybe BlockUpdateContent,
+    inTrash :: Maybe Bool
+  }
+  deriving stock (Eq, Generic, Show)
 
-instance ToJSON BlockUpdate where
-  toJSON (BlockUpdate bc) =
-    let bc' = stripReadOnlyFields bc
-        (typeName, inner) = blockContentFields bc'
-     in object [Key.fromText typeName .= inner]
+-- | Paragraph and callout update. Every field is optional.
+data ParagraphUpdate = ParagraphUpdate
+  { richText :: Maybe (Vector RichText),
+    color :: Maybe Color,
+    icon :: Maybe Icon
+  }
+  deriving stock (Eq, Generic, Show)
 
--- | Clear fields that the Notion API rejects on PATCH @\/blocks\/:id@.
---
--- Both @list_start_index@ and @list_format@ are read-only — the API returns
--- them in GET responses but rejects them on PATCH (and POST).
-stripReadOnlyFields :: BlockContent -> BlockContent
-stripReadOnlyFields bc = case bc of
-  NumberedListItemBlock {} -> bc {listStartIndex = Nothing, listFormat = Nothing}
-  _ -> bc
+-- | Heading update. The API requires the rich text.
+data HeadingUpdate = HeadingUpdate
+  { richText :: Vector RichText,
+    color :: Maybe Color,
+    isToggleable :: Maybe Bool
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- | List item, quote and toggle update. The API requires the rich text.
+data TextColorUpdate = TextColorUpdate
+  { richText :: Vector RichText,
+    color :: Maybe Color
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- | To-do update. Every field is optional.
+data ToDoUpdate = ToDoUpdate
+  { richText :: Maybe (Vector RichText),
+    checked :: Maybe Bool,
+    color :: Maybe Color
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- | Code block update. Every field is optional.
+data CodeUpdate = CodeUpdate
+  { richText :: Maybe (Vector RichText),
+    language :: Maybe CodeLanguage,
+    caption :: Maybe (Vector RichText)
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- | New source for a media block. Notion-hosted files cannot be set directly.
+data MediaSourceUpdate
+  = UpdateExternalSource Text
+  | UpdateFileUploadSource UUID
+  deriving stock (Eq, Generic, Show)
+
+-- | Image, video, PDF, audio and file update.
+data MediaUpdate = MediaUpdate
+  { caption :: Maybe (Vector RichText),
+    source :: Maybe MediaSourceUpdate
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- | Embed and bookmark update.
+data UrlCaptionUpdate = UrlCaptionUpdate
+  { url :: Maybe Text,
+    caption :: Maybe (Vector RichText)
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- | Table update: only the header flags can change.
+data TableUpdate = TableUpdate
+  { hasColumnHeader :: Maybe Bool,
+    hasRowHeader :: Maybe Bool
+  }
+  deriving stock (Eq, Generic, Show)
+
+-- | One constructor per block type the API allows updating.
+data BlockUpdateContent
+  = UpdateParagraph ParagraphUpdate
+  | UpdateHeading1 HeadingUpdate
+  | UpdateHeading2 HeadingUpdate
+  | UpdateHeading3 HeadingUpdate
+  | UpdateHeading4 HeadingUpdate
+  | UpdateBulletedListItem TextColorUpdate
+  | UpdateNumberedListItem TextColorUpdate
+  | UpdateQuote TextColorUpdate
+  | UpdateToggle TextColorUpdate
+  | UpdateToDo ToDoUpdate
+  | UpdateCallout ParagraphUpdate
+  | UpdateTemplateBlock (Vector RichText)
+  | UpdateCode CodeUpdate
+  | UpdateEquation Text
+  | UpdateImage MediaUpdate
+  | UpdateVideo MediaUpdate
+  | UpdatePdf MediaUpdate
+  | UpdateAudio MediaUpdate
+  | -- | File block; the 'Maybe Text' is the new file name.
+    UpdateFile MediaUpdate (Maybe Text)
+  | UpdateEmbed UrlCaptionUpdate
+  | UpdateBookmark UrlCaptionUpdate
+  | UpdateDivider
+  | UpdateBreadcrumb
+  | UpdateTab
+  | UpdateTableOfContents (Maybe Color)
+  | UpdateLinkToPage LinkTarget
+  | UpdateTableRow (Vector (Vector RichText))
+  | UpdateSyncedBlock SyncedFrom
+  | UpdateTable TableUpdate
+  | -- | Column width ratio between 0 and 1.
+    UpdateColumn (Maybe Double)
+  deriving stock (Eq, Generic, Show)
+
+instance ToJSON BlockUpdatePayload where
+  toJSON BlockUpdatePayload {..} =
+    object $
+      maybe [] (\c -> let (k, v) = blockUpdateFields c in [Key.fromText k .= v]) updateContent
+        <> maybe [] (\t -> ["in_trash" .= t]) inTrash
+
+-- | The block type key and inner object of an update.
+blockUpdateFields :: BlockUpdateContent -> (Text, Value)
+blockUpdateFields = \case
+  UpdateParagraph u -> ("paragraph", paragraphUpdate u)
+  UpdateHeading1 u -> ("heading_1", headingUpdate u)
+  UpdateHeading2 u -> ("heading_2", headingUpdate u)
+  UpdateHeading3 u -> ("heading_3", headingUpdate u)
+  UpdateHeading4 u -> ("heading_4", headingUpdate u)
+  UpdateBulletedListItem u -> ("bulleted_list_item", textColorUpdate u)
+  UpdateNumberedListItem u -> ("numbered_list_item", textColorUpdate u)
+  UpdateQuote u -> ("quote", textColorUpdate u)
+  UpdateToggle u -> ("toggle", textColorUpdate u)
+  UpdateToDo ToDoUpdate {..} ->
+    ( "to_do",
+      object $ opt "rich_text" richText <> opt "checked" checked <> opt "color" color
+    )
+  UpdateCallout u -> ("callout", paragraphUpdate u)
+  UpdateTemplateBlock rt -> ("template", object ["rich_text" .= rt])
+  UpdateCode CodeUpdate {..} ->
+    ( "code",
+      object $ opt "rich_text" richText <> opt "language" language <> opt "caption" caption
+    )
+  UpdateEquation e -> ("equation", object ["expression" .= e])
+  UpdateImage u -> ("image", object (mediaUpdatePairs u))
+  UpdateVideo u -> ("video", object (mediaUpdatePairs u))
+  UpdatePdf u -> ("pdf", object (mediaUpdatePairs u))
+  UpdateAudio u -> ("audio", object (mediaUpdatePairs u))
+  UpdateFile u name -> ("file", object (mediaUpdatePairs u <> opt "name" name))
+  UpdateEmbed u -> ("embed", urlCaptionUpdate u)
+  UpdateBookmark u -> ("bookmark", urlCaptionUpdate u)
+  UpdateDivider -> ("divider", object [])
+  UpdateBreadcrumb -> ("breadcrumb", object [])
+  UpdateTab -> ("tab", object [])
+  UpdateTableOfContents c -> ("table_of_contents", object (opt "color" c))
+  UpdateLinkToPage t -> ("link_to_page", toJSON t)
+  UpdateTableRow cells -> ("table_row", object ["cells" .= cells])
+  UpdateSyncedBlock sf -> ("synced_block", object ["synced_from" .= sf])
+  UpdateTable TableUpdate {..} ->
+    ( "table",
+      object $ opt "has_column_header" hasColumnHeader <> opt "has_row_header" hasRowHeader
+    )
+  UpdateColumn r -> ("column", object (opt "width_ratio" r))
+  where
+    opt :: (ToJSON a) => Aeson.Key -> Maybe a -> [Pair]
+    opt k = maybe [] (\v -> [k .= v])
+    paragraphUpdate ParagraphUpdate {..} =
+      object $ opt "rich_text" richText <> opt "color" color <> opt "icon" icon
+    headingUpdate HeadingUpdate {..} =
+      object $ ["rich_text" .= richText] <> opt "color" color <> opt "is_toggleable" isToggleable
+    textColorUpdate TextColorUpdate {..} =
+      object $ ["rich_text" .= richText] <> opt "color" color
+    urlCaptionUpdate UrlCaptionUpdate {..} =
+      object $ opt "url" url <> opt "caption" caption
+    mediaUpdatePairs MediaUpdate {..} =
+      opt "caption" caption
+        <> case source of
+          Nothing -> []
+          Just (UpdateExternalSource u) -> ["external" .= object ["url" .= u]]
+          Just (UpdateFileUploadSource i) -> ["file_upload" .= object ["id" .= i]]
+
+-- | An update that changes the given block content.
+mkBlockUpdate :: BlockUpdateContent -> BlockUpdatePayload
+mkBlockUpdate c = BlockUpdatePayload {updateContent = Just c, inTrash = Nothing}
+
+-- | An update that moves the block to the trash: @{"in_trash": true}@.
+trashBlockUpdate :: BlockUpdatePayload
+trashBlockUpdate = BlockUpdatePayload {updateContent = Nothing, inTrash = Just True}
+
+-- | Convert full block content to the equivalent \"set every updatable
+-- field\" update. Returns 'Nothing' for block types the API cannot update
+-- (child_page, child_database, column_list, link_preview, meeting_notes,
+-- unsupported, unknown). Read-only fields (@table_width@, @children@,
+-- @list_format@, @list_start_index@, Notion-hosted file URLs) are dropped.
+blockUpdateFromContent :: BlockContent -> Maybe BlockUpdateContent
+blockUpdateFromContent = \case
+  ParagraphBlock {..} -> Just (UpdateParagraph (ParagraphUpdate (Just richText) (Just color) paragraphIcon))
+  Heading1Block {..} -> Just (UpdateHeading1 (HeadingUpdate richText (Just color) (Just isToggleable)))
+  Heading2Block {..} -> Just (UpdateHeading2 (HeadingUpdate richText (Just color) (Just isToggleable)))
+  Heading3Block {..} -> Just (UpdateHeading3 (HeadingUpdate richText (Just color) (Just isToggleable)))
+  Heading4Block {..} -> Just (UpdateHeading4 (HeadingUpdate richText (Just color) (Just isToggleable)))
+  BulletedListItemBlock {..} -> Just (UpdateBulletedListItem (TextColorUpdate richText (Just color)))
+  NumberedListItemBlock {..} -> Just (UpdateNumberedListItem (TextColorUpdate richText (Just color)))
+  ToDoBlock {..} -> Just (UpdateToDo (ToDoUpdate (Just richText) (Just checked) (Just color)))
+  ToggleBlock {..} -> Just (UpdateToggle (TextColorUpdate richText (Just color)))
+  QuoteBlock {..} -> Just (UpdateQuote (TextColorUpdate richText (Just color)))
+  CalloutBlock {..} -> Just (UpdateCallout (ParagraphUpdate (Just richText) (Just color) calloutIcon))
+  CodeBlock {..} -> Just (UpdateCode (CodeUpdate (Just richText) (Just language) (Just caption)))
+  EquationBlock {..} -> Just (UpdateEquation expression)
+  ImageBlock {..} -> Just (UpdateImage (media imageSource caption))
+  VideoBlock {..} -> Just (UpdateVideo (media videoSource caption))
+  AudioBlock {..} -> Just (UpdateAudio (media audioSource caption))
+  PdfBlock {..} -> Just (UpdatePdf (media pdfSource caption))
+  FileBlock {..} -> Just (UpdateFile (media fileSource caption) fileName)
+  BookmarkBlock {..} -> Just (UpdateBookmark (UrlCaptionUpdate (Just url) (Just caption)))
+  EmbedBlock {..} -> Just (UpdateEmbed (UrlCaptionUpdate (Just url) (Just caption)))
+  LinkToPageBlock {..} -> Just (UpdateLinkToPage linkTarget)
+  DividerBlock -> Just UpdateDivider
+  BreadcrumbBlock -> Just UpdateBreadcrumb
+  TableOfContentsBlock {..} -> Just (UpdateTableOfContents (Just color))
+  ColumnBlock {..} -> Just (UpdateColumn widthRatio)
+  TableBlock {..} -> Just (UpdateTable (TableUpdate (Just hasColumnHeader) (Just hasRowHeader)))
+  TableRowBlock {..} -> Just (UpdateTableRow cells)
+  SyncedBlockContent {..} -> Just (UpdateSyncedBlock syncedFrom)
+  TabBlock {} -> Just UpdateTab
+  TemplateBlock {..} -> Just (UpdateTemplateBlock richText)
+  LinkPreviewBlock {} -> Nothing
+  ColumnListBlock {} -> Nothing
+  ChildPageBlock {} -> Nothing
+  ChildDatabaseBlock {} -> Nothing
+  MeetingNotesBlock {} -> Nothing
+  UnsupportedBlock _ -> Nothing
+  UnknownBlock _ _ -> Nothing
+  where
+    media src cap = MediaUpdate (Just cap) (sourceUpdate src)
+    sourceUpdate = \case
+      ExternalSource (ExternalFile u) -> Just (UpdateExternalSource u)
+      FileUploadSource i -> Just (UpdateFileUploadSource i)
+      NotionSource _ -> Nothing
 
 -- ---------------------------------------------------------------------------
 -- Smart constructors
@@ -1202,6 +1438,12 @@ dividerBlock = DividerBlock
 -- | Create an image block from a file source.
 imageBlock :: FileSource -> BlockContent
 imageBlock src = ImageBlock src Vector.empty
+
+-- | Build a tab block. Each tab item is a paragraph (its title), an optional
+-- icon, and the tab's content blocks — the only child shape the API accepts.
+tabBlock :: Vector (Vector RichText, Maybe Icon, Vector BlockContent) -> BlockContent
+tabBlock items =
+  TabBlock (fmap (\(rt, ic, cs) -> ParagraphBlock rt Default ic cs) items)
 
 -- | Attach children to a block. For constructors that do not support
 -- children, the block is returned unchanged.

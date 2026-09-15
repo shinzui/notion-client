@@ -120,6 +120,7 @@ test-suite tasty
     HelpersTests
     MeetingNotesTests
     OAuthTests
+    ObjectFieldTests
     RuntimeTests
     ViewTests
     WireFormatTests

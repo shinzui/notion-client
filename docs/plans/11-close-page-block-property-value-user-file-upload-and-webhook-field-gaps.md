@@ -5,11 +5,18 @@ title: "Close Page, Block, Property Value, User, File Upload, and Webhook Field 
 kind: exec-plan
 created_at: 2026-09-14T18:46:51Z
 master_plan: "docs/masterplans/1-reach-parity-with-the-official-notion-js-sdk-on-the-published-rest-api.md"
+intention: intention_01m2jjvjgpef9tyyp50524jfwq
 provenance:
   created_by:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:51Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T15:08:04Z
+      mode: "implement"
+      note: "Implemented EP-6 milestones"
 ---
 
 # Close Page, Block, Property Value, User, File Upload, and Webhook Field Gaps
@@ -39,16 +46,16 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
 
 ## Progress
 
-- [ ] Prerequisite check: EP-1 (`docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md`) has landed (see Concrete Steps, step 0).
-- [ ] Milestone 1: create `tasty/ObjectFieldTests.hs`, register it in `notion-client.cabal` and `tasty/Main.hs`.
-- [ ] Milestone 1: `CreatePage.parent` optional; empty `properties` omitted on create and update.
-- [ ] Milestone 1: `createPageFiltered` / `updatePageFiltered` methods with `filter_properties` query parameter, mirrored in `notion-client-effectful`.
-- [ ] Milestone 1: `UpdatePageTemplate` (no `none`) on `UpdatePage`.
-- [ ] Milestone 1: `MovePage` narrowed to `MovePageParent`, `position` removed.
-- [ ] Milestone 1: `InsertContentRequest.position` (`InsertAtStart` / `InsertAtEnd`).
-- [ ] Milestone 1: `BlockUpdatePayload` / `BlockUpdateContent` replace `BlockUpdate`; `blockUpdateFromContent`, `trashBlockUpdate`; `updateBlock` route and effectful constructor updated.
-- [ ] Milestone 1: audio and embed `caption`; `UnsupportedBlock` carries `block_type`; `tabBlock` smart constructor.
-- [ ] Milestone 1: fix existing tests and examples that break; `cabal build all` and `cabal test` green.
+- [x] Prerequisite check: EP-1 (`docs/plans/6-fix-wire-format-decoding-and-encoding-bugs-found-against-the-official-sdk.md`) has landed (see Concrete Steps, step 0). (2026-09-15)
+- [x] Milestone 1: create `tasty/ObjectFieldTests.hs`, register it in `notion-client.cabal` and `tasty/Main.hs`. (2026-09-15)
+- [x] Milestone 1: `CreatePage.parent` optional; empty `properties` omitted on create and update. (2026-09-15)
+- [x] Milestone 1: `createPageFiltered` / `updatePageFiltered` methods with `filter_properties` query parameter, mirrored in `notion-client-effectful`. (2026-09-15)
+- [x] Milestone 1: `UpdatePageTemplate` (no `none`) on `UpdatePage`; `UpdatePage.icon`/`cover` are `Clearable`. (2026-09-15)
+- [x] Milestone 1: `MovePage` narrowed to `MovePageParent`, `position` removed. (2026-09-15)
+- [x] Milestone 1: `InsertContentRequest.position` (`InsertAtStart` / `InsertAtEnd`). (2026-09-15)
+- [x] Milestone 1: `BlockUpdatePayload` / `BlockUpdateContent` replace `BlockUpdate`; `blockUpdateFromContent`, `trashBlockUpdate`; `updateBlock` route and effectful constructor updated. (2026-09-15)
+- [x] Milestone 1: audio and embed `caption`; `UnsupportedBlock` carries `block_type`; `tabBlock` smart constructor. (2026-09-15)
+- [x] Milestone 1: fix existing tests and examples that break; `cabal build all` and `cabal test` green (325 tests). (2026-09-15)
 - [ ] Milestone 2: `SelectOptionValue.description`.
 - [ ] Milestone 2: `UserValue`, `GroupObject`, `PeopleEntry` in `Notion.V1.Users`; `PeopleValue` uses `PeopleEntry`; `Eq` derived on user types.
 - [ ] Milestone 2: typed `Place`, `VerificationResult` with `VerificationState`, smart constructors `placeValue`, `verifiedValue`, `unverifiedValue`.
@@ -67,7 +74,15 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
 
 ## Surprises & Discoveries
 
-(None yet.)
+- The plan was drafted before EP-2 to EP-5 landed. EP-3 had already added `createPageAsync`, which wraps `CreatePage` in `AllowAsync` and uses its own `AsyncVerb` route, so `createPage`'s return type is still `PageObject` and `createPageFiltered` uses it too. EP-4 had added `Notion.V1.Clearable` (ADR 5), and `docs/adr/` now exists, so the "no ADRs" statement in Context and Orientation is out of date.
+- Naming the payload field `content`, as the plan specified, broke `Blocks.content block` in `notion-client-example/BlockDemo.hs`. `Notion.V1.Blocks` re-exports `Notion.V1.BlockContent`, so the two `content` fields became ambiguous at every qualified use site:
+
+    ```text
+    notion-client-example/BlockDemo.hs:188:10: error: [GHC-87543]
+        Ambiguous occurrence ‘Blocks.content’.
+    ```
+
+- Lazy `Data.ByteString.Lazy.Char8` string literals truncate non-ASCII characters, so a fixture containing `こんにちは` failed with `Invalid UTF-8 stream`. `tasty/ObjectFieldTests.hs` takes fixtures as `Text` and encodes them as UTF-8.
 
 
 ## Decision Log
@@ -131,6 +146,14 @@ To see it working, run `cabal test` and watch the new `ObjectFieldTests` group p
 - Decision: Keep `TabBlock.children :: Vector BlockContent` rather than restricting it at the type level. Add a `tabBlock` smart constructor that builds only valid tab items (paragraphs).
   Rationale: JS restricts tab children to paragraph "tab items" (`common.ts:2476-2478`, `2698-2706`, `2751-2755`). Responses may still decode arbitrary children, so the read type must stay general. The smart constructor makes the valid write shape the easy one.
   Date: 2026-09-14
+
+- Decision: Name the `BlockUpdatePayload` content field `updateContent`, not `content`.
+  Rationale: `Notion.V1.Blocks` re-exports `Notion.V1.BlockContent`, so a `content` field would clash with `BlockObject.content` for every user who reads blocks through `Blocks.content` (see Surprises & Discoveries).
+  Date: 2026-09-15
+
+- Decision: Make `UpdatePage.icon` and `UpdatePage.cover` `Clearable` (from `Notion.V1.Clearable`) instead of `Maybe`, and keep `CreatePage.icon`/`cover` as `Maybe`.
+  Rationale: `UpdatePageBodyParameters` accepts `icon?: PageIconRequest | null` and `cover?: PageCoverRequest | null` (`pages.ts:596-597`), and `null` is the only way to remove a page icon or cover. ADR 5 (`docs/adr/5-clearable-request-fields-and-shared-configuration-types.md`) prescribes `Clearable` for such fields. On create, `null` means the same as leaving the key out. Since the hand-written `UpdatePage` encoder was already being written, the cost was five record literals in tests and examples.
+  Date: 2026-09-15
 
 - Decision: Add an `UnknownPropertyValue Text Text Value` fallback to `PropertyValue`, and make the `id` key optional when decoding a property value (default `""`).
   Rationale: This follows the MasterPlan's tolerant-decoding rule. It is also required for typed rollup arrays, whose elements are property values without `id` (`ArrayPartialRollupValueResponse`, `common.ts:2806-2810`).

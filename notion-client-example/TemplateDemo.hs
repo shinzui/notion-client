@@ -16,6 +16,7 @@ import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
+import Notion.V1.Clearable (Clearable (..))
 import Notion.V1.Common (Parent (..))
 import Notion.V1.DataSources (ListTemplatesResponse (..), TemplateRef (..))
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
@@ -81,7 +82,7 @@ runTemplateDemo methods databaseIdStr = do
           -- template variables resolve.
           createReq =
             CreatePage
-              { parent = DataSourceParent {dataSourceId = dsId, parentDatabaseId = Nothing},
+              { parent = Just (DataSourceParent {dataSourceId = dsId, parentDatabaseId = Nothing}),
                 properties = props,
                 children = Nothing,
                 markdown = Nothing,
@@ -104,8 +105,10 @@ runTemplateDemo methods databaseIdStr = do
             UpdatePage
               { properties = fromList [],
                 inTrash = Just True,
-                icon = Nothing,
-                cover = Nothing,
+                isLocked = Nothing,
+                isArchived = Nothing,
+                icon = Unset,
+                cover = Unset,
                 template = Nothing,
                 eraseContent = Nothing
               }

@@ -29,9 +29,11 @@ module Notion.V1.Effectful.Effect
 
     -- * Pages
     createPage,
+    createPageFiltered,
     retrievePage,
     retrievePageFiltered,
     updatePage,
+    updatePageFiltered,
     retrievePageProperty,
     retrievePageMarkdown,
     updatePageMarkdown,
@@ -138,9 +140,11 @@ data Notion :: Effect where
     Notion m DataSources.ListTemplatesResponse
   -- Pages
   CreatePage :: CreatePage -> Notion m PageObject
+  CreatePageFiltered :: [Text] -> CreatePage -> Notion m PageObject
   RetrievePage :: PageID -> Notion m PageObject
   RetrievePageFiltered :: PageID -> [Text] -> Notion m PageObject
   UpdatePage :: PageID -> UpdatePage -> Notion m PageObject
+  UpdatePageFiltered :: PageID -> [Text] -> UpdatePage -> Notion m PageObject
   RetrievePageProperty ::
     PageID ->
     Text ->
@@ -154,7 +158,7 @@ data Notion :: Effect where
   UpdatePageMarkdownAsync :: PageID -> UpdatePageMarkdown -> Notion m (AsyncOr PageMarkdown)
   -- Blocks
   RetrieveBlock :: BlockID -> Notion m BlockObject
-  UpdateBlock :: BlockID -> Blocks.BlockUpdate -> Notion m BlockObject
+  UpdateBlock :: BlockID -> Blocks.BlockUpdatePayload -> Notion m BlockObject
   ListBlockChildren :: ParentID -> Maybe Natural -> Maybe Text -> Notion m (ListOf BlockObject)
   AppendBlockChildren :: ParentID -> Blocks.AppendBlockChildren -> Notion m (ListOf BlockObject)
   DeleteBlock :: BlockID -> Notion m BlockObject
@@ -277,6 +281,10 @@ listDataSourceTemplates dsId nameFilter startCursor pageSize =
 createPage :: (Notion :> es) => CreatePage -> Eff es PageObject
 createPage = send . CreatePage
 
+-- | See 'Notion.V1.Methods'.'Notion.V1.createPageFiltered'.
+createPageFiltered :: (Notion :> es) => [Text] -> CreatePage -> Eff es PageObject
+createPageFiltered props req = send (CreatePageFiltered props req)
+
 -- | See 'Notion.V1.Methods'.'Notion.V1.retrievePage'.
 retrievePage :: (Notion :> es) => PageID -> Eff es PageObject
 retrievePage = send . RetrievePage
@@ -288,6 +296,10 @@ retrievePageFiltered pid props = send (RetrievePageFiltered pid props)
 -- | See 'Notion.V1.Methods'.'Notion.V1.updatePage'.
 updatePage :: (Notion :> es) => PageID -> UpdatePage -> Eff es PageObject
 updatePage pid upd = send (UpdatePage pid upd)
+
+-- | See 'Notion.V1.Methods'.'Notion.V1.updatePageFiltered'.
+updatePageFiltered :: (Notion :> es) => PageID -> [Text] -> UpdatePage -> Eff es PageObject
+updatePageFiltered pid props upd = send (UpdatePageFiltered pid props upd)
 
 -- | See 'Notion.V1.Methods'.'Notion.V1.retrievePageProperty'.
 retrievePageProperty ::
@@ -331,7 +343,7 @@ retrieveBlock :: (Notion :> es) => BlockID -> Eff es BlockObject
 retrieveBlock = send . RetrieveBlock
 
 -- | See 'Notion.V1.Methods'.'Notion.V1.updateBlock'.
-updateBlock :: (Notion :> es) => BlockID -> Blocks.BlockUpdate -> Eff es BlockObject
+updateBlock :: (Notion :> es) => BlockID -> Blocks.BlockUpdatePayload -> Eff es BlockObject
 updateBlock bid upd = send (UpdateBlock bid upd)
 
 -- | See 'Notion.V1.Methods'.'Notion.V1.listBlockChildren'.

@@ -3,7 +3,7 @@ module Notion.V1.Blocks
   ( -- * Main types
     BlockID,
     BlockObject (..),
-    BlockUpdate (..),
+    BlockUpdatePayload (..),
     AppendBlockChildren (..),
     Position (..),
 
@@ -127,7 +127,7 @@ type API =
     :> ( Capture "block_id" BlockID
            :> Get '[JSON] BlockObject
            :<|> Capture "block_id" BlockID
-           :> ReqBody '[JSON] BlockUpdate
+           :> ReqBody '[JSON] BlockUpdatePayload
            :> Patch '[JSON] BlockObject
            :<|> Capture "block_id" BlockID
            :> "children"

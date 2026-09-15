@@ -35,6 +35,7 @@ import Notion.V1.Pages
   ( ContentUpdate (..),
     CreatePage (..),
     MovePage (..),
+    MovePageParent (..),
     PageMarkdown (..),
     PageObject (..),
     ReplaceContentRequest (..),
@@ -42,6 +43,7 @@ import Notion.V1.Pages
     UpdateContentRequest (..),
     UpdatePage (..),
     UpdatePageMarkdown (..),
+    UpdatePageTemplate (..),
     mkCreatePage,
     mkUpdatePage,
   )
@@ -55,6 +57,7 @@ import Notion.V1.Users (BotUser (..), UserObject (..), WorkspaceLimits (..))
 import Notion.V1.Views (Clearable (..), CreateView (..), UpdateView (..), ViewObject (..), ViewType (..))
 import Notion.V1.Views qualified as Views
 import OAuthTests qualified
+import ObjectFieldTests qualified
 import RuntimeTests qualified
 import System.Environment qualified as Environment
 import Test.Tasty
@@ -176,6 +179,7 @@ tests = do
         AsyncTaskTests.tests,
         MeetingNotesTests.tests,
         WireFormatTests.tests,
+        ObjectFieldTests.tests,
         RuntimeTests.tests,
         OAuthTests.tests,
         HelpersTests.tests,
@@ -230,8 +234,8 @@ trashPage Methods {updatePage} pageId = do
             inTrash = Just True,
             isLocked = Nothing,
             isArchived = Nothing,
-            icon = Nothing,
-            cover = Nothing,
+            icon = Unset,
+            cover = Unset,
             template = Nothing,
             eraseContent = Nothing
           }
@@ -604,17 +608,16 @@ testBlockContentHasChildrenKey = do
 testBlockUpdateWithChildren :: Assertion
 testBlockUpdateWithChildren = do
   let block = toggleBlock (mkRichText "T") `withChildren` Vector.singleton (textBlock "C")
-      update = Blocks.BlockUpdate block
-      json = Aeson.toJSON update
-  case json of
+  update <- maybe (assertFailure "toggle blocks are updatable") (pure . Blocks.mkBlockUpdate) (Blocks.blockUpdateFromContent block)
+  case Aeson.toJSON update of
     Aeson.Object o -> do
       assertBool "should have 'toggle' key" (KeyMap.member "toggle" o)
       assertBool "should NOT have 'type' key" (not $ KeyMap.member "type" o)
       case KeyMap.lookup "toggle" o of
         Just (Aeson.Object inner) ->
-          assertBool "update should include 'children' key" (KeyMap.member "children" inner)
+          assertBool "update must not include 'children' key" (not $ KeyMap.member "children" inner)
         _ -> assertFailure "Expected toggle object in update"
-    _ -> assertFailure "Expected object from BlockUpdate ToJSON"
+    _ -> assertFailure "Expected object from BlockUpdatePayload ToJSON"
 
 testParseBlockContentWithChildren :: Assertion
 testParseBlockContentWithChildren = do
@@ -641,13 +644,13 @@ testParseBlockContentWithChildren = do
 
 testBlockUpdateSerialization :: Assertion
 testBlockUpdateSerialization = do
-  let update = Blocks.BlockUpdate (paragraphBlock (mkRichText "Updated"))
+  let update = Blocks.mkBlockUpdate (Blocks.UpdateParagraph (Blocks.ParagraphUpdate (Just (mkRichText "Updated")) Nothing Nothing))
       json = Aeson.toJSON update
   case json of
     Aeson.Object o -> do
       assertBool "should have 'paragraph' key" (KeyMap.member "paragraph" o)
       assertBool "should NOT have 'type' key" (not $ KeyMap.member "type" o)
-    _ -> assertFailure "Expected object from BlockUpdate ToJSON"
+    _ -> assertFailure "Expected object from BlockUpdatePayload ToJSON"
 
 -- =====================================================================
 -- JSON Serialization Tests (unit tests, no API token needed)
@@ -894,7 +897,7 @@ testViewTypeRoundTrip = do
 
 testSerializeMovePage :: Assertion
 testSerializeMovePage = do
-  let req = MovePage {parent = PageParent {pageId = UUID "target-page"}, position = Nothing}
+  let req = MovePage {parent = MoveToPage (UUID "target-page")}
       json = Aeson.toJSON req
   case json of
     Aeson.Object o -> do
@@ -954,7 +957,7 @@ testSerializeCreatePageMarkdown :: Assertion
 testSerializeCreatePageMarkdown = do
   let req =
         CreatePage
-          { parent = PageParent {pageId = UUID "p-1"},
+          { parent = Just (PageParent {pageId = UUID "p-1"}),
             properties = Map.empty,
             children = Nothing,
             markdown = Just "# Hello\n\nWorld",
@@ -979,9 +982,9 @@ testSerializeUpdatePageTemplate = do
             inTrash = Nothing,
             isLocked = Nothing,
             isArchived = Nothing,
-            icon = Nothing,
-            cover = Nothing,
-            template = Just (DefaultTemplate (Just "America/Chicago")),
+            icon = Unset,
+            cover = Unset,
+            template = Just (UpdateDefaultTemplate (Just "America/Chicago")),
             eraseContent = Just True
           }
       json = Aeson.toJSON req
@@ -1246,7 +1249,7 @@ testMovePageLifecycle methods@Methods {movePage, retrievePage} parentPageId = do
       PageObject {id = pageBId} = pageB
 
   -- Move page A under page B
-  let moveReq = MovePage {parent = PageParent {pageId = pageBId}, position = Nothing}
+  let moveReq = MovePage {parent = MoveToPage pageBId}
   movedPage <- movePage pageAId moveReq
   let PageObject {id = movedId} = movedPage
   assertEqual "Moved page should have same ID" pageAId movedId
@@ -1753,8 +1756,8 @@ testSerializeUpdatePageLockArchive = do
             inTrash = Nothing,
             isLocked = Just True,
             isArchived = Just False,
-            icon = Nothing,
-            cover = Nothing,
+            icon = Unset,
+            cover = Unset,
             template = Nothing,
             eraseContent = Nothing
           }

@@ -18,6 +18,7 @@ import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
+import Notion.V1.Clearable (Clearable (..))
 import Notion.V1.Common (Parent (..), UUID (..))
 import Notion.V1.Pages
 import Notion.V1.PropertyValue qualified as PV
@@ -40,7 +41,7 @@ runMarkdownDemo methods pageIdStr = do
       -- This is much simpler than constructing block JSON manually.
       createReq =
         CreatePage
-          { parent = PageParent {pageId = parentPageId},
+          { parent = Just (PageParent {pageId = parentPageId}),
             properties = props,
             children = Nothing,
             markdown = Just markdownContent,
@@ -149,7 +150,7 @@ runMarkdownDemo methods pageIdStr = do
   let PageObject {id = targetId} = targetPage
 
   -- Move the demo page under the target
-  let moveReq = MovePage {parent = PageParent {pageId = targetId}, position = Nothing}
+  let moveReq = MovePage {parent = MoveToPage targetId}
   _movedPage <-
     runTest (Text.pack "Moving page to new parent") $
       movePage methods newPageId moveReq
@@ -166,7 +167,7 @@ runMarkdownDemo methods pageIdStr = do
       putStrLn $ "Unexpected parent type: " <> show other
 
   -- Move it back to the original parent
-  let moveBackReq = MovePage {parent = PageParent {pageId = parentPageId}, position = Nothing}
+  let moveBackReq = MovePage {parent = MoveToPage parentPageId}
   _ <-
     runTest (Text.pack "Moving page back to original parent") $
       movePage methods newPageId moveBackReq
@@ -176,8 +177,10 @@ runMarkdownDemo methods pageIdStr = do
         UpdatePage
           { properties = fromList [],
             inTrash = Just True,
-            icon = Nothing,
-            cover = Nothing,
+            isLocked = Nothing,
+            isArchived = Nothing,
+            icon = Unset,
+            cover = Unset,
             template = Nothing,
             eraseContent = Nothing
           }

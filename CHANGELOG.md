@@ -45,6 +45,12 @@
 * `Filter`, `PropertyCondition` and `Sort` gain `UnknownFilter`, `UnknownCondition` and `UnknownSort`; their decoders no longer fail on unmodelled shapes. `SelectCondition`, `StatusCondition` and `MultiSelectCondition` gain array-valued constructors
 * `DatabaseObject` and `DataSourceObject` gain `databaseType`
 * The effectful `queryDataSource` and `search` result types changed accordingly
+* `BlockUpdate` is replaced by `BlockUpdatePayload` (optional `updateContent :: Maybe BlockUpdateContent` plus `inTrash`), with one `BlockUpdateContent` constructor per updatable block type; use `mkBlockUpdate` and `blockUpdateFromContent` to migrate. Updates no longer send `children`, `table_width` or other fields Notion rejects on `PATCH /v1/blocks/{id}`
+* `MovePage` drops `position`, and its `parent` is now `MovePageParent` (`MoveToPage` / `MoveToDataSource`)
+* `UpdatePage.template` is `Maybe UpdatePageTemplate` (no `none` variant), and `UpdatePage.icon` / `cover` are `Clearable`
+* `CreatePage.parent` is `Maybe Parent`
+* `AudioBlock` and `EmbedBlock` gain `caption`; `UnsupportedBlock` carries the `block_type` as `Maybe Text`
+* `InsertContentRequest` gains `position`
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
@@ -71,6 +77,10 @@
 * Search by relevance (`SearchByRelevance`) and `in_trash` search filters
 * `PropertyUpdate`, `OptionUpdate` and `OptionTarget`: rename a property without resending its schema, and target select/status options by id
 * Filter constructors `SelectEqualsAny`, `SelectDoesNotEqualAny`, `StatusEqualsAny`, `StatusDoesNotEqualAny`, `MultiSelectContainsAny` and `MultiSelectDoesNotContainAny`, plus `RelativeDate` / `relativeDate` for relative date filters
+* `createPageFiltered` and `updatePageFiltered` send `filter_properties` query parameters, mirrored in `notion-client-effectful`
+* `trashBlockUpdate`, `mkBlockUpdate` and the `tabBlock` smart constructor
+* Insert markdown at the start or end of a page with `InsertAtStart` / `InsertAtEnd`
+* Page create and update omit `properties` when the map is empty, so trash-only or markdown-only requests send just those keys
 * New module `Notion.V1.DataSourceRows` with `iterateAllDataSourceRows`, `collectAllDataSourceRows` and `foldAllDataSourceRows`, which read every row of a data source past Notion's per-query result limit
 
 ### Bug Fixes

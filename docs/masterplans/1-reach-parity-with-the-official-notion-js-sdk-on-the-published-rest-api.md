@@ -31,6 +31,11 @@ provenance:
       at: 2026-09-15T14:46:36Z
       mode: "implement"
       note: "Started EP-5; registry updated"
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T15:08:04Z
+      mode: "implement"
+      note: "Started EP-6; registry updated"
 ---
 
 # Reach Parity with the Official Notion JS SDK on the Published REST API
@@ -112,7 +117,7 @@ Prior plans in this repository that give useful background (all checked in, all 
 | 3 | Add Comment Mutation, Async Task, and Meeting Notes Endpoints | docs/plans/8-add-comment-mutation-async-task-and-meeting-notes-endpoints.md | EP-1 | EP-2 | Complete |
 | 4 | Add View Queries and Typed View Configuration | docs/plans/9-add-view-queries-and-typed-view-configuration.md | None | EP-2, EP-5 | Complete |
 | 5 | Type Data Source, Database, and Search Results and Close Query and Filter Gaps | docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md | EP-1, EP-2 | None | Complete |
-| 6 | Close Page, Block, Property Value, User, File Upload, and Webhook Field Gaps | docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md | EP-1 | EP-3 | Not Started |
+| 6 | Close Page, Block, Property Value, User, File Upload, and Webhook Field Gaps | docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md | EP-1 | EP-3 | In Progress |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).

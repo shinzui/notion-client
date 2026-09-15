@@ -162,8 +162,8 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
                  :<|> listDataSourceTemplates_
                )
         :<|> ( retrievePageFiltered
-                 :<|> createPage
-                 :<|> updatePage
+                 :<|> createPageFiltered
+                 :<|> updatePageFiltered
                  :<|> retrievePageProperty
                  :<|> retrievePageMarkdown
                  :<|> updatePageMarkdown
@@ -222,6 +222,8 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
 
     -- Wrap retrievePageFiltered to provide backward-compatible retrievePage
     retrievePage pid = retrievePageFiltered pid []
+    createPage = createPageFiltered []
+    updatePage pid = updatePageFiltered pid []
 
     -- The async variants always send allow_async: true
     createPageAsync req = fromAsyncUnion <$> createPageAsync_ (AllowAsync req)
@@ -272,10 +274,14 @@ data Methods = Methods
       IO DataSources.ListTemplatesResponse,
     -- \* Pages
     createPage :: CreatePage -> IO PageObject,
+    -- | Create a page, limiting which properties the response includes.
+    createPageFiltered :: [Text] -> CreatePage -> IO PageObject,
     retrievePage :: PageID -> IO PageObject,
     -- | Retrieve a page, optionally filtering which properties are returned.
     retrievePageFiltered :: PageID -> [Text] -> IO PageObject,
     updatePage :: PageID -> UpdatePage -> IO PageObject,
+    -- | Update a page, limiting which properties the response includes.
+    updatePageFiltered :: PageID -> [Text] -> UpdatePage -> IO PageObject,
     -- | Retrieve a single page property item.
     -- For title, rich_text, relation, and people properties, the response may be paginated.
     retrievePageProperty ::
@@ -312,7 +318,8 @@ data Methods = Methods
     updatePageMarkdownAsync :: PageID -> UpdatePageMarkdown -> IO (AsyncOr PageMarkdown),
     -- \* Blocks
     retrieveBlock :: BlockID -> IO BlockObject,
-    updateBlock :: BlockID -> Blocks.BlockUpdate -> IO BlockObject,
+    -- | Update part of a block, or trash it with 'Blocks.trashBlockUpdate'.
+    updateBlock :: BlockID -> Blocks.BlockUpdatePayload -> IO BlockObject,
     listBlockChildren ::
       ParentID ->
       Maybe Natural ->
