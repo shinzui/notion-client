@@ -14,10 +14,13 @@
 * `UserOwner` gains an `UnknownOwner` fallback
 * `NumberFormat` gains an `OtherNumberFormat Text` fallback
 * `FormulaResult` gains `FormulaUnsupportedResult` and an `UnknownFormulaResult Value` fallback
+* `CreatePage.position` changes from `Maybe Blocks.Position` to `Maybe PagePosition`
+* The exported Servant `API` types of `Notion.V1`, `Notion.V1.DataSources` and `Notion.V1.Databases` gain a `QueryParams "filter_properties" Text` segment on the query routes (only affects code deriving its own client from them; the `Methods` record is unchanged)
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
 * New meeting-notes payload types `MeetingNotesStatus`, `MeetingNotesChildren`, `MeetingCalendarEvent` and `MeetingRecording` in `Notion.V1.BlockContent`
+* New `PagePosition` type (`PageAfterBlock`, `PageStart`, `PageEnd`) in `Notion.V1.Pages`
 
 ### Bug Fixes
 * Decode the `default_background` color — previously any rich text or block using it failed the whole response
@@ -29,6 +32,8 @@
 * Decode person users without a visible email, and bots owned by a user (Notion sends the user object, not a bare ID)
 * Decode data sources with number formats newer than this library
 * Decode unique-ID properties whose `number` is null, and formula properties with an `unsupported` result
+* `queryDataSource` and `queryDatabase` send `filterProperties` as repeated `filter_properties` query parameters instead of a JSON body field, which Notion rejected
+* `CreatePage` positions encode as `page_start`, `page_end` and `after_block`, the shapes Notion accepts for page creation
 
 ## 0.7.0.2 (2026-06-27)
 

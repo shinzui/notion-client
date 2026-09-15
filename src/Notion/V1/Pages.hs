@@ -4,6 +4,7 @@ module Notion.V1.Pages
     PageID,
     PageObject (..),
     CreatePage (..),
+    PagePosition (..),
     UpdatePage (..),
     PageProperties,
     mkCreatePage,
@@ -140,6 +141,20 @@ instance ToJSON Template where
       ]
         <> maybe [] (\tz -> ["timezone" .= tz]) mTz
 
+-- | Where to place a new page among its parent's content (@POST /v1/pages@).
+-- Distinct from 'Notion.V1.Blocks.Position', which uses @start@/@end@.
+data PagePosition
+  = PageAfterBlock UUID
+  | PageStart
+  | PageEnd
+  deriving stock (Eq, Generic, Show)
+
+instance ToJSON PagePosition where
+  toJSON (PageAfterBlock blockId) =
+    Aeson.object ["type" .= ("after_block" :: Text), "after_block" .= Aeson.object ["id" .= blockId]]
+  toJSON PageStart = Aeson.object ["type" .= ("page_start" :: Text)]
+  toJSON PageEnd = Aeson.object ["type" .= ("page_end" :: Text)]
+
 -- | Create a page request
 data CreatePage = CreatePage
   { parent :: Parent,
@@ -149,7 +164,7 @@ data CreatePage = CreatePage
     icon :: Maybe Icon,
     cover :: Maybe Cover,
     template :: Maybe Template,
-    position :: Maybe Position
+    position :: Maybe PagePosition
   }
   deriving stock (Generic, Show)
 

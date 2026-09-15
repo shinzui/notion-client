@@ -23,6 +23,7 @@ import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Map qualified as Map
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType, Parent, UUID)
@@ -32,6 +33,7 @@ import Notion.V1.Pages (PageObject)
 import Notion.V1.Properties (PropertySchema)
 import Notion.V1.RichText (RichText)
 import Notion.V1.Users (UserReference)
+import Servant.API (QueryParams)
 import Prelude hiding (id)
 
 -- | Data source ID
@@ -141,8 +143,12 @@ data QueryDataSource = QueryDataSource
   }
   deriving stock (Generic, Show)
 
+-- | @filter_properties@ is a query parameter, not a body field; 'Notion.V1.makeMethods'
+-- moves 'filterProperties' into the URL.
 instance ToJSON QueryDataSource where
-  toJSON = genericToJSON aesonOptions
+  toJSON q = case genericToJSON aesonOptions q of
+    Object o -> Object (KeyMap.delete "filter_properties" o)
+    other -> other
 
 -- | A reference to a data source template
 data TemplateRef = TemplateRef
@@ -178,6 +184,7 @@ type API =
            :> Patch '[JSON] DataSourceObject
            :<|> Capture "data_source_id" DataSourceID
            :> "query"
+           :> QueryParams "filter_properties" Text
            :> ReqBody '[JSON] QueryDataSource
            :> Post '[JSON] (ListOf PageObject)
            :<|> Capture "data_source_id" DataSourceID

@@ -51,9 +51,9 @@ This is EP-1 of the MasterPlan `docs/masterplans/1-reach-parity-with-the-officia
 - [x] Milestone 2: `NumberFormat` gains `OtherNumberFormat Text` (`src/Notion/V1/Properties.hs`). (2026-09-15)
 - [x] Milestone 2: `UniqueIdResult.number` becomes `Maybe Natural`, and `FormulaResult` gains `FormulaUnsupportedResult` and `UnknownFormulaResult Value` (`src/Notion/V1/PropertyValue.hs`). (2026-09-15)
 - [x] Milestone 2: Ten Milestone-2 tests pass; CHANGELOG entries added. (2026-09-15)
-- [ ] Milestone 3: `filter_properties` sent as a repeated query parameter for `queryDataSource` and `queryDatabase` (`DataSources.hs`, `Databases.hs`, `V1.hs`), with `Methods` signatures unchanged.
-- [ ] Milestone 3: New `PagePosition` type used by `CreatePage.position` (`src/Notion/V1/Pages.hs`).
-- [ ] Milestone 3: Four Milestone-3 tests pass; `cabal build all` builds `notion-client-effectful` unchanged; CHANGELOG entries added.
+- [x] Milestone 3: `filter_properties` sent as a repeated query parameter for `queryDataSource` and `queryDatabase` (`DataSources.hs`, `Databases.hs`, `V1.hs`), with `Methods` signatures unchanged. (2026-09-15)
+- [x] Milestone 3: New `PagePosition` type used by `CreatePage.position` (`src/Notion/V1/Pages.hs`). (2026-09-15)
+- [x] Milestone 3: Four Milestone-3 tests pass; `cabal build all` builds `notion-client-effectful` unchanged; CHANGELOG entries added. (2026-09-15)
 - [ ] Milestone 4: `WebhookEvent.accessibleBy` defaults to empty when absent, and `verifySignature` validates the prefix, length and hex and ignores hex case (`src/Notion/V1/Webhooks.hs`).
 - [ ] Milestone 4: Three Milestone-4 tests pass; full `cabal test` passes; CHANGELOG finalized; MasterPlan EP-1 progress rows ticked.
 

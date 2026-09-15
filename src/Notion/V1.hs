@@ -34,6 +34,7 @@ module Notion.V1
 where
 
 import Control.Exception qualified as Exception
+import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
 import Network.HTTP.Client.TLS qualified as TLS
@@ -89,12 +90,12 @@ makeMethods clientEnv token = Methods {..}
     ( ( createDatabase
           :<|> retrieveDatabase
           :<|> updateDatabase
-          :<|> queryDatabase
+          :<|> queryDatabase_
         )
         :<|> ( retrieveDataSource
                  :<|> createDataSource
                  :<|> updateDataSource
-                 :<|> queryDataSource
+                 :<|> queryDataSource_
                  :<|> listDataSourceTemplates_
                )
         :<|> ( retrievePageFiltered
@@ -148,6 +149,12 @@ makeMethods clientEnv token = Methods {..}
 
     -- Wrap retrievePageFiltered to provide backward-compatible retrievePage
     retrievePage pid = retrievePageFiltered pid []
+
+    -- filter_properties is sent as repeated query parameters (see DataSources.API)
+    queryDataSource dsId q@DataSources.QueryDataSource {filterProperties = props} =
+      queryDataSource_ dsId (fromMaybe [] props) q
+    queryDatabase dbId q@Databases.QueryDatabase {filterProperties = props} =
+      queryDatabase_ dbId (fromMaybe [] props) q
 
     -- Keep the ListOf structure
     listBlockChildren = retrieveBlockChildren_

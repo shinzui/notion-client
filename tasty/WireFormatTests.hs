@@ -2,9 +2,15 @@
 -- Notion JS SDK types, and requests captured before they reach the network.
 module WireFormatTests (tests) where
 
+import Control.Exception (Exception, throwIO, try)
 import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
+import Data.ByteString.Char8 qualified as B8
 import Data.ByteString.Lazy.Char8 qualified as L8
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Vector qualified as Vector
+import Network.HTTP.Client qualified as HTTP
+import Notion.V1 (Methods (..), makeMethods)
 import Notion.V1.BlockContent
   ( BlockContent (..),
     CodeLanguage (..),
@@ -14,10 +20,14 @@ import Notion.V1.BlockContent
   )
 import Notion.V1.Blocks (BlockObject (..))
 import Notion.V1.Common (Color (..), Icon (..), Parent (..), UUID (..))
+import Notion.V1.DataSources qualified as DataSources
+import Notion.V1.Databases qualified as Databases
+import Notion.V1.Pages (PagePosition (..))
 import Notion.V1.Properties (NumberFormat (..))
 import Notion.V1.PropertyValue (FormulaResult (..), PropertyValue (..), UniqueIdResult (..))
 import Notion.V1.RichText (Annotations (..), MentionContent (..), RichText (..), RichTextContent (..))
 import Notion.V1.Users (BotUser (..), PersonUser (..), UserObject (..), UserOwner (..))
+import Servant.Client qualified as Client
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -26,7 +36,8 @@ tests =
   testGroup
     "WireFormat"
     [ testGroup "Common and rich text" commonTests,
-      testGroup "Blocks, users and property values" blockUserPropertyTests
+      testGroup "Blocks, users and property values" blockUserPropertyTests,
+      testGroup "Request encoding" requestEncodingTests
     ]
 
 -- | Decode a lazy ByteString literal or fail the test with aeson's message.
@@ -210,4 +221,96 @@ blockUserPropertyTests =
       case v of
         FormulaValue _ FormulaUnsupportedResult -> pure ()
         other -> assertFailure ("expected an unsupported formula, got " <> show other)
+  ]
+
+------------------------------------------------------------------------------
+-- Request encoding
+
+data RequestCaptured = RequestCaptured deriving stock (Show)
+
+instance Exception RequestCaptured
+
+-- | Run a 'Methods' call and capture the HTTP request it builds, aborting
+-- before any network I/O happens.
+captureRequest :: (Methods -> IO a) -> IO HTTP.Request
+captureRequest call = do
+  ref <- newIORef Nothing
+  manager <- HTTP.newManager HTTP.defaultManagerSettings
+  let env0 = Client.mkClientEnv manager (Client.BaseUrl Client.Https "api.notion.com" 443 "/v1")
+      env =
+        env0
+          { Client.makeClientRequest = \burl req -> do
+              built <- Client.defaultMakeClientRequest burl req
+              writeIORef ref (Just built)
+              throwIO RequestCaptured
+          }
+  _ <- try @RequestCaptured (call (makeMethods env "secret_test_token"))
+  readIORef ref >>= maybe (assertFailure "no request was built") pure
+
+-- | Assert the captured query request carries filter_properties in the URL only.
+assertFilterPropertiesInQuery :: HTTP.Request -> Assertion
+assertFilterPropertiesInQuery req = do
+  assertBool
+    ("query string: " <> B8.unpack (HTTP.queryString req))
+    ("filter_properties=title&filter_properties=Xy12" `B8.isInfixOf` HTTP.queryString req)
+  assertBool ("path: " <> B8.unpack (HTTP.path req)) ("/query" `B8.isSuffixOf` HTTP.path req)
+  case HTTP.requestBody req of
+    HTTP.RequestBodyLBS lbs -> case Aeson.decode lbs of
+      Just (Aeson.Object o) -> do
+        KeyMap.lookup "filter_properties" o @?= Nothing
+        KeyMap.lookup "page_size" o @?= Just (Aeson.Number 5)
+      _ -> assertFailure ("body is not a JSON object: " <> L8.unpack lbs)
+    _ -> assertFailure "expected a lazy ByteString request body"
+
+requestEncodingTests :: [TestTree]
+requestEncodingTests =
+  [ testCase "queryDataSource sends filter_properties as repeated query parameters" $ do
+      req <-
+        captureRequest $ \m ->
+          queryDataSource
+            m
+            (UUID "dddddddd-0000-4000-8000-000000000008")
+            DataSources.QueryDataSource
+              { filter = Nothing,
+                sorts = Nothing,
+                startCursor = Nothing,
+                pageSize = Just 5,
+                inTrash = Nothing,
+                filterProperties = Just ["title", "Xy12"]
+              }
+      assertFilterPropertiesInQuery req,
+    testCase "queryDatabase sends filter_properties as repeated query parameters" $ do
+      req <-
+        captureRequest $ \m ->
+          queryDatabase
+            m
+            (UUID "dddddddd-0000-4000-8000-000000000009")
+            Databases.QueryDatabase
+              { filter = Nothing,
+                sorts = Nothing,
+                startCursor = Nothing,
+                pageSize = Just 5,
+                filterProperties = Just ["title", "Xy12"]
+              }
+      assertFilterPropertiesInQuery req,
+    testCase "QueryDataSource JSON omits filter_properties" $
+      case Aeson.toJSON
+        DataSources.QueryDataSource
+          { filter = Nothing,
+            sorts = Nothing,
+            startCursor = Nothing,
+            pageSize = Nothing,
+            inTrash = Nothing,
+            filterProperties = Just ["title"]
+          } of
+        Aeson.Object o -> KeyMap.lookup "filter_properties" o @?= Nothing
+        other -> assertFailure ("expected object, got " <> show other),
+    testCase "CreatePage position encodes page_start, page_end and after_block" $ do
+      Aeson.toJSON PageStart @?= Aeson.object ["type" Aeson..= ("page_start" :: String)]
+      Aeson.toJSON PageEnd @?= Aeson.object ["type" Aeson..= ("page_end" :: String)]
+      Aeson.toJSON (PageAfterBlock (UUID "b1"))
+        @?= Aeson.object
+          [ "type" Aeson..= ("after_block" :: String),
+            "after_block" Aeson..= Aeson.object ["id" Aeson..= ("b1" :: String)]
+          ]
   ]

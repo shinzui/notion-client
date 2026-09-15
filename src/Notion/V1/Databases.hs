@@ -16,6 +16,7 @@ where
 
 import Control.Applicative ((<|>))
 import Data.Aeson ((.:), (.:?))
+import Data.Aeson.KeyMap qualified as KeyMap
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.Filter (Filter, Sort)
@@ -24,6 +25,7 @@ import Notion.V1.Pages (PageObject)
 import Notion.V1.Properties (PropertySchema)
 import Notion.V1.RichText (RichText)
 import Notion.V1.Users (UserReference)
+import Servant.API (QueryParams)
 import Prelude hiding (id)
 
 -- | Database ID
@@ -152,8 +154,12 @@ data QueryDatabase = QueryDatabase
   }
   deriving stock (Generic, Show)
 
+-- | @filter_properties@ is a query parameter, not a body field; 'Notion.V1.makeMethods'
+-- moves 'filterProperties' into the URL.
 instance ToJSON QueryDatabase where
-  toJSON = genericToJSON aesonOptions
+  toJSON q = case genericToJSON aesonOptions q of
+    Object o -> Object (KeyMap.delete "filter_properties" o)
+    other -> other
 
 -- | Servant API
 type API =
@@ -167,6 +173,7 @@ type API =
            :> Patch '[JSON] DatabaseObject
            :<|> Capture "database_id" DatabaseID
            :> "query"
+           :> QueryParams "filter_properties" Text
            :> ReqBody '[JSON] QueryDatabase
            :> Post '[JSON] (ListOf PageObject)
        )
