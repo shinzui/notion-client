@@ -4,12 +4,19 @@ slug: add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth
 title: "Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth"
 kind: exec-plan
 created_at: 2026-09-14T18:46:51Z
+intention: intention_01m2jjvjgpef9tyyp50524jfwq
 master_plan: "docs/masterplans/1-reach-parity-with-the-official-notion-js-sdk-on-the-published-rest-api.md"
 provenance:
   created_by:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:51Z
+  revisions:
+    - model: "claude-opus-5[1m]"
+      harness: "claude-code"
+      at: 2026-09-15T13:29:07Z
+      mode: "implement"
+      note: "Implementing EP-2 milestones"
 ---
 
 # Add a Configurable Client Runtime with Retries, Typed Error Codes, and OAuth
@@ -39,10 +46,10 @@ It is visible through new unit tests in the `tasty` suite that run without netwo
 
 ## Progress
 
-- [ ] Milestone 1: Add dependencies and `Paths_notion_client` to `notion-client.cabal`.
-- [ ] Milestone 1: Create `src/Notion/V1/Client.hs` with `ClientConfig`, `LogLevel`, `Logger`, `defaultClientConfig`, `RequestContext`/`requestContextFor`/`standardHeaders`, `responseTimeoutFor`, `configureClientEnv` (timeout + `User-Agent` middleware).
-- [ ] Milestone 1: Add `makeMethodsWith` / `makeMethodsWithEnv` in `src/Notion/V1.hs`; re-implement `makeMethods` as a wrapper; thread `notionVersion` from the config.
-- [ ] Milestone 1: Create `tasty/FakeNotion.hs` and `tasty/RuntimeTests.hs` (config tests); register in cabal and `tasty/Main.hs`; `cabal test` green.
+- [x] Milestone 1: Add dependencies and `Paths_notion_client` to `notion-client.cabal`. (2026-09-15)
+- [x] Milestone 1: Create `src/Notion/V1/Client.hs` with `ClientConfig`, `LogLevel`, `Logger`, `defaultClientConfig`, `RequestContext`/`requestContextFor`/`standardHeaders`, `responseTimeoutFor`, `configureClientEnv` (timeout + `User-Agent` middleware). (2026-09-15)
+- [x] Milestone 1: Add `makeMethodsWith` / `makeMethodsWithEnv` in `src/Notion/V1.hs`; re-implement `makeMethods` as a wrapper; thread `notionVersion` from the config. (2026-09-15)
+- [x] Milestone 1: Create `tasty/FakeNotion.hs` and `tasty/RuntimeTests.hs` (config tests); register in cabal and `tasty/Main.hs`; `cabal test` green. (2026-09-15)
 - [ ] Milestone 2: Rewrite `src/Notion/V1/Error.hs` (`APIErrorCode`, extended `NotionError`, `HttpErrorResponse`, `UnknownHTTPResponseError`, `RequestTimeoutError`, `InvalidPathParameterError`, `buildRequestError`, `notionErrorFromResponse`, `fromClientError`).
 - [ ] Milestone 2: Convert errors in the runtime; add `RequestStatus` to `src/Notion/V1/ListOf.hs`; fix `requestStatus` in existing test fixtures and the example app.
 - [ ] Milestone 2: Error and `RequestStatus` tests in `tasty/RuntimeTests.hs`; `cabal test` green.
@@ -56,10 +63,20 @@ It is visible through new unit tests in the `tasty` suite that run without netwo
 
 ## Surprises & Discoveries
 
-(None yet.)
+- The servant-client resolved in the Nix shell is 0.20.3.0, so `ClientEnv.middleware` is available and the fallback in Idempotence and Recovery was not needed. In `servant-client/src/Servant/Client/Internal/HttpClient.hs`, `performRequest` calls `makeClientRequest` *outside* `catchConnectionError`, so an exception thrown from a custom `makeClientRequest` escapes as a plain `IO` exception. That is why EP-1's `captureRequest` helper in `tasty/WireFormatTests.hs` keeps working unchanged under the new middleware; all 27 of its tests passed after Milestone 1.
+- `Network.HTTP.Client.ResponseTimeout` has no `Eq` instance, so "applyTimeout sets responseTimeout" compares `show` output instead of using `@?=` on the values.
+- tasty's `-p` pattern containing `||` must be passed through `cabal test` as two `--test-option=` arguments; `--test-options='-p /A/ || /B/'` splits on spaces and fails with ``Invalid argument `||'``.
 
 
 ## Decision Log
+
+- Decision: Create `src/Notion/V1/Retry.hs` in Milestone 1 holding only `RetryOptions`, `defaultRetryOptions` and `noRetries`; `Notion.V1.Client` re-exports them. Export `withRetries` from `Notion.V1.Client` in Milestone 3, when it exists, rather than stubbing it in Milestone 1.
+  Rationale: The plan allowed either placement. Creating the module early avoids moving the type later, and an unimplemented `withRetries` stub would be misleading.
+  Date: 2026-09-15
+
+- Decision: Also export `defaultUserAgent :: Text` from `Notion.V1.Client`.
+  Rationale: `defaultClientConfig` needs the value, and callers who set `userAgent` to add a suffix can reuse it. It is purely additive.
+  Date: 2026-09-15
 
 - Decision: The retry loop, timeout, `User-Agent` header and path guard are installed as a servant-client `ClientEnv` middleware (the `middleware` field added in servant-client 0.20.2), not by re-running whole `ClientM` actions inside `run`.
   Rationale: The middleware receives the servant `Request`, so the HTTP method (needed by the JS rule "retry 500/503 only for GET/DELETE") and the path are known before the first attempt. Only the HTTP exchange is retried; response decoding happens after the middleware. The lower bound of `servant-client` must rise from 0.20 to 0.20.2 (verified in `servant-client/CHANGELOG.md` of the Mori-registered servant checkout: "Clients now support real middleware ... which can be configured in `ClientEnv`" under 0.20.2).

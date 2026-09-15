@@ -48,6 +48,7 @@ import Notion.V1.RichText qualified as RT
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), dataSourceFilter, pageFilter, parseSearchResults)
 import Notion.V1.Users (BotUser (..), UserObject (..), WorkspaceLimits (..))
 import Notion.V1.Views (CreateView (..), QueryView (..), UpdateView (..), ViewObject (..), ViewType (..))
+import RuntimeTests qualified
 import System.Environment qualified as Environment
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -164,6 +165,7 @@ tests = do
         propertyValueTests,
         fileUploadTests,
         WireFormatTests.tests,
+        RuntimeTests.tests,
         basicIntegration,
         markdownE2E,
         pageE2E,

@@ -14,9 +14,9 @@
 -- main = do
 --     token <- Environment.getEnv "NOTION_TOKEN"
 --
---     clientEnv <- getClientEnv "https://api.notion.com/v1"
+--     manager <- newTlsManager
 --
---     let methods = makeMethods clientEnv (Text.pack token)
+--     let methods = makeMethodsWith defaultClientConfig manager (Text.pack token)
 --
 --     page <- retrievePage methods "page-id-here"
 --
@@ -26,21 +26,61 @@ module Notion.V1
   ( -- * Methods
     getClientEnv,
     makeMethods,
+    makeMethodsWith,
+    makeMethodsWithEnv,
     Methods (..),
+
+    -- * Configuration
+    ClientConfig (..),
+    defaultClientConfig,
+    legacyClientConfig,
+    defaultBaseUrl,
+    defaultNotionVersion,
+    RetryOptions (..),
+    defaultRetryOptions,
+    noRetries,
+    LogLevel (..),
+    Logger,
+    stderrLogger,
+
+    -- * Runtime building blocks
+    RequestContext (..),
+    requestContextFor,
+    standardHeaders,
+    responseTimeoutFor,
 
     -- * Servant
     API,
   )
 where
 
-import Control.Exception qualified as Exception
 import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
+import Network.HTTP.Client (Manager)
 import Network.HTTP.Client.TLS qualified as TLS
 import Notion.Prelude
 import Notion.V1.Blocks (BlockID, BlockObject)
 import Notion.V1.Blocks qualified as Blocks
+import Notion.V1.Client
+  ( ClientConfig (..),
+    LogLevel (..),
+    Logger,
+    RequestContext (..),
+    RetryOptions (..),
+    configureClientEnv,
+    defaultBaseUrl,
+    defaultClientConfig,
+    defaultNotionVersion,
+    defaultRetryOptions,
+    legacyClientConfig,
+    noRetries,
+    requestContextFor,
+    responseTimeoutFor,
+    runClientWith,
+    standardHeaders,
+    stderrLogger,
+  )
 import Notion.V1.Comments (CommentObject)
 import Notion.V1.Comments qualified as Comments
 import Notion.V1.Common (ParentID, UUID)
@@ -50,7 +90,6 @@ import Notion.V1.DataSources (DataSourceID, DataSourceObject)
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (CreateDatabase, DatabaseID, DatabaseObject, QueryDatabase, UpdateDatabase)
 import Notion.V1.Databases qualified as Databases
-import Notion.V1.Error (parseNotionError)
 import Notion.V1.FileUploads (FileUploadID, FileUploadObject, FileUploadStatus)
 import Notion.V1.FileUploads qualified as FileUploads
 import Notion.V1.ListOf (ListOf (..))
@@ -76,17 +115,36 @@ getClientEnv baseUrlText = do
   manager <- TLS.newTlsManager
   pure (Client.mkClientEnv manager baseUrl)
 
--- | Get a record of API methods after providing an API token
+-- | Get a record of API methods after providing an API token.
+--
+-- Uses 'legacyClientConfig': default API version, retries and @User-Agent@,
+-- keeping the 'ClientEnv' manager's own timeout.
 makeMethods ::
   ClientEnv ->
   -- | API token
   Text ->
   Methods
-makeMethods clientEnv token = Methods {..}
+makeMethods = makeMethodsWithEnv legacyClientConfig
+
+-- | Build 'Methods' from a configuration, a connection manager (for example
+-- from 'Network.HTTP.Client.TLS.newTlsManager') and an API token. The base URL
+-- comes from 'apiBaseUrl'.
+makeMethodsWith :: ClientConfig -> Manager -> Text -> Methods
+makeMethodsWith config manager =
+  makeMethodsWithEnv config (Client.mkClientEnv manager (apiBaseUrl config))
+
+-- | Build 'Methods' from a configuration, an existing 'ClientEnv' (which
+-- supplies the manager and base URL) and an API token.
+makeMethodsWithEnv ::
+  ClientConfig ->
+  ClientEnv ->
+  -- | API token
+  Text ->
+  Methods
+makeMethodsWithEnv config clientEnv token = Methods {..}
   where
-    notionVersion = "2026-03-11" -- Notion API version with markdown content support
-    -- If you experience 400 errors, check for updated versions at
-    -- https://developers.notion.com/reference/versioning
+    context = requestContextFor config clientEnv token
+    configuredEnv = configureClientEnv config clientEnv
     ( ( createDatabase
           :<|> retrieveDatabase
           :<|> updateDatabase
@@ -134,18 +192,17 @@ makeMethods clientEnv token = Methods {..}
                  :<|> completeFileUpload
                  :<|> listFileUploads_
                )
-      ) = Client.hoistClient @API Proxy run (Client.client @API Proxy) authorization notionVersion
-
-    authorization = "Bearer " <> token
+      ) =
+        Client.hoistClient
+          @API
+          Proxy
+          run
+          (Client.client @API Proxy)
+          (contextAuthorization context)
+          (notionVersion config)
 
     run :: Client.ClientM a -> IO a
-    run clientM = do
-      result <- Client.runClientM clientM clientEnv
-      case result of
-        Left err -> case parseNotionError err of
-          Just notionErr -> Exception.throwIO notionErr
-          Nothing -> Exception.throwIO err
-        Right a -> return a
+    run = runClientWith configuredEnv
 
     -- Wrap retrievePageFiltered to provide backward-compatible retrievePage
     retrievePage pid = retrievePageFiltered pid []
