@@ -34,6 +34,17 @@ questions for comments and meeting notes.
     so the read path is not weakened for everyone.
   - **Helpers.** Small functions such as `commentResponseId` and `commentResponseObject` cover
     the common access patterns.
+- **Result unions.** Query and search results mix several object kinds, and each kind may be full
+  or partial. They decode into one union, `PageOrDataSource`: `PageResult`, `PartialPageResult`,
+  `DataSourceResult`, `PartialDataSourceResult`, and `UnknownResult Value` for unknown `object`
+  values. It was added on 2026-09-15 by `docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md`.
+  - **Discriminators.** A page is full when it has `url`, and a data source is full when it has
+    `title`. These match the JS SDK's `isFullPage`/`isFullDataSource`.
+  - **Helpers.** `pageResults`, `dataSourceResults`, `resultId` and `resultCreatedTime` cover
+    callers that want one kind.
+  - **Single-object endpoints.** `retrieveDataSource`, `updateDatabase` and the rest keep their
+    full return types, even though the JS SDK types them as full-or-partial. The integration always
+    sees the object it addressed. The partial types are still exported for manual decoding.
 - **Request shapes.** A request whose shape differs from the response gets its own request-only
   type (`CommentAttachmentRequest`, `CommentDisplayNameRequest`, `CreateMeetingNote`). Read-side
   types and their tolerant decoders stay unchanged.
@@ -50,5 +61,6 @@ questions for comments and meeting notes.
 - Adopting this for an existing request record is a breaking change, as it was for `CreateComment`.
 - Callers must handle the partial case explicitly. Live checks so far (2026-09-15) always
   received full comments.
-- The partial page and data source types planned by the MasterPlan's EP-4 and EP-5
-  (`PartialPageObject` and others) should follow the same pattern.
+- The partial page, data source and database types (`PartialPageObject`, `PartialDataSourceObject`,
+  `PartialDatabaseObject`) follow the same pattern. Later partial types for pages and blocks
+  should reuse them.

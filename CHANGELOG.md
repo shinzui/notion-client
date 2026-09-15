@@ -33,6 +33,18 @@
 * `ViewObject`: `parent` is now `Maybe Parent`, `filter` is `Maybe ViewFilter`, `sorts` is `Maybe (Vector ViewSort)`, `quickFilters` is `Maybe (Map Text QuickFilter)`, `configuration` is `Maybe ViewConfig`
 * `CreateView`: `filter`, `sorts`, `quickFilters`, `configuration` and `position` are typed; new fields `createDatabase_` (wire `create_database`) and `placement`
 * `UpdateView`: `filter`, `sorts` (now property sorts only) and `quickFilters` are `Clearable`, so they can be cleared with `null`; `configuration` is `Maybe ViewConfig`
+* `queryDataSource` returns `ListOf PageOrDataSource` (was `ListOf PageObject`), and `search` returns `ListOf PageOrDataSource` (was `ListOf Value`). `SearchResult` is now a type alias for `PageOrDataSource`, and `parseSearchResults` was removed. Use `pageResults` for the old page-only behaviour
+* `SearchSort` and `SearchFilter` are now sum types (`SearchByLastEditedTime` / `SearchByRelevance`, `SearchObjectFilter` / `SearchInTrashFilter`)
+* `CreateDatabase.title` is `Maybe`, `CreateDatabase` gains `databaseType`, and `InitialDataSource.properties` is `Maybe`
+* `QueryDataSource` gains `resultType`
+* Every `PropertySchema` constructor gains `schemaDescription`, `RelationSchema` gains `relationDatabaseId`, `SelectOption` gains `description`, and `DualProperty` fields are `Maybe`
+* `PropertySchema` gains `LocationSchema`, `LastVisitedTimeSchema` and `UnknownSchema`
+* `UpdateDataSource.properties` is `Maybe (Map Text PropertyUpdate)` (was `Maybe (Map Text (Maybe PropertySchema))`): use `RemoveProperty` for `Nothing` and `SetPropertySchema` for `Just`
+* `PropertySchema` encoding omits an empty `id`, and omits `groups` for a status schema with no groups
+* `VerificationCondition` takes `VerificationState` and gains `VerificationDoesNotEqual`; `UniqueIdCondition` takes `Scientific` and gains `UniqueIdIsEmpty` / `UniqueIdIsNotEmpty`
+* `Filter`, `PropertyCondition` and `Sort` gain `UnknownFilter`, `UnknownCondition` and `UnknownSort`; their decoders no longer fail on unmodelled shapes. `SelectCondition`, `StatusCondition` and `MultiSelectCondition` gain array-valued constructors
+* `DatabaseObject` and `DataSourceObject` gain `databaseType`
+* The effectful `queryDataSource` and `search` result types changed accordingly
 
 ### New Features
 * Export `UserOwner (..)` from `Notion.V1.Users`
@@ -54,6 +66,12 @@
 * `Notion.V1.Clearable` for request fields that distinguish "leave unchanged" (`Unset`) from "clear with null" (`Clear`)
 * `FromJSON` instances for `Filter`, `PropertyCondition` and its condition types, `Sort` and `SortDirection`; `ToJSON PropertyCondition`
 * `CreateView` supports `position` (`ViewPositionStart` / `ViewPositionEnd` / `ViewPositionAfterView`), dashboard widget `placement`, and `create_database`
+* `DatabaseType`, `CreateDatabaseType` (typed databases created without a title), `QueryResultType` and `_QueryDataSource`
+* `PageOrDataSource` with `PartialDataSourceObject` and `PartialDatabaseObject`, plus `pageResults`, `dataSourceResults`, `resultId` and `resultCreatedTime`
+* Search by relevance (`SearchByRelevance`) and `in_trash` search filters
+* `PropertyUpdate`, `OptionUpdate` and `OptionTarget`: rename a property without resending its schema, and target select/status options by id
+* Filter constructors `SelectEqualsAny`, `SelectDoesNotEqualAny`, `StatusEqualsAny`, `StatusDoesNotEqualAny`, `MultiSelectContainsAny` and `MultiSelectDoesNotContainAny`, plus `RelativeDate` / `relativeDate` for relative date filters
+* New module `Notion.V1.DataSourceRows` with `iterateAllDataSourceRows`, `collectAllDataSourceRows` and `foldAllDataSourceRows`, which read every row of a data source past Notion's per-query result limit
 
 ### Bug Fixes
 * Decode the `default_background` color — previously any rich text or block using it failed the whole response
@@ -68,6 +86,9 @@
 * `queryDataSource` and `queryDatabase` send `filterProperties` as repeated `filter_properties` query parameters instead of a JSON body field, which Notion rejected
 * `CreatePage` positions encode as `page_start`, `page_end` and `after_block`, the shapes Notion accepts for page creation
 * `WebhookEvent` decodes without `accessible_by` (it is only sent to public integrations); `accessibleBy` is empty in that case
+* Data source queries on wiki databases (which return child data sources and partial objects) no longer fail to decode
+* Search no longer silently drops partial or undecodable results
+* Unknown property types no longer fail data source decoding
 * `verifySignature` accepts upper- or lowercase hex and rejects headers without the `sha256=` prefix, of the wrong length, or with non-hex characters
 
 ## 0.7.0.2 (2026-06-27)

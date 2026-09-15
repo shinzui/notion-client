@@ -44,6 +44,15 @@ cannot fail the whole view. Tests for such types assert the typed constructor of
 not only a byte-for-byte round trip, because a broken typed decoder would still round-trip
 through the fallback.
 
+The filter and sort DSL in `Notion.V1.Filter` applies the refinement in its own decoders
+(2026-09-15, from `docs/plans/10-type-data-source-database-and-search-results-and-close-query-and-filter-gaps.md`).
+`Filter`, `PropertyCondition` and `Sort` carry `UnknownFilter Value`, `UnknownCondition Text Value`
+and `UnknownSort Value`, and the condition decoder picks the condition key before parsing. A
+malformed known condition then keeps its key in `UnknownCondition`. The same applies to
+`UnknownSchema` for property schemas and `UnknownResult` for query and search results. Wrappers
+that callers added before these fallbacks existed (`RawViewFilter`, `RawViewSort`) are no longer
+reached, but stay for compatibility.
+
 When a later change types a value that was previously falling back, it adds a new constructor
 and keeps the fallback. Tests for the fallback use made-up discriminators, so they keep
 exercising it after new kinds are typed.

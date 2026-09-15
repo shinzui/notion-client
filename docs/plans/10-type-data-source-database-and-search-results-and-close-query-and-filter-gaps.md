@@ -61,12 +61,18 @@ The proof is a new `tasty` test module, `tasty/DataSourceSearchTests.hs`. It dec
 - [x] (2026-09-15) Milestone 4: new filter constructors (verification `does_not_equal`, array values, `unique_id` empty checks with `Scientific`, `RelativeDate`), unknown fallbacks.
 - [x] (2026-09-15) Milestone 4: `FromJSON` for `Filter` and `Sort` added (or extended, if EP-4 added them first); M4 tests pass.
 - [x] (2026-09-15) Milestone 5: `src/Notion/V1/DataSourceRows.hs` with `createdTimeLowerBound`, `foldAllDataSourceRows`, `iterateAllDataSourceRows`, `collectAllDataSourceRows`; M5 tests pass.
-- [ ] CHANGELOG `## Unreleased` entries written; `cabal build all` and `cabal test` green; MasterPlan Progress items for EP-5 checked.
+- [x] (2026-09-15) CHANGELOG `## Unreleased` entries written; `cabal build all` and `cabal test` green (308 tests); MasterPlan Progress items for EP-5 checked.
+- [x] (2026-09-15) Read-only live check against the test workspace: relevance search, `queryDataSource`, `retrieveDatabase`/`retrieveDataSource` and `collectAllDataSourceRows` (47 rows).
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+- EP-4 had already added `FromJSON` for `Filter`, `PropertyCondition`, every condition type, `Sort` and `SortDirection`, plus `PartialPageObject` in `src/Notion/V1/Pages.hs`. Both were reused. EP-4's `parsePropertyCondition` tried every key with `asum`, which cannot honour the optional `type` discriminator or name the key for `UnknownCondition`. It was restructured around a `conditionParsers` table (condition key to parser). The per-type `parse…Condition` helpers were extended in place.
+- With `UnknownFilter` and `UnknownSort`, the `Filter` and `Sort` decoders no longer fail. EP-4's `RawViewFilter` and `RawViewSort` wrappers in `src/Notion/V1/Views.hs` are therefore unreachable, but harmless. `RawQuickFilter` is still reached by an object with no condition key. EP-4's test "array-valued select filter survives as ViewFilter" still passes, now through the typed `SelectDoesNotEqualAny`.
+- Live responses (2026-09-15, test workspace): `database_type` is `null` for an ordinary database and its data source, and a 3-row `queryDataSource` response carries no `request_status`. Relevance search and `collectAllDataSourceRows` worked against the live API (47 rows).
+- In GHCi, and in any module that imports several records sharing field names, `_QueryDataSource { pageSize = Just 3 }` compiles only with a `-Wambiguous-fields` warning. GHC says this type-directed disambiguation will be removed. The test module uses helper functions (`updateWithProperties`) or pattern matches instead of such record updates.
+- `cabal build all` already reports `-Wmissing-fields` warnings in `notion-client-example/BlockDemo.hs` (`ColumnBlock.widthRatio`) and in `MarkdownDemo.hs`/`TemplateDemo.hs` (`UpdatePage.isLocked`, `isArchived`). They predate this plan, which added none. They would crash those demos at runtime if the fields were forced.
+- The plan's `cabal test --test-options='-p "EP-5"'` does not filter. `cabal test --test-option=--pattern=EP-5` does.
 
 
 ## Decision Log
@@ -119,10 +125,45 @@ The proof is a new `tasty` test module, `tasty/DataSourceSearchTests.hs`. It dec
   Rationale: The MasterPlan Integration Points say that whichever of EP-4 and EP-5 starts first adds them.
   Date: 2026-09-14
 
+- Decision: Consumed EP-4's `FromJSON` instances and `PartialPageObject`. `parsePropertyCondition` now picks the condition key first: the `type` discriminator if present, else the first known key, else the only key other than `property`/`type`. It then runs that key's parser with `<|> pure (UnknownCondition key raw)`.
+  Rationale: This is the plan's rule 1–4. Choosing the key before parsing is what lets a malformed known condition (for example `select: {resembles: ...}`) keep its key in `UnknownCondition`, following ADR 1's nested-fallback refinement.
+  Date: 2026-09-15
+
+- Decision: Left `SelectColor` and `RelationType` decoding strict (unknown values still fail).
+  Rationale: The JS SDK types `SelectColor` as a closed set, and neither type was in this plan's scope. Adding fallbacks is a breaking change that belongs with EP-6 or a follow-up, per ADR 1.
+  Date: 2026-09-15
+
+- Decision: `resultType` was added to `QueryDataSource`, and the generic encoder with EP-1's `filter_properties` stripping was kept, so `result_type` is emitted automatically. `_QueryDataSource` includes `filterProperties = Nothing`.
+  Rationale: EP-1 left `ToJSON QueryDataSource` generic plus a key deletion, so no hand-written field was needed.
+  Date: 2026-09-15
+
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+Completed 2026-09-15 in five milestone commits plus a documentation commit. All acceptance criteria are met: `cabal build all` succeeds with no new `-Wmissing-fields` warnings, and `cabal test` passes all 308 tests. The new group `EP-5 Data sources, databases, search, filters` holds 44 cases: 10 in M1, 5 in M2, 10 in M3, 9 in M4 and 10 in M5.
+
+What exists now:
+
+- Data source queries and search return `ListOf PageOrDataSource`, so wiki data sources and partial objects decode, and search no longer drops results.
+- Databases and data sources expose `databaseType`, and typed databases can be created without a title.
+- Property schemas round-trip `description` and unknown types, and data source updates can rename properties and target options by id.
+- Filters cover every JS SDK variant, and decode tolerantly.
+- `Notion.V1.DataSourceRows` reads past the per-query result limit.
+
+The live check exercised relevance search, typed queries and `collectAllDataSourceRows`. No workspace had a wiki data source or more than 10,000 rows, so the partial-object and multi-window paths are proven only by fixtures and the fake query function.
+
+Remaining or deferred work:
+
+- `SelectColor` and `RelationType` still fail on unknown values.
+- The pre-existing `-Wmissing-fields` warnings in the example demos are unfixed.
+- `RawViewFilter` and `RawViewSort` are now dead code and could be removed in a later breaking release.
+
+Lessons:
+
+- Choosing a discriminator key before parsing gives better fallbacks than trying every alternative with `asum`, because the fallback can name what it failed to parse.
+- A pure function argument, here the query function, made the row helper testable without HTTP and usable from the effectful package.
+
+ADR distillation: [docs/adr/4-full-or-partial-responses-and-request-only-types.md](../adr/4-full-or-partial-responses-and-request-only-types.md) now records the `PageOrDataSource` union and its `url`/`title` discriminators. [docs/adr/1-tolerant-response-decoders.md](../adr/1-tolerant-response-decoders.md) now records that the filter and sort DSL decoders carry their own fallbacks.
 
 
 ## Context and Orientation
@@ -224,7 +265,7 @@ It also has one smart constructor per field with the same name and argument orde
   - `notion-client-example/DatabaseDemo.hs`: `SelectOption` values and `UpdateDataSource` near lines 110-137, and `TitleSchema`/`RichTextSchema` near line 88.
 - `CHANGELOG.md`: it has no `## Unreleased` heading today (the top entry is `## 0.7.0.2`).
 
-ADR context: this repository has no `docs/adr/` directory, so no relevant ADR exists.
+ADR context: this plan was drafted when no `docs/adr/` existed. By implementation, ADR 1 (tolerant decoders), ADR 4 (full-or-partial responses) and ADR 5 (`Clearable` request fields) applied, and ADRs 1 and 4 were amended by this plan.
 
 ### Preconditions (hard dependencies)
 
@@ -1415,3 +1456,6 @@ What this plan consumes from other plans:
 - EP-4 (`docs/plans/9-add-view-queries-and-typed-view-configuration.md`), optionally: `FromJSON Filter`/`Sort`, and possibly `PartialPageObject`.
 
 What other plans consume from this one: EP-4 may reuse `FromJSON Filter`/`Sort`, `PartialPageObject` and `PageOrDataSource`.
+
+
+Revision 2026-09-15 (implementation): All milestones are implemented and every Progress item is checked. Surprises & Discoveries, the Decision Log and Outcomes & Retrospective record that EP-4's decoders and `PartialPageObject` were consumed, how `parsePropertyCondition` was restructured, the live-check results, and the deferred items. The ADR context line was updated because ADRs now exist.
