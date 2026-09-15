@@ -48,28 +48,40 @@ in  Schema.Project::{ project =
             "Effectful effect + interpreter for notion-client"
         }
       ]
-    , dependencies = [ "haskell-servant/servant" ]
+    , dependencies =
+      [ "haskell-servant/servant:servant"
+      , "haskell-servant/servant:servant-client"
+      , "haskell-servant/servant:servant-client-core"
+      , "effectful/effectful:effectful-core"
+      ]
+    , dependencyRefs =
+      [ Schema.MoriRef::{
+        , namespace = "haskell-servant"
+        , name = "servant"
+        , kind = Some Schema.MoriArtifactKind.Package
+        , key = Some "servant"
+        }
+      , Schema.MoriRef::{
+        , namespace = "haskell-servant"
+        , name = "servant"
+        , kind = Some Schema.MoriArtifactKind.Package
+        , key = Some "servant-client"
+        }
+      , Schema.MoriRef::{
+        , namespace = "haskell-servant"
+        , name = "servant"
+        , kind = Some Schema.MoriArtifactKind.Package
+        , key = Some "servant-client-core"
+        }
+      , Schema.MoriRef::{
+        , namespace = "effectful"
+        , name = "effectful"
+        , kind = Some Schema.MoriArtifactKind.Package
+        , key = Some "effectful-core"
+        }
+      ]
     , docs =
-      [ Schema.DocRef::{ key = "readme"
-        , kind = Schema.DocKind.Guide
-        , audience = Schema.DocAudience.User
-        , description = Some "Getting started and usage examples"
-        , location = Schema.DocLocation.LocalFile "README.md"
-        }
-      , Schema.DocRef::{ key = "changelog"
-        , kind = Schema.DocKind.Notes
-        , audience = Schema.DocAudience.User
-        , description = Some "Release history"
-        , location = Schema.DocLocation.LocalFile "CHANGELOG.md"
-        }
-      , Schema.DocRef::{ key = "architecture"
-        , kind = Schema.DocKind.Reference
-        , audience = Schema.DocAudience.Module
-        , description = Some
-            "Architecture notes for API 2025-09-03 migration"
-        , location = Schema.DocLocation.LocalFile "architecture.md"
-        }
-      , Schema.DocRef::{ key = "hackage"
+      [ Schema.DocRef::{ key = "hackage"
         , kind = Schema.DocKind.Reference
         , audience = Schema.DocAudience.API
         , description = Some "Hackage package page"
