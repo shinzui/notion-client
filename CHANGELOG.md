@@ -1,6 +1,6 @@
 # Changelog for notion-client
 
-## Unreleased
+## 0.8.0.0 (2026-09-15)
 
 ### Breaking Changes
 * `Color` gains `DefaultBackground` and an `UnknownColor Text` fallback; its JSON instances are now hand-written
