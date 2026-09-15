@@ -23,7 +23,7 @@ import Notion.V1.Filter (Sort (..), SortDirection (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.Pages (CreatePage (..), PageObject (..), PropertyItemResponse (..))
 import Notion.V1.Pagination (paginateAll)
-import Notion.V1.Properties (PropertySchema (..), SelectColor (..), SelectOption (..))
+import Notion.V1.Properties (PropertySchema (..), PropertyUpdate (..), SelectColor (..), SelectOption (..))
 import Notion.V1.PropertyValue qualified as PV
 import Notion.V1.RichText (RichText (..), RichTextContent (..), TextContent (..), defaultAnnotations)
 import Prelude hiding (id)
@@ -86,8 +86,8 @@ runDatabaseDemo methods databaseIdStr = do
 
   let newDsProperties =
         Map.fromList
-          [ ("Name", TitleSchema {schemaId = "", schemaName = "Name"}),
-            ("Description", RichTextSchema {schemaId = "", schemaName = "Description"})
+          [ ("Name", TitleSchema {schemaId = "", schemaName = "Name", schemaDescription = Nothing}),
+            ("Description", RichTextSchema {schemaId = "", schemaName = "Description", schemaDescription = Nothing})
           ]
 
       createDsRequest =
@@ -113,20 +113,20 @@ runDatabaseDemo methods databaseIdStr = do
 
   let statusOptions =
         Vector.fromList
-          [ SelectOption {id = Nothing, name = "Not Started", color = Just Red},
-            SelectOption {id = Nothing, name = "In Progress", color = Just Yellow},
-            SelectOption {id = Nothing, name = "Done", color = Just Green}
+          [ SelectOption {id = Nothing, name = "Not Started", color = Just Red, description = Nothing},
+            SelectOption {id = Nothing, name = "In Progress", color = Just Yellow, description = Nothing},
+            SelectOption {id = Nothing, name = "Done", color = Just Green, description = Nothing}
           ]
       priorityOptions =
         Vector.fromList
-          [ SelectOption {id = Nothing, name = "High", color = Just Red},
-            SelectOption {id = Nothing, name = "Medium", color = Just Yellow},
-            SelectOption {id = Nothing, name = "Low", color = Just Gray}
+          [ SelectOption {id = Nothing, name = "High", color = Just Red, description = Nothing},
+            SelectOption {id = Nothing, name = "Medium", color = Just Yellow, description = Nothing},
+            SelectOption {id = Nothing, name = "Low", color = Just Gray, description = Nothing}
           ]
       combinedProperties =
         Map.fromList
-          [ ("Status", Just (SelectSchema {schemaId = "", schemaName = "Status", selectOptions = statusOptions})),
-            ("Priority", Just (SelectSchema {schemaId = "", schemaName = "Priority", selectOptions = priorityOptions}))
+          [ ("Status", SetPropertySchema (SelectSchema {schemaId = "", schemaName = "Status", schemaDescription = Nothing, selectOptions = statusOptions})),
+            ("Priority", SetPropertySchema (SelectSchema {schemaId = "", schemaName = "Priority", schemaDescription = Nothing, selectOptions = priorityOptions}))
           ]
 
       updateDsRequest =

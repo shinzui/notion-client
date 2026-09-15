@@ -4,12 +4,14 @@ module DataSourceSearchTests (tests) where
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy.Char8 qualified as L8
+import Data.Map qualified as Map
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1.Common (Parent (..))
 import Notion.V1.DataSources
 import Notion.V1.Databases (CreateDatabase (..), CreateDatabaseType (..), DatabaseObject (..), DatabaseType (..), InitialDataSource (..), PartialDatabaseObject (..))
 import Notion.V1.ListOf (IncompleteReason (..), ListOf (..), RequestStatus (..), RequestStatusType (..))
+import Notion.V1.Properties
 import Notion.V1.Search (SearchFilter (..), SearchObjectType (..), SearchSort (..), SearchSortDirection (..))
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -20,7 +22,8 @@ tests =
   testGroup
     "EP-5 Data sources, databases, search, filters"
     [ milestone1Tests,
-      milestone2Tests
+      milestone2Tests,
+      milestone3Tests
     ]
 
 -- ---------------------------------------------------------------------
@@ -217,4 +220,109 @@ milestone2Tests =
         Vector.length (results list) @?= 5
         map resultKind (Vector.toList (results list)) @?= ["page", "partial page", "data_source", "partial data_source", "unknown"]
         requestStatus list @?= Just RequestStatus {type_ = RequestIncomplete, incompleteReason = Just QueryResultLimitReached}
+    ]
+
+-- ---------------------------------------------------------------------
+-- Milestone 3
+-- ---------------------------------------------------------------------
+
+-- | The value stored under @key@ in an encoded object.
+lookupKey :: Aeson.Key -> Aeson.Value -> IO Aeson.Value
+lookupKey key v = do
+  o <- objectOf v
+  maybe (assertFailure ("missing key " <> show key <> " in " <> show v)) pure (KeyMap.lookup key o)
+
+updateWithProperties :: Map.Map Text.Text PropertyUpdate -> UpdateDataSource
+updateWithProperties ps = UpdateDataSource {title = Nothing, icon = Nothing, properties = Just ps, inTrash = Nothing, parent = Nothing}
+
+milestone3Tests :: TestTree
+milestone3Tests =
+  testGroup
+    "Milestone 3"
+    [ testCase "Property schema decodes description" $ do
+        schema <- decodeOrFail "{\"id\":\"a1\",\"name\":\"Owner\",\"description\":\"Sato Kenji's column\",\"type\":\"people\",\"people\":{}}"
+        schemaDescription schema @?= Just "Sato Kenji's column",
+      testCase "Select and status options decode description" $ do
+        sel <- decodeOrFail "{\"id\":\"s\",\"name\":\"State\",\"description\":null,\"type\":\"select\",\"select\":{\"options\":[{\"id\":\"o1\",\"name\":\"Done\",\"color\":\"green\",\"description\":null}]}}"
+        case sel of
+          SelectSchema {selectOptions} ->
+            Vector.toList selectOptions @?= [SelectOption {id = Just "o1", name = "Done", color = Just Green, description = Nothing}]
+          other -> assertFailure ("expected SelectSchema, got " <> show other)
+        st <- decodeOrFail "{\"id\":\"t\",\"name\":\"Status\",\"description\":null,\"type\":\"status\",\"status\":{\"options\":[{\"id\":\"o2\",\"name\":\"Finished\",\"color\":\"blue\",\"description\":\"finished\"}],\"groups\":[{\"id\":\"g1\",\"name\":\"Complete\",\"color\":\"blue\",\"option_ids\":[\"o2\"]}]}}"
+        case st of
+          StatusSchema {statusOptions, statusGroups} -> do
+            fmap (\SelectOption {description} -> description) (Vector.toList statusOptions) @?= [Just "finished"]
+            fmap (\StatusGroup {optionIds} -> optionIds) (Vector.toList statusGroups) @?= [Vector.fromList ["o2"]]
+          other -> assertFailure ("expected StatusSchema, got " <> show other),
+      testCase "Relation schema decodes database_id" $ do
+        schema <- decodeOrFail "{\"id\":\"r1\",\"name\":\"Tasks\",\"description\":null,\"type\":\"relation\",\"relation\":{\"database_id\":\"db-1\",\"data_source_id\":\"ds-1\",\"type\":\"dual_property\",\"dual_property\":{\"synced_property_id\":\"sp1\",\"synced_property_name\":\"Related\"}}}"
+        case schema of
+          RelationSchema {relationDatabaseId, relationType} -> do
+            relationDatabaseId @?= Just "db-1"
+            relationType @?= DualProperty {syncedPropertyId = Just "sp1", syncedPropertyName = Just "Related"}
+          other -> assertFailure ("expected RelationSchema, got " <> show other),
+      testCase "Dual property with no synced fields encodes empty dual_property" $ do
+        let schema =
+              RelationSchema
+                { schemaId = "",
+                  schemaName = "Tasks",
+                  schemaDescription = Nothing,
+                  relationDataSourceId = "ds-1",
+                  relationDatabaseId = Nothing,
+                  relationType = DualProperty {syncedPropertyId = Nothing, syncedPropertyName = Nothing}
+                }
+        relation <- lookupKey "relation" (Aeson.toJSON schema)
+        dual <- lookupKey "dual_property" relation
+        dual @?= Aeson.object [],
+      testCase "Status schema without groups encodes options only" $ do
+        let schema =
+              StatusSchema
+                { schemaId = "",
+                  schemaName = "Status",
+                  schemaDescription = Nothing,
+                  statusOptions = Vector.fromList [SelectOption {id = Nothing, name = "Todo", color = Nothing, description = Nothing}],
+                  statusGroups = Vector.empty
+                }
+        status <- lookupKey "status" (Aeson.toJSON schema)
+        status @?= Aeson.object ["options" Aeson..= [Aeson.object ["name" Aeson..= ("Todo" :: Text.Text)]]],
+      testCase "Empty schema id is omitted" $ do
+        o <- objectOf (Aeson.toJSON TitleSchema {schemaId = "", schemaName = "Name", schemaDescription = Nothing})
+        KeyMap.member "id" o @?= False,
+      testCase "Location and last_visited_time schemas encode" $ do
+        loc <- objectOf (Aeson.toJSON LocationSchema {schemaId = "", schemaName = "Where", schemaDescription = Nothing})
+        KeyMap.lookup "type" loc @?= Just (Aeson.String "location")
+        KeyMap.lookup "location" loc @?= Just (Aeson.object [])
+        lv <- objectOf (Aeson.toJSON LastVisitedTimeSchema {schemaId = "", schemaName = "Seen", schemaDescription = Just "Tanaka Hanako's last visit"})
+        KeyMap.lookup "type" lv @?= Just (Aeson.String "last_visited_time")
+        KeyMap.lookup "last_visited_time" lv @?= Just (Aeson.object [])
+        KeyMap.lookup "description" lv @?= Just (Aeson.String "Tanaka Hanako's last visit"),
+      testCase "Unknown property type decodes to UnknownSchema" $ do
+        schema <- decodeOrFail "{\"id\":\"x\",\"name\":\"Mood\",\"type\":\"sentiment\",\"sentiment\":{\"scale\":5}}"
+        case schema of
+          UnknownSchema {schemaType} -> schemaType @?= "sentiment"
+          other -> assertFailure ("expected UnknownSchema, got " <> show other)
+        sentiment <- lookupKey "sentiment" (Aeson.toJSON schema)
+        sentiment @?= Aeson.object ["scale" Aeson..= (5 :: Int)],
+      testCase "UpdateDataSource rename-only property" $
+        Aeson.toJSON (updateWithProperties (Map.fromList [("Old", RenameProperty "New")]))
+          @?= Aeson.object ["properties" Aeson..= Aeson.object ["Old" Aeson..= Aeson.object ["name" Aeson..= ("New" :: Text.Text)]]],
+      testCase "UpdateDataSource select option targeted by id" $ do
+        let update =
+              UpdateSelectOptions
+                { newName = Nothing,
+                  optionUpdates = Vector.fromList [OptionUpdate (OptionWithId "o1" Nothing) (Just Red) (Just "urgent")]
+                }
+        Aeson.toJSON update
+          @?= Aeson.object
+            [ "select"
+                Aeson..= Aeson.object
+                  [ "options"
+                      Aeson..= [ Aeson.object
+                                   [ "id" Aeson..= ("o1" :: Text.Text),
+                                     "color" Aeson..= ("red" :: Text.Text),
+                                     "description" Aeson..= ("urgent" :: Text.Text)
+                                   ]
+                               ]
+                  ]
+            ]
     ]

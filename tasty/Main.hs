@@ -1569,8 +1569,8 @@ testSerializeNullablePropertyDeletion = do
             properties =
               Just $
                 Map.fromList
-                  [ ("OldColumn", Nothing),
-                    ("NewColumn", Just (Props.TitleSchema {schemaId = "", schemaName = "NewColumn"}))
+                  [ ("OldColumn", Props.RemoveProperty),
+                    ("NewColumn", Props.SetPropertySchema (Props.TitleSchema {schemaId = "", schemaName = "NewColumn", schemaDescription = Nothing}))
                   ],
             inTrash = Nothing,
             parent = Nothing
@@ -2027,10 +2027,10 @@ testPropertySchemaSelectRoundTrip :: Assertion
 testPropertySchemaSelectRoundTrip = do
   let opts =
         Vector.fromList
-          [ Props.SelectOption {id = Just "opt-1", name = "Done", color = Just Props.Green},
-            Props.SelectOption {id = Just "opt-2", name = "Todo", color = Just Props.Red}
+          [ Props.SelectOption {id = Just "opt-1", name = "Done", color = Just Props.Green, description = Nothing},
+            Props.SelectOption {id = Just "opt-2", name = "Todo", color = Just Props.Red, description = Nothing}
           ]
-      schema = Props.SelectSchema {schemaId = "abc", schemaName = "Status", selectOptions = opts}
+      schema = Props.SelectSchema {schemaId = "abc", schemaName = "Status", schemaDescription = Nothing, selectOptions = opts}
       json = Aeson.toJSON schema
   case Aeson.fromJSON json of
     Aeson.Success decoded -> assertEqual "round-trip" schema decoded
@@ -2038,7 +2038,7 @@ testPropertySchemaSelectRoundTrip = do
 
 testPropertySchemaNumberRoundTrip :: Assertion
 testPropertySchemaNumberRoundTrip = do
-  let schema = Props.NumberSchema {schemaId = "n1", schemaName = "Price", numberFormat = Props.Dollar}
+  let schema = Props.NumberSchema {schemaId = "n1", schemaName = "Price", schemaDescription = Nothing, numberFormat = Props.Dollar}
       json = Aeson.toJSON schema
   case Aeson.fromJSON json of
     Aeson.Success decoded -> assertEqual "round-trip" schema decoded
@@ -2046,7 +2046,7 @@ testPropertySchemaNumberRoundTrip = do
 
 testPropertySchemaFormulaRoundTrip :: Assertion
 testPropertySchemaFormulaRoundTrip = do
-  let schema = Props.FormulaSchema {schemaId = "f1", schemaName = "Total", formulaExpression = "prop(\"Price\") * 2"}
+  let schema = Props.FormulaSchema {schemaId = "f1", schemaName = "Total", schemaDescription = Nothing, formulaExpression = "prop(\"Price\") * 2"}
       json = Aeson.toJSON schema
   case Aeson.fromJSON json of
     Aeson.Success decoded -> assertEqual "round-trip" schema decoded
@@ -2054,8 +2054,8 @@ testPropertySchemaFormulaRoundTrip = do
 
 testPropertySchemaRelationRoundTrip :: Assertion
 testPropertySchemaRelationRoundTrip = do
-  let relType = Props.DualProperty {syncedPropertyId = "sp1", syncedPropertyName = "Related"}
-      schema = Props.RelationSchema {schemaId = "r1", schemaName = "Tasks", relationDataSourceId = UUID "ds-123", relationType = relType}
+  let relType = Props.DualProperty {syncedPropertyId = Just "sp1", syncedPropertyName = Just "Related"}
+      schema = Props.RelationSchema {schemaId = "r1", schemaName = "Tasks", schemaDescription = Nothing, relationDataSourceId = UUID "ds-123", relationDatabaseId = Nothing, relationType = relType}
       json = Aeson.toJSON schema
   case Aeson.fromJSON json of
     Aeson.Success decoded -> assertEqual "round-trip" schema decoded
@@ -2067,7 +2067,9 @@ testPropertySchemaRelationSingleShape = do
         Props.RelationSchema
           { schemaId = "r1",
             schemaName = "Depends On",
+            schemaDescription = Nothing,
             relationDataSourceId = UUID "ds-123",
+            relationDatabaseId = Nothing,
             relationType = Props.SingleProperty
           }
       json = Aeson.toJSON schema
@@ -2091,7 +2093,9 @@ testPropertySchemaRelationSingleRoundTrip = do
         Props.RelationSchema
           { schemaId = "r1",
             schemaName = "Depends On",
+            schemaDescription = Nothing,
             relationDataSourceId = UUID "ds-123",
+            relationDatabaseId = Nothing,
             relationType = Props.SingleProperty
           }
   case Aeson.fromJSON (Aeson.toJSON schema) of
@@ -2102,15 +2106,15 @@ testPropertySchemaStatusRoundTrip :: Assertion
 testPropertySchemaStatusRoundTrip = do
   let opts =
         Vector.fromList
-          [ Props.SelectOption {id = Just "s1", name = "Not Started", color = Just Props.Gray},
-            Props.SelectOption {id = Just "s2", name = "Done", color = Just Props.Green}
+          [ Props.SelectOption {id = Just "s1", name = "Not Started", color = Just Props.Gray, description = Nothing},
+            Props.SelectOption {id = Just "s2", name = "Done", color = Just Props.Green, description = Nothing}
           ]
       grps =
         Vector.fromList
           [ Props.StatusGroup {id = Just "g1", name = "To-do", color = Just Props.Gray, optionIds = Vector.fromList ["s1"]},
             Props.StatusGroup {id = Just "g2", name = "Complete", color = Just Props.Green, optionIds = Vector.fromList ["s2"]}
           ]
-      schema = Props.StatusSchema {schemaId = "st1", schemaName = "Status", statusOptions = opts, statusGroups = grps}
+      schema = Props.StatusSchema {schemaId = "st1", schemaName = "Status", schemaDescription = Nothing, statusOptions = opts, statusGroups = grps}
       json = Aeson.toJSON schema
   case Aeson.fromJSON json of
     Aeson.Success decoded -> assertEqual "round-trip" schema decoded

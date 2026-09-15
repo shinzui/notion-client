@@ -33,10 +33,8 @@ where
 import Control.Applicative ((<|>))
 import Data.Aeson ((.!=), (.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
-import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Parser)
-import Data.Map qualified as Map
 import Data.Vector qualified as Vector
 import Notion.Prelude
 import Notion.V1.Common (Cover, Icon, ObjectType, Parent, UUID (..))
@@ -44,7 +42,7 @@ import Notion.V1.Databases (DatabaseType)
 import Notion.V1.Filter (Filter, Sort)
 import Notion.V1.ListOf (ListOf)
 import Notion.V1.Pages (PageObject (..), PartialPageObject (..))
-import Notion.V1.Properties (PropertySchema)
+import Notion.V1.Properties (PropertySchema, PropertyUpdate)
 import Notion.V1.RichText (RichText)
 import Notion.V1.Users (UserReference)
 import Servant.API (QueryParams)
@@ -191,15 +189,12 @@ instance ToJSON CreateDataSource where
 
 -- | Update data source request.
 --
--- The @properties@ field uses @Maybe (Maybe PropertySchema)@ to distinguish between:
---
--- * @Nothing@ (outer): omit the properties field entirely (don't touch properties)
--- * @Just (Map ...)@ with @Just schema@: add or update a property
--- * @Just (Map ...)@ with @Nothing@: delete a property (emits @null@ in JSON)
+-- Each entry of @properties@ is a 'PropertyUpdate': remove ('RemoveProperty', sent as @null@),
+-- rename only, a full schema, or an option-list update. @Nothing@ leaves properties untouched.
 data UpdateDataSource = UpdateDataSource
   { title :: Maybe (Vector RichText),
     icon :: Maybe Icon,
-    properties :: Maybe (Map Text (Maybe PropertySchema)),
+    properties :: Maybe (Map Text PropertyUpdate),
     inTrash :: Maybe Bool,
     parent :: Maybe Parent
   }
@@ -210,14 +205,9 @@ instance ToJSON UpdateDataSource where
     Aeson.object $
       maybe [] (\t -> ["title" .= t]) title
         <> maybe [] (\i -> ["icon" .= i]) icon
-        <> maybe [] (\p -> ["properties" .= mapWithNulls p]) properties
+        <> maybe [] (\p -> ["properties" .= p]) properties
         <> maybe [] (\t -> ["in_trash" .= t]) inTrash
         <> maybe [] (\p -> ["parent" .= p]) parent
-    where
-      -- Emit Nothing values as JSON null (not omitted)
-      mapWithNulls :: Map Text (Maybe PropertySchema) -> Value
-      mapWithNulls m =
-        Aeson.object $ map (\(k, v) -> Key.fromText k .= v) (Map.toList m)
 
 -- | Query data source request
 data QueryDataSource = QueryDataSource

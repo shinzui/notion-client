@@ -17,12 +17,21 @@ module Notion.V1.Properties
     NumberFormat (..),
     RollupFunction (..),
     RelationType (..),
+
+    -- * Data source property updates
+    PropertyUpdate (..),
+    OptionUpdate (..),
+    OptionTarget (..),
   )
 where
 
-import Data.Aeson (object, (.:), (.:?), (.=))
+import Data.Aeson (object, (.!=), (.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
+import Data.Aeson.Key qualified as Key
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Parser)
+import Data.Text qualified as Text
+import Data.Vector qualified as Vector
 import Notion.Prelude
 import Notion.V1.Common (UUID)
 import Prelude hiding (id)
@@ -74,7 +83,8 @@ instance ToJSON SelectColor where
 data SelectOption = SelectOption
   { id :: Maybe Text,
     name :: Text,
-    color :: Maybe SelectColor
+    color :: Maybe SelectColor,
+    description :: Maybe Text
   }
   deriving stock (Eq, Show, Generic)
 
@@ -326,9 +336,10 @@ instance ToJSON RollupFunction where
 -- | Relation property type configuration.
 data RelationType
   = SingleProperty
-  | DualProperty
-      { syncedPropertyId :: Text,
-        syncedPropertyName :: Text
+  | -- | Both synced fields are optional in requests; Notion fills them in responses.
+    DualProperty
+      { syncedPropertyId :: Maybe Text,
+        syncedPropertyName :: Maybe Text
       }
   deriving stock (Eq, Show, Generic)
 
@@ -339,107 +350,131 @@ instance FromJSON RelationType where
       case relType of
         "single_property" -> pure SingleProperty
         "dual_property" -> do
-          dp <- o .: "dual_property"
-          syncedPropertyId <- dp .: "synced_property_id"
-          syncedPropertyName <- dp .: "synced_property_name"
+          dp <- o .:? "dual_property" .!= KeyMap.empty
+          syncedPropertyId <- dp .:? "synced_property_id"
+          syncedPropertyName <- dp .:? "synced_property_name"
           pure DualProperty {..}
         other -> fail $ "Unknown RelationType: " <> unpack other
     _ -> fail "Expected object for RelationType"
 
 instance ToJSON RelationType where
-  toJSON SingleProperty =
-    object ["type" .= ("single_property" :: Text)]
-  toJSON DualProperty {..} =
-    object
-      [ "type" .= ("dual_property" :: Text),
-        "dual_property"
-          .= object
-            [ "synced_property_id" .= syncedPropertyId,
-              "synced_property_name" .= syncedPropertyName
-            ]
-      ]
+  toJSON relType = object (relationTypeFields relType)
+
+relationTypeFields :: RelationType -> [(Aeson.Key, Value)]
+relationTypeFields = \case
+  SingleProperty ->
+    [ "type" .= ("single_property" :: Text),
+      "single_property" .= object []
+    ]
+  DualProperty {..} ->
+    [ "type" .= ("dual_property" :: Text),
+      "dual_property"
+        .= object
+          ( maybe [] (\v -> ["synced_property_id" .= v]) syncedPropertyId
+              <> maybe [] (\v -> ["synced_property_name" .= v]) syncedPropertyName
+          )
+    ]
 
 -- | Typed property schema for a database or data source property.
 --
--- Each constructor carries the common envelope fields (@schemaId@, @schemaName@)
--- plus any type-specific configuration. The JSON representation uses a @type@
--- discriminator with the configuration nested under a key matching the type name.
+-- Each constructor carries the common envelope fields (@schemaId@, @schemaName@,
+-- @schemaDescription@) plus any type-specific configuration. The JSON representation uses a
+-- @type@ discriminator with the configuration nested under a key matching the type name.
+--
+-- Request bodies may leave @schemaId@ empty; an empty id is not sent.
 data PropertySchema
-  = TitleSchema {schemaId :: Text, schemaName :: Text}
-  | RichTextSchema {schemaId :: Text, schemaName :: Text}
-  | NumberSchema {schemaId :: Text, schemaName :: Text, numberFormat :: NumberFormat}
-  | SelectSchema {schemaId :: Text, schemaName :: Text, selectOptions :: Vector SelectOption}
-  | MultiSelectSchema {schemaId :: Text, schemaName :: Text, multiSelectOptions :: Vector SelectOption}
-  | DateSchema {schemaId :: Text, schemaName :: Text}
-  | PeopleSchema {schemaId :: Text, schemaName :: Text}
-  | FilesSchema {schemaId :: Text, schemaName :: Text}
-  | CheckboxSchema {schemaId :: Text, schemaName :: Text}
-  | UrlSchema {schemaId :: Text, schemaName :: Text}
-  | EmailSchema {schemaId :: Text, schemaName :: Text}
-  | PhoneNumberSchema {schemaId :: Text, schemaName :: Text}
-  | FormulaSchema {schemaId :: Text, schemaName :: Text, formulaExpression :: Text}
-  | RelationSchema {schemaId :: Text, schemaName :: Text, relationDataSourceId :: UUID, relationType :: RelationType}
+  = TitleSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | RichTextSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | NumberSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text, numberFormat :: NumberFormat}
+  | SelectSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text, selectOptions :: Vector SelectOption}
+  | MultiSelectSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text, multiSelectOptions :: Vector SelectOption}
+  | DateSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | PeopleSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | FilesSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | CheckboxSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | UrlSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | EmailSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | PhoneNumberSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | FormulaSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text, formulaExpression :: Text}
+  | RelationSchema
+      { schemaId :: Text,
+        schemaName :: Text,
+        schemaDescription :: Maybe Text,
+        relationDataSourceId :: UUID,
+        -- | The database containing the related data source (response only).
+        relationDatabaseId :: Maybe UUID,
+        relationType :: RelationType
+      }
   | RollupSchema
       { schemaId :: Text,
         schemaName :: Text,
+        schemaDescription :: Maybe Text,
         rollupFunction :: RollupFunction,
         rollupRelationPropertyName :: Maybe Text,
         rollupRelationPropertyId :: Maybe Text,
         rollupPropertyName :: Maybe Text,
         rollupPropertyId :: Maybe Text
       }
-  | CreatedTimeSchema {schemaId :: Text, schemaName :: Text}
-  | CreatedBySchema {schemaId :: Text, schemaName :: Text}
-  | LastEditedTimeSchema {schemaId :: Text, schemaName :: Text}
-  | LastEditedBySchema {schemaId :: Text, schemaName :: Text}
-  | StatusSchema {schemaId :: Text, schemaName :: Text, statusOptions :: Vector SelectOption, statusGroups :: Vector StatusGroup}
-  | UniqueIdSchema {schemaId :: Text, schemaName :: Text, uniqueIdPrefix :: Maybe Text}
-  | PlaceSchema {schemaId :: Text, schemaName :: Text}
-  | ButtonSchema {schemaId :: Text, schemaName :: Text}
-  | VerificationSchema {schemaId :: Text, schemaName :: Text}
+  | CreatedTimeSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | CreatedBySchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | LastEditedTimeSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | LastEditedBySchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | -- | A status schema. Creation requests may only send options; 'statusGroups' is omitted
+    -- when empty.
+    StatusSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text, statusOptions :: Vector SelectOption, statusGroups :: Vector StatusGroup}
+  | UniqueIdSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text, uniqueIdPrefix :: Maybe Text}
+  | PlaceSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | ButtonSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | VerificationSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | LocationSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | LastVisitedTimeSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text}
+  | -- | A property type this client does not model; @schemaConfig@ is the raw value under the type key.
+    UnknownSchema {schemaId :: Text, schemaName :: Text, schemaDescription :: Maybe Text, schemaType :: Text, schemaConfig :: Value}
   deriving stock (Eq, Show, Generic)
 
 instance FromJSON PropertySchema where
   parseJSON = \case
     Object o -> do
-      sid <- o .: "id"
-      sname <- o .: "name"
+      sid <- o .:? "id" .!= ""
+      sname <- o .:? "name" .!= ""
+      sdesc <- o .:? "description"
       propType <- o .: "type"
-      parseByType sid sname propType o
+      parseByType sid sname sdesc propType o
     _ -> fail "Expected object for PropertySchema"
     where
-      parseByType :: Text -> Text -> Text -> Aeson.Object -> Parser PropertySchema
-      parseByType sid sname = \case
-        "title" -> \_ -> pure TitleSchema {schemaId = sid, schemaName = sname}
-        "rich_text" -> \_ -> pure RichTextSchema {schemaId = sid, schemaName = sname}
+      parseByType :: Text -> Text -> Maybe Text -> Text -> Aeson.Object -> Parser PropertySchema
+      parseByType sid sname sdesc = \case
+        "title" -> \_ -> pure TitleSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "rich_text" -> \_ -> pure RichTextSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
         "number" -> \o -> do
           cfg <- o .: "number"
           fmt <- cfg .: "format"
-          pure NumberSchema {schemaId = sid, schemaName = sname, numberFormat = fmt}
+          pure NumberSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc, numberFormat = fmt}
         "select" -> \o -> do
           cfg <- o .: "select"
           opts <- cfg .: "options"
-          pure SelectSchema {schemaId = sid, schemaName = sname, selectOptions = opts}
+          pure SelectSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc, selectOptions = opts}
         "multi_select" -> \o -> do
           cfg <- o .: "multi_select"
           opts <- cfg .: "options"
-          pure MultiSelectSchema {schemaId = sid, schemaName = sname, multiSelectOptions = opts}
-        "date" -> \_ -> pure DateSchema {schemaId = sid, schemaName = sname}
-        "people" -> \_ -> pure PeopleSchema {schemaId = sid, schemaName = sname}
-        "files" -> \_ -> pure FilesSchema {schemaId = sid, schemaName = sname}
-        "checkbox" -> \_ -> pure CheckboxSchema {schemaId = sid, schemaName = sname}
-        "url" -> \_ -> pure UrlSchema {schemaId = sid, schemaName = sname}
-        "email" -> \_ -> pure EmailSchema {schemaId = sid, schemaName = sname}
-        "phone_number" -> \_ -> pure PhoneNumberSchema {schemaId = sid, schemaName = sname}
+          pure MultiSelectSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc, multiSelectOptions = opts}
+        "date" -> \_ -> pure DateSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "people" -> \_ -> pure PeopleSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "files" -> \_ -> pure FilesSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "checkbox" -> \_ -> pure CheckboxSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "url" -> \_ -> pure UrlSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "email" -> \_ -> pure EmailSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "phone_number" -> \_ -> pure PhoneNumberSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
         "formula" -> \o -> do
           cfg <- o .: "formula"
           expr <- cfg .: "expression"
-          pure FormulaSchema {schemaId = sid, schemaName = sname, formulaExpression = expr}
+          pure FormulaSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc, formulaExpression = expr}
         "relation" -> \o -> do
           cfg <- o .: "relation"
           dsId <- cfg .: "data_source_id"
+          dbId <- cfg .:? "database_id"
           relType <- Aeson.parseJSON (Object cfg)
-          pure RelationSchema {schemaId = sid, schemaName = sname, relationDataSourceId = dsId, relationType = relType}
+          pure RelationSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc, relationDataSourceId = dsId, relationDatabaseId = dbId, relationType = relType}
         "rollup" -> \o -> do
           cfg <- o .: "rollup"
           fn <- cfg .: "function"
@@ -451,38 +486,42 @@ instance FromJSON PropertySchema where
             RollupSchema
               { schemaId = sid,
                 schemaName = sname,
+                schemaDescription = sdesc,
                 rollupFunction = fn,
                 rollupRelationPropertyName = relPropName,
                 rollupRelationPropertyId = relPropId,
                 rollupPropertyName = propName,
                 rollupPropertyId = propId
               }
-        "created_time" -> \_ -> pure CreatedTimeSchema {schemaId = sid, schemaName = sname}
-        "created_by" -> \_ -> pure CreatedBySchema {schemaId = sid, schemaName = sname}
-        "last_edited_time" -> \_ -> pure LastEditedTimeSchema {schemaId = sid, schemaName = sname}
-        "last_edited_by" -> \_ -> pure LastEditedBySchema {schemaId = sid, schemaName = sname}
+        "created_time" -> \_ -> pure CreatedTimeSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "created_by" -> \_ -> pure CreatedBySchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "last_edited_time" -> \_ -> pure LastEditedTimeSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "last_edited_by" -> \_ -> pure LastEditedBySchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
         "status" -> \o -> do
           cfg <- o .: "status"
           opts <- cfg .: "options"
-          grps <- cfg .: "groups"
-          pure StatusSchema {schemaId = sid, schemaName = sname, statusOptions = opts, statusGroups = grps}
+          grps <- cfg .:? "groups" .!= mempty
+          pure StatusSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc, statusOptions = opts, statusGroups = grps}
         "unique_id" -> \o -> do
           cfg <- o .: "unique_id"
           prefix <- cfg .:? "prefix"
-          pure UniqueIdSchema {schemaId = sid, schemaName = sname, uniqueIdPrefix = prefix}
-        "place" -> \_ -> pure PlaceSchema {schemaId = sid, schemaName = sname}
-        "button" -> \_ -> pure ButtonSchema {schemaId = sid, schemaName = sname}
-        "verification" -> \_ -> pure VerificationSchema {schemaId = sid, schemaName = sname}
-        other -> \_ -> fail $ "Unknown property type: " <> unpack other
+          pure UniqueIdSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc, uniqueIdPrefix = prefix}
+        "place" -> \_ -> pure PlaceSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "button" -> \_ -> pure ButtonSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "verification" -> \_ -> pure VerificationSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "location" -> \_ -> pure LocationSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        "last_visited_time" -> \_ -> pure LastVisitedTimeSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc}
+        other -> \o -> do
+          cfg <- o .:? Key.fromText other .!= object []
+          pure UnknownSchema {schemaId = sid, schemaName = sname, schemaDescription = sdesc, schemaType = other, schemaConfig = cfg}
 
 instance ToJSON PropertySchema where
   toJSON schema =
     let (sid, sname, typeName, typeConfig) = schemaFields schema
      in object $
-          [ "id" .= sid,
-            "name" .= sname,
-            "type" .= typeName
-          ]
+          (if Text.null sid then [] else ["id" .= sid])
+            <> ["name" .= sname, "type" .= typeName]
+            <> maybe [] (\d -> ["description" .= d]) (schemaDescription schema)
             <> [typeName .= typeConfig]
 
 schemaFields :: PropertySchema -> (Text, Text, Aeson.Key, Value)
@@ -501,19 +540,11 @@ schemaFields = \case
   PhoneNumberSchema {..} -> (schemaId, schemaName, "phone_number", object [])
   FormulaSchema {..} -> (schemaId, schemaName, "formula", object ["expression" .= formulaExpression])
   RelationSchema {..} ->
-    let relObj = case relationType of
-          SingleProperty ->
-            object
-              [ "data_source_id" .= relationDataSourceId,
-                "type" .= ("single_property" :: Text),
-                "single_property" .= object []
-              ]
-          DualProperty {..} ->
-            object
-              [ "data_source_id" .= relationDataSourceId,
-                "type" .= ("dual_property" :: Text),
-                "dual_property" .= object ["synced_property_id" .= syncedPropertyId, "synced_property_name" .= syncedPropertyName]
-              ]
+    let relObj =
+          object $
+            maybe [] (\v -> ["database_id" .= v]) relationDatabaseId
+              <> ["data_source_id" .= relationDataSourceId]
+              <> relationTypeFields relationType
      in (schemaId, schemaName, "relation", relObj)
   RollupSchema {..} ->
     ( schemaId,
@@ -530,7 +561,12 @@ schemaFields = \case
   CreatedBySchema {..} -> (schemaId, schemaName, "created_by", object [])
   LastEditedTimeSchema {..} -> (schemaId, schemaName, "last_edited_time", object [])
   LastEditedBySchema {..} -> (schemaId, schemaName, "last_edited_by", object [])
-  StatusSchema {..} -> (schemaId, schemaName, "status", object ["options" .= statusOptions, "groups" .= statusGroups])
+  StatusSchema {..} ->
+    ( schemaId,
+      schemaName,
+      "status",
+      object (["options" .= statusOptions] <> (if Vector.null statusGroups then [] else ["groups" .= statusGroups]))
+    )
   UniqueIdSchema {..} ->
     ( schemaId,
       schemaName,
@@ -540,3 +576,60 @@ schemaFields = \case
   PlaceSchema {..} -> (schemaId, schemaName, "place", object [])
   ButtonSchema {..} -> (schemaId, schemaName, "button", object [])
   VerificationSchema {..} -> (schemaId, schemaName, "verification", object [])
+  LocationSchema {..} -> (schemaId, schemaName, "location", object [])
+  LastVisitedTimeSchema {..} -> (schemaId, schemaName, "last_visited_time", object [])
+  UnknownSchema {..} -> (schemaId, schemaName, Key.fromText schemaType, schemaConfig)
+
+-- | Which existing option an option update addresses.
+data OptionTarget
+  = -- | @{"name": ...}@: match (or create) by name.
+    OptionNamed Text
+  | -- | @{"id": ..., "name"?: ...}@: match by id, optionally renaming.
+    OptionWithId Text (Maybe Text)
+  deriving stock (Eq, Show, Generic)
+
+-- | One entry of a select, multi-select or status @options@ list in a data source update.
+data OptionUpdate = OptionUpdate
+  { target :: OptionTarget,
+    color :: Maybe SelectColor,
+    description :: Maybe Text
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON OptionUpdate where
+  toJSON OptionUpdate {..} =
+    object $
+      ( case target of
+          OptionNamed n -> ["name" .= n]
+          OptionWithId i mn -> ["id" .= i] <> maybe [] (\n -> ["name" .= n]) mn
+      )
+        <> maybe [] (\c -> ["color" .= c]) color
+        <> maybe [] (\d -> ["description" .= d]) description
+
+-- | One entry of @UpdateDataSource.properties@.
+data PropertyUpdate
+  = -- | @null@: remove the property.
+    RemoveProperty
+  | -- | @{"name": ...}@: rename only.
+    RenameProperty Text
+  | -- | A full property configuration.
+    SetPropertySchema PropertySchema
+  | -- | @{"name"?:..., "select": {"options": [...]}}@
+    UpdateSelectOptions {newName :: Maybe Text, optionUpdates :: Vector OptionUpdate}
+  | -- | @{"name"?:..., "multi_select": {"options": [...]}}@
+    UpdateMultiSelectOptions {newName :: Maybe Text, optionUpdates :: Vector OptionUpdate}
+  | -- | @{"name"?:..., "status": {"options": [...]}}@
+    UpdateStatusOptions {newName :: Maybe Text, optionUpdates :: Vector OptionUpdate}
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON PropertyUpdate where
+  toJSON = \case
+    RemoveProperty -> Null
+    RenameProperty n -> object ["name" .= n]
+    SetPropertySchema s -> toJSON s
+    UpdateSelectOptions {..} -> opts "select" newName optionUpdates
+    UpdateMultiSelectOptions {..} -> opts "multi_select" newName optionUpdates
+    UpdateStatusOptions {..} -> opts "status" newName optionUpdates
+    where
+      opts :: Aeson.Key -> Maybe Text -> Vector OptionUpdate -> Value
+      opts key mName us = object $ maybe [] (\n -> ["name" .= n]) mName <> [key .= object ["options" .= us]]
