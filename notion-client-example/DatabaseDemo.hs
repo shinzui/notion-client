@@ -16,6 +16,7 @@ import Notion.V1 (Methods (..))
 import Notion.V1.Blocks qualified as Blocks
 import Notion.V1.Comments (CommentContent (..), CommentObject (..), CommentResponse (..), commentResponseId, mkCreateComment, mkReplyComment)
 import Notion.V1.Common (Icon (..), Parent (..), UUID (..))
+import Notion.V1.DataSourceRows (collectAllDataSourceRows)
 import Notion.V1.DataSources qualified as DataSources
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
 import Notion.V1.Error (NotionError (..), apiErrorCodeText)
@@ -261,6 +262,12 @@ runDatabaseDemo methods databaseIdStr = do
               resultType = Nothing
             }
   putStrLn $ "Total pages collected via paginateAll: " <> show (Vector.length allPages)
+
+  -- Collect every row, even past the per-query result limit
+  allRows <-
+    runTest (Text.pack "Collecting all rows with collectAllDataSourceRows") $
+      collectAllDataSourceRows (queryDataSource methods dsId) DataSources._QueryDataSource Nothing
+  putStrLn $ "collectAllDataSourceRows returned " <> show (Vector.length allRows) <> " rows"
 
   -- Demonstrate typed error handling
   printHeader (Text.pack "Typed Error Handling")

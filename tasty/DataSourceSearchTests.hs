@@ -1,14 +1,19 @@
 -- | Data sources, databases, search, property schemas, filters and the full-row helper (EP-5).
 module DataSourceSearchTests (tests) where
 
+import Control.Exception (try)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy.Char8 qualified as L8
+import Data.IORef (atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map qualified as Map
 import Data.Text qualified as Text
+import Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
+import Data.Time.Format.ISO8601 (iso8601ParseM)
 import Data.Vector qualified as Vector
 import Notion.V1.Common (Parent (..))
+import Notion.V1.DataSourceRows
 import Notion.V1.DataSources
 import Notion.V1.Databases (CreateDatabase (..), CreateDatabaseType (..), DatabaseObject (..), DatabaseType (..), InitialDataSource (..), PartialDatabaseObject (..))
 import Notion.V1.Filter
@@ -27,7 +32,8 @@ tests =
     [ milestone1Tests,
       milestone2Tests,
       milestone3Tests,
-      milestone4Tests
+      milestone4Tests,
+      milestone5Tests
     ]
 
 -- ---------------------------------------------------------------------
@@ -430,4 +436,144 @@ milestone4Tests =
           [PropertySort "Due" Ascending, TimestampSort FilterCreatedTime Descending]
         let sideways = jsonValue "{\"property\":\"X\",\"direction\":\"sideways\"}"
         Aeson.fromJSON sideways @?= Aeson.Success (UnknownSort sideways)
+    ]
+
+-- ---------------------------------------------------------------------
+-- Milestone 5
+-- ---------------------------------------------------------------------
+
+-- | A query function replaying the given response bodies, plus an action returning the JSON of
+-- every request sent so far.
+fakeQuery :: [Aeson.Value] -> IO (QueryDataSource -> IO (ListOf PageOrDataSource), IO [Aeson.Value])
+fakeQuery bodies = do
+  queue <- newIORef bodies
+  sent <- newIORef []
+  let run req = do
+        modifyIORef' sent (Aeson.toJSON req :)
+        next <- atomicModifyIORef' queue (\case (b : bs) -> (bs, b); [] -> ([], Aeson.Null))
+        case Aeson.fromJSON next of
+          Aeson.Success l -> pure l
+          Aeson.Error e -> assertFailure ("fake response did not decode: " <> e)
+  pure (run, reverse <$> readIORef sent)
+
+posix :: String -> POSIXTime
+posix str = maybe (error ("bad time " <> str)) utcTimeToPOSIXSeconds (iso8601ParseM str)
+
+day :: Int -> Text.Text
+day n = "2024-01-0" <> Text.pack (show n) <> "T00:00:00.000Z"
+
+row :: Text.Text -> Int -> Aeson.Value
+row rid n = pageJson rid (day n)
+
+boundJson :: Text.Text -> Aeson.Value
+boundJson start =
+  Aeson.object
+    [ "timestamp" Aeson..= ("created_time" :: Text.Text),
+      "created_time" Aeson..= Aeson.object ["on_or_after" Aeson..= start]
+    ]
+
+statusDone :: PropertyCondition
+statusDone = StatusCondition (StatusEquals "Done")
+
+statusDoneJson :: Aeson.Value
+statusDoneJson = jsonValue "{\"property\":\"Status\",\"status\":{\"equals\":\"Done\"}}"
+
+idsOf :: Vector.Vector PageOrDataSource -> [Maybe Text.Text]
+idsOf = map resultId . Vector.toList
+
+-- | Visit every row with 'iterateAllDataSourceRows', returning the visited ids and the requests.
+runIterate :: Maybe AllRowsFilter -> [Aeson.Value] -> IO ([Maybe Text.Text], [Aeson.Value])
+runIterate mFilter bodies = do
+  (run, sentRequests) <- fakeQuery bodies
+  visited <- newIORef []
+  iterateAllDataSourceRows run _QueryDataSource mFilter (\r -> modifyIORef' visited (resultId r :))
+  (,) <$> (reverse <$> readIORef visited) <*> sentRequests
+
+lookupMaybe :: Aeson.Key -> Aeson.Value -> Maybe Aeson.Value
+lookupMaybe key = \case
+  Aeson.Object o -> KeyMap.lookup key o
+  _ -> Nothing
+
+milestone5Tests :: TestTree
+milestone5Tests =
+  testGroup
+    "Milestone 5"
+    [ testCase "createdTimeLowerBound: first window returns caller filter" $
+        createdTimeLowerBound (Just (AllRowsPropertyFilter "Status" statusDone)) Nothing
+          @?= Just (PropertyFilter "Status" statusDone),
+      testCase "createdTimeLowerBound: no caller filter returns bound" $
+        Aeson.toJSON (createdTimeLowerBound Nothing (Just (posix "2024-01-04T00:00:00Z")))
+          @?= boundJson "2024-01-04T00:00:00Z",
+      testCase "createdTimeLowerBound: and filter gets bound appended" $ do
+        let a = PropertyFilter "Status" statusDone
+            t = posix "2024-01-04T00:00:00Z"
+        createdTimeLowerBound (Just (AllRowsAnd [a])) (Just t)
+          @?= Just (And [a, TimestampFilter FilterCreatedTime (DateOnOrAfter "2024-01-04T00:00:00Z")]),
+      testCase "createdTimeLowerBound: property filter is wrapped in and" $
+        createdTimeLowerBound (Just (AllRowsPropertyFilter "Status" statusDone)) (Just (posix "2024-01-04T00:00:00Z"))
+          @?= Just (And [PropertyFilter "Status" statusDone, TimestampFilter FilterCreatedTime (DateOnOrAfter "2024-01-04T00:00:00Z")]),
+      testCase "iterateAllDataSourceRows: single complete window" $ do
+        (ids, sent) <- runIterate Nothing [queryResponse [row "r1" 1, row "r2" 2] Nothing False]
+        ids @?= map Just ["r1", "r2"]
+        req <- case sent of
+          [r] -> pure r
+          _ -> assertFailure ("expected one request, got " <> show (length sent))
+        lookupMaybe "sorts" req @?= Just (jsonValue "[{\"timestamp\":\"created_time\",\"direction\":\"ascending\"}]")
+        lookupMaybe "filter" req @?= Nothing
+        lookupMaybe "start_cursor" req @?= Nothing,
+      testCase "iterateAllDataSourceRows: advances past the limit and de-duplicates" $ do
+        (ids, sent) <-
+          runIterate
+            Nothing
+            [ queryResponse [row "r1" 1, row "r2" 2] (Just "c1") False,
+              queryResponse [row "r3" 3, row "r4" 4] Nothing True,
+              queryResponse [row "r4" 4, row "r5" 5] Nothing False
+            ]
+        ids @?= map Just ["r1", "r2", "r3", "r4", "r5"]
+        length sent @?= 3
+        lookupMaybe "start_cursor" (sent !! 1) @?= Just (Aeson.String "c1")
+        lookupMaybe "start_cursor" (sent !! 2) @?= Nothing
+        lookupMaybe "filter" (sent !! 2) @?= Just (boundJson "2024-01-04T00:00:00Z"),
+      testCase "iterateAllDataSourceRows: combines caller filter with and" $ do
+        (ids, sent) <-
+          runIterate
+            (Just (AllRowsPropertyFilter "Status" statusDone))
+            [ queryResponse [row "r1" 1] Nothing True,
+              queryResponse [row "r1" 1, row "r2" 2] Nothing False
+            ]
+        ids @?= map Just ["r1", "r2"]
+        map (lookupMaybe "filter") sent
+          @?= [ Just statusDoneJson,
+                Just (Aeson.object ["and" Aeson..= [statusDoneJson, boundJson "2024-01-01T00:00:00Z"]])
+              ],
+      testCase "iterateAllDataSourceRows: advances on a data-source boundary row" $ do
+        (ids, sent) <-
+          runIterate
+            Nothing
+            [ queryResponse [row "r1" 1, dataSourceJson "ds-child" (day 2)] Nothing True,
+              queryResponse [dataSourceJson "ds-child" (day 2), row "r2" 3] Nothing False
+            ]
+        ids @?= map Just ["r1", "ds-child", "r2"]
+        length sent @?= 2
+        lookupMaybe "filter" (sent !! 1) @?= Just (boundJson "2024-01-02T00:00:00Z"),
+      testCase "collectAllDataSourceRows: cannot make progress throws" $ do
+        (run, _) <-
+          fakeQuery
+            [ queryResponse [row "r1" 1, row "r2" 1] Nothing True,
+              queryResponse [row "r1" 1, row "r2" 1] Nothing True
+            ]
+        result <- try @DataSourceRowsError (collectAllDataSourceRows run _QueryDataSource Nothing)
+        case result of
+          Left err@(CannotMakeProgress t) -> do
+            t @?= Just (posix "2024-01-01T00:00:00Z")
+            assertBool "show is non-empty" (not (null (show err)))
+          Right rows -> assertFailure ("expected CannotMakeProgress, got " <> show (idsOf rows)),
+      testCase "collectAllDataSourceRows: collects across windows" $ do
+        (run, _) <-
+          fakeQuery
+            [ queryResponse [row "r1" 1] Nothing True,
+              queryResponse [row "r1" 1, row "r2" 2] Nothing False
+            ]
+        rows <- collectAllDataSourceRows run _QueryDataSource Nothing
+        idsOf rows @?= map Just ["r1", "r2"]
     ]

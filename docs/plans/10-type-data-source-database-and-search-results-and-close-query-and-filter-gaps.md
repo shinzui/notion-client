@@ -60,7 +60,7 @@ The proof is a new `tasty` test module, `tasty/DataSourceSearchTests.hs`. It dec
 - [x] (2026-09-15) Milestone 3: `PropertyUpdate`/`OptionUpdate`/`OptionTarget` for `UpdateDataSource`; call sites updated; M3 tests pass.
 - [x] (2026-09-15) Milestone 4: new filter constructors (verification `does_not_equal`, array values, `unique_id` empty checks with `Scientific`, `RelativeDate`), unknown fallbacks.
 - [x] (2026-09-15) Milestone 4: `FromJSON` for `Filter` and `Sort` added (or extended, if EP-4 added them first); M4 tests pass.
-- [ ] Milestone 5: `src/Notion/V1/DataSourceRows.hs` with `createdTimeLowerBound`, `foldAllDataSourceRows`, `iterateAllDataSourceRows`, `collectAllDataSourceRows`; M5 tests pass.
+- [x] (2026-09-15) Milestone 5: `src/Notion/V1/DataSourceRows.hs` with `createdTimeLowerBound`, `foldAllDataSourceRows`, `iterateAllDataSourceRows`, `collectAllDataSourceRows`; M5 tests pass.
 - [ ] CHANGELOG `## Unreleased` entries written; `cabal build all` and `cabal test` green; MasterPlan Progress items for EP-5 checked.
 
 

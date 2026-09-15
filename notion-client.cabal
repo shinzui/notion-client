@@ -71,6 +71,7 @@ library
     Notion.V1.Comments
     Notion.V1.Common
     Notion.V1.CustomEmojis
+    Notion.V1.DataSourceRows
     Notion.V1.DataSources
     Notion.V1.Databases
     Notion.V1.Error
