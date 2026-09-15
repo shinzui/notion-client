@@ -25,7 +25,8 @@ tests =
     [ viewQueryTests,
       filterSortTests,
       viewObjectTests,
-      viewRequestTests
+      viewRequestTests,
+      viewConfigTests
     ]
 
 -- ---------------------------------------------------------------------
@@ -316,3 +317,136 @@ testCreateViewCreateDatabase = do
           \\"position\":{\"type\":\"after_block\",\"block_id\":\"block-1\"}}"
       )
   objectKey "create_database_" json @?= Nothing
+
+-- ---------------------------------------------------------------------
+-- View configuration
+-- ---------------------------------------------------------------------
+
+viewConfigTests :: TestTree
+viewConfigTests =
+  testGroup
+    "View configuration"
+    [ testCase "table configuration round-trips" (roundTrip tableFixture isTable),
+      testCase "board configuration round-trips" (roundTrip boardFixture isBoard),
+      testCase "calendar configuration round-trips" (roundTrip calendarFixture isCalendar),
+      testCase "timeline configuration round-trips" (roundTrip timelineFixture isTimeline),
+      testCase "gallery configuration round-trips" (roundTrip galleryFixture isGallery),
+      testCase "list configuration round-trips" (roundTrip listFixture isList),
+      testCase "response-only property_name is decoded and dropped" testResponseOnlyStripped,
+      testCase "unknown configuration type is preserved" testUnknownConfig,
+      testCase "unknown enum value is preserved" testUnknownEnum,
+      testCase "formula group-by round-trips" testFormulaGroupBy,
+      testCase "UpdateView can clear a configuration field" testClearConfigField
+    ]
+
+-- | Decode a fixture, check its constructor, and re-encode it to the identical JSON value.
+roundTrip :: L8.ByteString -> (ViewConfig -> Bool) -> Assertion
+roundTrip fixture expected = do
+  config <- decodeOrFail fixture
+  assertBool ("unexpected constructor: " <> show config) (expected config)
+  Aeson.toJSON config @?= jsonValue fixture
+
+isTable, isBoard, isCalendar, isTimeline, isGallery, isList :: ViewConfig -> Bool
+-- The table and board checks also require a typed (not unknown) group-by.
+isTable = \case TableConfig TableViewConfig {groupBy = Set (DateGroupBy {})} -> True; _ -> False
+isBoard = \case BoardConfig BoardViewConfig {groupBy = SelectGroupBy {}} -> True; _ -> False
+isCalendar = \case CalendarConfig {} -> True; _ -> False
+isTimeline = \case TimelineConfig {} -> True; _ -> False
+isGallery = \case GalleryConfig {} -> True; _ -> False
+isList = \case ListConfig {} -> True; _ -> False
+
+tableFixture :: L8.ByteString
+tableFixture =
+  "{\"type\":\"table\",\"properties\":[{\"property_id\":\"title\",\"visible\":true,\"width\":280,\"wrap\":false},\
+  \{\"property_id\":\"d%3Aue\",\"date_format\":\"year_month_day\",\"time_format\":\"24_hour\"}],\
+  \\"group_by\":{\"type\":\"date\",\"property_id\":\"d%3Aue\",\"group_by\":\"week\",\"sort\":{\"type\":\"ascending\"},\"start_day_of_week\":1},\
+  \\"subtasks\":{\"property_id\":\"r%3Bx\",\"display_mode\":\"flattened\",\"filter_scope\":\"parents_and_subitems\"},\
+  \\"wrap_cells\":true,\"frozen_column_index\":1,\"show_vertical_lines\":false}"
+
+boardFixture :: L8.ByteString
+boardFixture =
+  "{\"type\":\"board\",\"group_by\":{\"type\":\"multi_select\",\"property_id\":\"t%3Ag\",\"sort\":{\"type\":\"manual\"},\"hide_empty_groups\":true},\
+  \\"sub_group_by\":null,\"properties\":[{\"property_id\":\"title\",\"card_property_width_mode\":\"full_line\"}],\
+  \\"cover\":{\"type\":\"property\",\"property_id\":\"f%3Ail\"},\"cover_size\":\"medium\",\"cover_aspect\":\"cover\",\"card_layout\":\"compact\"}"
+
+calendarFixture :: L8.ByteString
+calendarFixture = "{\"type\":\"calendar\",\"date_property_id\":\"d%3Aue\",\"view_range\":\"week\",\"show_weekends\":false}"
+
+timelineFixture :: L8.ByteString
+timelineFixture =
+  "{\"type\":\"timeline\",\"date_property_id\":\"d%3Aue\",\"end_date_property_id\":null,\"show_table\":true,\
+  \\"table_properties\":[{\"property_id\":\"title\"}],\"preference\":{\"zoom_level\":\"5_years\",\"center_timestamp\":1789000000000},\
+  \\"arrows_by\":{\"property_id\":null},\"color_by\":false}"
+
+galleryFixture :: L8.ByteString
+galleryFixture = "{\"type\":\"gallery\",\"cover\":{\"type\":\"page_cover\"},\"cover_size\":\"large\",\"card_layout\":\"list\"}"
+
+listFixture :: L8.ByteString
+listFixture = "{\"type\":\"list\",\"properties\":[{\"property_id\":\"title\",\"visible\":true,\"status_show_as\":\"checkbox\"}]}"
+
+testResponseOnlyStripped :: Assertion
+testResponseOnlyStripped = do
+  ViewObject {configuration} <- decodeOrFail viewObjectFixture
+  case configuration of
+    Just config@(BoardConfig BoardViewConfig {groupBy = StatusGroupBy StatusGroupByConfig {propertyName, groupBy}}) -> do
+      propertyName @?= Just "Status"
+      groupBy @?= GroupByStatusGroup
+      (objectKey "group_by" (Aeson.toJSON config) >>= objectKey "property_name") @?= Nothing
+      (objectKey "group_by" (Aeson.toJSON config) >>= objectKey "type") @?= Just (Aeson.String "status")
+    other -> assertFailure ("expected a status-grouped board, got " <> show other)
+
+testUnknownConfig :: Assertion
+testUnknownConfig = do
+  let raw = "{\"type\":\"kanban_3d\",\"depth\":3}"
+  config <- decodeOrFail raw
+  case config of
+    UnknownViewConfig {} -> pure ()
+    other -> assertFailure ("expected UnknownViewConfig, got " <> show other)
+  Aeson.toJSON config @?= jsonValue raw
+
+testUnknownEnum :: Assertion
+testUnknownEnum = do
+  let raw = "{\"type\":\"list\",\"properties\":[{\"property_id\":\"title\",\"date_format\":\"iso_week\"}]}"
+  config <- decodeOrFail raw
+  case config of
+    ListConfig ListViewConfig {properties = Set props} ->
+      map (\ViewPropertyConfig {dateFormat} -> dateFormat) (Vector.toList props) @?= [Just (UnknownDateFormat "iso_week")]
+    other -> assertFailure ("expected a list configuration, got " <> show other)
+  Aeson.toJSON config @?= jsonValue raw
+
+testFormulaGroupBy :: Assertion
+testFormulaGroupBy = do
+  let raw =
+        "{\"type\":\"board\",\"group_by\":{\"type\":\"formula\",\"property_id\":\"fx\",\"group_by\":{\"type\":\"number\",\
+        \\"sort\":{\"type\":\"descending\"},\"range_start\":0,\"range_end\":100,\"range_size\":10}}}"
+  config <- decodeOrFail raw
+  case config of
+    BoardConfig BoardViewConfig {groupBy = FormulaGroupBy FormulaGroupByConfig {groupBy = FormulaNumberGroup {}}} -> pure ()
+    other -> assertFailure ("expected a formula number group-by, got " <> show other)
+  Aeson.toJSON config @?= jsonValue raw
+
+testClearConfigField :: Assertion
+testClearConfigField =
+  objectKey
+    "configuration"
+    ( Aeson.toJSON
+        UpdateView
+          { name = Nothing,
+            filter = Unset,
+            sorts = Unset,
+            quickFilters = Unset,
+            configuration =
+              Just
+                ( TableConfig
+                    TableViewConfig
+                      { properties = Unset,
+                        groupBy = Clear,
+                        subtasks = Unset,
+                        wrapCells = Nothing,
+                        frozenColumnIndex = Nothing,
+                        showVerticalLines = Nothing
+                      }
+                )
+          }
+    )
+    @?= Just (jsonValue "{\"type\":\"table\",\"group_by\":null}")

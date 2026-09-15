@@ -21,6 +21,9 @@ module Notion.V1.Views
     CreateDatabaseForView (..),
     Clearable (..),
 
+    -- * Configuration
+    module Notion.V1.ViewConfig,
+
     -- * View queries
     ViewQueryID,
     CreateViewQuery (..),
@@ -43,6 +46,7 @@ import Notion.V1.Filter (Filter, PropertyCondition, Sort, SortDirection)
 import Notion.V1.ListOf (ListOf, RequestStatus)
 import Notion.V1.Pages (PartialPageObject (..))
 import Notion.V1.Users (UserReference)
+import Notion.V1.ViewConfig
 import Prelude hiding (id)
 
 -- | View ID
@@ -201,7 +205,7 @@ data ViewObject = ViewObject
     filter :: Maybe ViewFilter,
     sorts :: Maybe (Vector ViewSort),
     quickFilters :: Maybe (Map Text QuickFilter),
-    configuration :: Maybe Value,
+    configuration :: Maybe ViewConfig,
     dashboardViewId :: Maybe ViewID,
     object :: Maybe ObjectType
   }
@@ -246,7 +250,7 @@ data CreateView = CreateView
     quickFilters :: Maybe (Map Text QuickFilter),
     -- | Wire name @create_database@
     createDatabase_ :: Maybe CreateDatabaseForView,
-    configuration :: Maybe Value,
+    configuration :: Maybe ViewConfig,
     position :: Maybe ViewPosition,
     placement :: Maybe WidgetPlacement
   }
@@ -263,7 +267,7 @@ data UpdateView = UpdateView
     sorts :: Clearable (Vector ViewPropertySort),
     -- | A 'Nothing' value removes that quick filter; 'Clear' removes all of them
     quickFilters :: Clearable (Map Text (Maybe QuickFilter)),
-    configuration :: Maybe Value
+    configuration :: Maybe ViewConfig
   }
   deriving stock (Generic, Show)
 

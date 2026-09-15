@@ -88,6 +88,7 @@ library
     Notion.V1.RichText
     Notion.V1.Search
     Notion.V1.Users
+    Notion.V1.ViewConfig
     Notion.V1.ViewQueries
     Notion.V1.Views
     Notion.V1.Webhooks

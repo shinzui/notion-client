@@ -58,8 +58,8 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 - [x] Milestone 2: Added `FromJSON` for `Filter`, `PropertyCondition`, all condition types, `SortDirection` and `Sort`, plus `ToJSON PropertyCondition`, in `src/Notion/V1/Filter.hs` (EP-4 was first). (2026-09-15)
 - [x] Milestone 2: Added `ViewFilter`, `ViewSort`, `QuickFilter`, `ViewPropertySort`, `ViewPosition`, `WidgetPlacement`, `CreateDatabaseForView` and `UnknownViewType`; retyped `ViewObject`, `CreateView` and `UpdateView` (configuration still `Value`). (2026-09-15)
 - [x] Milestone 2: Added the "Filters and sorts", "View object" and "View requests" test groups; updated the literals in `tasty/Main.hs` and `ViewDemo.hs`. All 15 EP-4 tests and the live "View E2E" pass. (2026-09-15)
-- [ ] Milestone 3: Create `src/Notion/V1/ViewConfig.hs` with the enum helpers, shared pieces (property config, group-by union, subtasks, cover) and table, board, calendar, timeline, gallery and list configs, plus `ViewConfig` with an `UnknownViewConfig` fallback.
-- [ ] Milestone 3: Switch `ViewObject.configuration`, `CreateView.configuration` and `UpdateView.configuration` to `ViewConfig`; add the "View configuration" test group.
+- [x] Milestone 3: Created `src/Notion/V1/ViewConfig.hs` with the enum helpers, shared pieces (property config, group-by union, subtasks, cover) and table, board, calendar, timeline, gallery and list configs, plus `ViewConfig` with an `UnknownViewConfig` fallback. (2026-09-15)
+- [x] Milestone 3: Switched `ViewObject.configuration`, `CreateView.configuration` and `UpdateView.configuration` to `ViewConfig`; added the "View configuration" group (26 EP-4 tests pass). (2026-09-15)
 - [ ] Milestone 4: Add the chart, map, form and dashboard configs and their enums; extend the tests.
 - [ ] Milestone 4: Write the CHANGELOG `## Unreleased` entries, finish `ViewDemo.hs`, run the full validation, and fill in Outcomes & Retrospective.
 
@@ -75,6 +75,7 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
   ```
 
 - A freshly retrieved table view on that database had `"filter":null,"sorts":null,"quick_filters":null,"configuration":{"type":"table"}`, so `null` really does appear in responses for these fields.
+- Views on the live test database all came back with the minimal configuration `{"type":"table"}`, which decodes as `TableConfig` with every field `Unset` or `Nothing`. Richer shapes are therefore covered by the SDK-derived fixtures, not by live data. The database also holds two "E2E Test View (Renamed)" views created on 2026-03-29, left over from an earlier run; they are not from this plan's runs.
 - `cabal test --test-options='-p "Views (EP-4)"'` does not work: cabal splits `--test-options` on spaces and tasty rejects the fragment. Use `cabal test --test-option=--pattern=EP-4` instead.
 
 
@@ -126,6 +127,10 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 
 - Decision: EP-4 added the `Filter`/`Sort`/`PropertyCondition` decoders, using the helper names `parsePropertyCondition`, `parseTextCondition`, `parseDateCondition` and so on, plus two small private helpers `flagKey` (for `{"is_empty": true}`) and `emptyKey` (for relative dates such as `{"next_week": {}}`). The round-trip test also covers `CreatedTime`/`CreatedBy`/`LastEditedTime`/`LastEditedBy`/`Url`/`Email`/`PhoneNumber` conditions and `RollupNumber`, beyond the minimum the plan listed.
   Rationale: EP-5 had not started, so under the MasterPlan's Integration Points this plan owns the instances. EP-5 can extend the parsers in place.
+  Date: 2026-09-15
+
+- Decision: The table and board round-trip tests also assert that the nested `group_by` decoded to a typed constructor (`DateGroupBy`, `SelectGroupBy`), not `UnknownGroupBy`.
+  Rationale: Because every sum type falls back to raw JSON, a broken typed decoder would still round-trip byte for byte. Checking only the outer constructor would let such a regression pass silently.
   Date: 2026-09-15
 
 - Decision: Add `UnknownViewType Text` to `ViewType` in this plan.
