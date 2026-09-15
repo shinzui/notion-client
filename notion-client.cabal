@@ -66,6 +66,7 @@ library
     Notion.V1.AsyncTasks
     Notion.V1.BlockContent
     Notion.V1.Blocks
+    Notion.V1.Clearable
     Notion.V1.Client
     Notion.V1.Comments
     Notion.V1.Common

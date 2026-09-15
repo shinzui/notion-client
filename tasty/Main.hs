@@ -51,7 +51,7 @@ import Notion.V1.RichText (Annotations (..), Date (..), MentionContent (..), Ric
 import Notion.V1.RichText qualified as RT
 import Notion.V1.Search (SearchRequest (..), SearchResult (..), dataSourceFilter, pageFilter, parseSearchResults)
 import Notion.V1.Users (BotUser (..), UserObject (..), WorkspaceLimits (..))
-import Notion.V1.Views (CreateView (..), UpdateView (..), ViewObject (..), ViewType (..))
+import Notion.V1.Views (Clearable (..), CreateView (..), UpdateView (..), ViewObject (..), ViewType (..))
 import Notion.V1.Views qualified as Views
 import OAuthTests qualified
 import RuntimeTests qualified
@@ -912,8 +912,10 @@ testSerializeCreateView = do
             filter = Nothing,
             sorts = Nothing,
             quickFilters = Nothing,
+            createDatabase_ = Nothing,
             configuration = Nothing,
-            position = Nothing
+            position = Nothing,
+            placement = Nothing
           }
       json = Aeson.toJSON req
   case json of
@@ -932,9 +934,9 @@ testSerializeUpdateView = do
   let req =
         UpdateView
           { name = Just "Renamed View",
-            filter = Nothing,
-            sorts = Nothing,
-            quickFilters = Nothing,
+            filter = Unset,
+            sorts = Unset,
+            quickFilters = Unset,
             configuration = Nothing
           }
       json = Aeson.toJSON req
@@ -1343,8 +1345,10 @@ testViewLifecycle methods@Methods {createView, retrieveView, updateView, listVie
             filter = Nothing,
             sorts = Nothing,
             quickFilters = Nothing,
+            createDatabase_ = Nothing,
             configuration = Nothing,
-            position = Nothing
+            position = Nothing,
+            placement = Nothing
           }
   view <- createView createReq
   let ViewObject {id = viewId, type_ = viewType, name = viewName} = view
@@ -1362,9 +1366,9 @@ testViewLifecycle methods@Methods {createView, retrieveView, updateView, listVie
   let updateReq =
         UpdateView
           { name = Just "E2E Test View (Renamed)",
-            filter = Nothing,
-            sorts = Nothing,
-            quickFilters = Nothing,
+            filter = Unset,
+            sorts = Unset,
+            quickFilters = Unset,
             configuration = Nothing
           }
   updated <- updateView viewId updateReq

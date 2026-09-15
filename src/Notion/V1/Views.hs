@@ -11,6 +11,16 @@ module Notion.V1.Views
     CreateView (..),
     UpdateView (..),
 
+    -- * Filters, sorts and placement
+    ViewFilter (..),
+    ViewSort (..),
+    QuickFilter (..),
+    ViewPropertySort (..),
+    ViewPosition (..),
+    WidgetPlacement (..),
+    CreateDatabaseForView (..),
+    Clearable (..),
+
     -- * View queries
     ViewQueryID,
     CreateViewQuery (..),
@@ -23,9 +33,13 @@ module Notion.V1.Views
   )
 where
 
-import Data.Aeson ((.:), (.:?))
+import Control.Applicative ((<|>))
+import Data.Aeson ((.:), (.:?), (.=))
+import Data.Aeson qualified as Aeson
 import Notion.Prelude
-import Notion.V1.Common (ObjectType, UUID)
+import Notion.V1.Clearable (Clearable (..))
+import Notion.V1.Common (ObjectType, Parent, UUID)
+import Notion.V1.Filter (Filter, PropertyCondition, Sort, SortDirection)
 import Notion.V1.ListOf (ListOf, RequestStatus)
 import Notion.V1.Pages (PartialPageObject (..))
 import Notion.V1.Users (UserReference)
@@ -46,10 +60,12 @@ data ViewType
   | ChartView
   | MapView
   | DashboardView
+  | -- | A view type this library does not know yet; holds the raw string.
+    UnknownViewType Text
   deriving stock (Eq, Show, Generic)
 
 instance FromJSON ViewType where
-  parseJSON = \case
+  parseJSON = Aeson.withText "ViewType" $ \case
     "table" -> pure TableView
     "board" -> pure BoardView
     "list" -> pure ListViewType
@@ -60,7 +76,7 @@ instance FromJSON ViewType where
     "chart" -> pure ChartView
     "map" -> pure MapView
     "dashboard" -> pure DashboardView
-    other -> fail $ "Unknown view type: " <> show other
+    other -> pure (UnknownViewType other)
 
 instance ToJSON ViewType where
   toJSON = \case
@@ -74,6 +90,98 @@ instance ToJSON ViewType where
     ChartView -> "chart"
     MapView -> "map"
     DashboardView -> "dashboard"
+    UnknownViewType t -> String t
+
+-- | A view's filter: typed when the 'Filter' DSL can express it, raw JSON otherwise.
+data ViewFilter
+  = ViewFilter Filter
+  | RawViewFilter Value
+  deriving stock (Eq, Show)
+
+instance FromJSON ViewFilter where
+  parseJSON v = (ViewFilter <$> parseJSON v) <|> pure (RawViewFilter v)
+
+instance ToJSON ViewFilter where
+  toJSON = \case
+    ViewFilter f -> toJSON f
+    RawViewFilter v -> v
+
+-- | A view sort: typed property or timestamp sort, or raw JSON.
+data ViewSort
+  = ViewSort Sort
+  | RawViewSort Value
+  deriving stock (Eq, Show)
+
+instance FromJSON ViewSort where
+  parseJSON v = (ViewSort <$> parseJSON v) <|> pure (RawViewSort v)
+
+instance ToJSON ViewSort where
+  toJSON = \case
+    ViewSort s -> toJSON s
+    RawViewSort v -> v
+
+-- | A quick filter condition (a property condition without the @property@
+-- key, e.g. @{"select":{"equals":"High"}}@), or raw JSON.
+data QuickFilter
+  = QuickFilter PropertyCondition
+  | RawQuickFilter Value
+  deriving stock (Eq, Show)
+
+instance FromJSON QuickFilter where
+  parseJSON v = (QuickFilter <$> parseJSON v) <|> pure (RawQuickFilter v)
+
+instance ToJSON QuickFilter where
+  toJSON = \case
+    QuickFilter c -> toJSON c
+    RawQuickFilter v -> v
+
+-- | A property sort, the only kind 'UpdateView' accepts.
+data ViewPropertySort = ViewPropertySort
+  { property :: Text,
+    direction :: SortDirection
+  }
+  deriving stock (Eq, Generic, Show)
+
+instance ToJSON ViewPropertySort where
+  toJSON = genericToJSON aesonOptions
+
+-- | Where a new view tab goes in the database's tab bar.
+data ViewPosition
+  = ViewPositionStart
+  | ViewPositionEnd
+  | ViewPositionAfterView ViewID
+  deriving stock (Eq, Show)
+
+instance ToJSON ViewPosition where
+  toJSON = \case
+    ViewPositionStart -> Aeson.object ["type" .= ("start" :: Text)]
+    ViewPositionEnd -> Aeson.object ["type" .= ("end" :: Text)]
+    ViewPositionAfterView v -> Aeson.object ["type" .= ("after_view" :: Text), "view_id" .= v]
+
+-- | Where a new widget goes inside a dashboard view (0-based row index).
+data WidgetPlacement
+  = NewRow (Maybe Natural)
+  | ExistingRow Natural
+  deriving stock (Eq, Show)
+
+instance ToJSON WidgetPlacement where
+  toJSON = \case
+    NewRow Nothing -> Aeson.object ["type" .= ("new_row" :: Text)]
+    NewRow (Just i) -> Aeson.object ["type" .= ("new_row" :: Text), "row_index" .= i]
+    ExistingRow i -> Aeson.object ["type" .= ("existing_row" :: Text), "row_index" .= i]
+
+-- | Create a new linked database block on a page and put the view in it.
+data CreateDatabaseForView = CreateDatabaseForView
+  { parentPageId :: UUID,
+    afterBlockId :: Maybe UUID
+  }
+  deriving stock (Eq, Show)
+
+instance ToJSON CreateDatabaseForView where
+  toJSON CreateDatabaseForView {..} =
+    Aeson.object $
+      ["parent" .= Aeson.object ["type" .= ("page_id" :: Text), "page_id" .= parentPageId]]
+        <> maybe [] (\b -> ["position" .= Aeson.object ["type" .= ("after_block" :: Text), "block_id" .= b]]) afterBlockId
 
 -- | Notion view object
 --
@@ -81,7 +189,7 @@ instance ToJSON ViewType where
 -- depending on context (list endpoints return minimal objects with just id, parent, type).
 data ViewObject = ViewObject
   { id :: ViewID,
-    parent :: Maybe Value,
+    parent :: Maybe Parent,
     name :: Maybe Text,
     type_ :: Maybe ViewType,
     createdTime :: Maybe POSIXTime,
@@ -90,9 +198,9 @@ data ViewObject = ViewObject
     dataSourceId :: Maybe UUID,
     createdBy :: Maybe UserReference,
     lastEditedBy :: Maybe UserReference,
-    filter :: Maybe Value,
-    sorts :: Maybe (Vector Value),
-    quickFilters :: Maybe Value,
+    filter :: Maybe ViewFilter,
+    sorts :: Maybe (Vector ViewSort),
+    quickFilters :: Maybe (Map Text QuickFilter),
     configuration :: Maybe Value,
     dashboardViewId :: Maybe ViewID,
     object :: Maybe ObjectType
@@ -128,25 +236,33 @@ data CreateView = CreateView
   { dataSourceId :: UUID,
     name :: Text,
     type_ :: ViewType,
+    -- | Mutually exclusive with 'viewId' and 'createDatabase_'
     databaseId :: Maybe UUID,
+    -- | Dashboard view to add this view to as a widget
     viewId :: Maybe ViewID,
-    filter :: Maybe Value,
-    sorts :: Maybe (Vector Value),
-    quickFilters :: Maybe Value,
+    filter :: Maybe ViewFilter,
+    sorts :: Maybe (Vector ViewSort),
+    -- | Keyed by property ID
+    quickFilters :: Maybe (Map Text QuickFilter),
+    -- | Wire name @create_database@
+    createDatabase_ :: Maybe CreateDatabaseForView,
     configuration :: Maybe Value,
-    position :: Maybe Value
+    position :: Maybe ViewPosition,
+    placement :: Maybe WidgetPlacement
   }
   deriving stock (Generic, Show)
 
 instance ToJSON CreateView where
   toJSON = genericToJSON aesonOptions
 
--- | Update a view request (all fields optional)
+-- | Update a view request. 'Unset' leaves a field unchanged and 'Clear' sends
+-- @null@ to clear it.
 data UpdateView = UpdateView
   { name :: Maybe Text,
-    filter :: Maybe Value,
-    sorts :: Maybe (Vector Value),
-    quickFilters :: Maybe Value,
+    filter :: Clearable ViewFilter,
+    sorts :: Clearable (Vector ViewPropertySort),
+    -- | A 'Nothing' value removes that quick filter; 'Clear' removes all of them
+    quickFilters :: Clearable (Map Text (Maybe QuickFilter)),
     configuration :: Maybe Value
   }
   deriving stock (Generic, Show)

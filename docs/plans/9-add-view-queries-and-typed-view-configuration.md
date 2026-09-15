@@ -54,10 +54,10 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 - [x] Milestone 1: Added `src/Notion/V1/ViewQueries.hs` with `queryAllViewPages`; registered it in `notion-client.cabal`. (2026-09-15)
 - [x] Milestone 1: Created `tasty/ViewTests.hs` with the "View queries" group (plus a `FakeNotion` test of `queryAllViewPages`), wired it into `notion-client.cabal` and `tasty/Main.hs`; fixed `tasty/Main.hs` imports and the E2E lifecycle test. (2026-09-15)
 - [x] Milestone 1: Updated `notion-client-example/ViewDemo.hs` with the query flow; `cabal build all` and `cabal test` pass, and the live "View E2E" test passes. (2026-09-15)
-- [ ] Milestone 2: Add `src/Notion/V1/Clearable.hs` and register it.
-- [ ] Milestone 2: Add `FromJSON` for `Filter`, `PropertyCondition`, all condition types, `SortDirection` and `Sort`, plus `ToJSON PropertyCondition`, in `src/Notion/V1/Filter.hs` (or record that EP-5 already did).
-- [ ] Milestone 2: Add `ViewFilter`, `ViewSort`, `QuickFilter`, `ViewPropertySort`, `ViewPosition`, `WidgetPlacement`, `CreateDatabaseForView` and `UnknownViewType`; retype `ViewObject`, `CreateView` and `UpdateView` (configuration still `Value`).
-- [ ] Milestone 2: Add the "Filters and sorts", "View object" and "View requests" test groups; update the literals in `tasty/Main.hs` and `ViewDemo.hs`.
+- [x] Milestone 2: Added `src/Notion/V1/Clearable.hs` and registered it. (2026-09-15)
+- [x] Milestone 2: Added `FromJSON` for `Filter`, `PropertyCondition`, all condition types, `SortDirection` and `Sort`, plus `ToJSON PropertyCondition`, in `src/Notion/V1/Filter.hs` (EP-4 was first). (2026-09-15)
+- [x] Milestone 2: Added `ViewFilter`, `ViewSort`, `QuickFilter`, `ViewPropertySort`, `ViewPosition`, `WidgetPlacement`, `CreateDatabaseForView` and `UnknownViewType`; retyped `ViewObject`, `CreateView` and `UpdateView` (configuration still `Value`). (2026-09-15)
+- [x] Milestone 2: Added the "Filters and sorts", "View object" and "View requests" test groups; updated the literals in `tasty/Main.hs` and `ViewDemo.hs`. All 15 EP-4 tests and the live "View E2E" pass. (2026-09-15)
 - [ ] Milestone 3: Create `src/Notion/V1/ViewConfig.hs` with the enum helpers, shared pieces (property config, group-by union, subtasks, cover) and table, board, calendar, timeline, gallery and list configs, plus `ViewConfig` with an `UnknownViewConfig` fallback.
 - [ ] Milestone 3: Switch `ViewObject.configuration`, `CreateView.configuration` and `UpdateView.configuration` to `ViewConfig`; add the "View configuration" test group.
 - [ ] Milestone 4: Add the chart, map, form and dashboard configs and their enums; extend the tests.
@@ -122,6 +122,10 @@ You can see it working in three ways. Run `cabal test`: a new `Views (EP-4)` tes
 
 - Decision: Bind the results route as `getViewQueryResults_` in `makeMethodsWithEnv` and assign `getViewQueryResults = getViewQueryResults_`, and use a qualified `Notion.V1.Views` import for the query types in `tasty/Main.hs`.
   Rationale: The first follows the existing convention for routes whose `Methods` field has per-argument Haddock comments (`listViews_`, `listUsers_`). The second is needed because importing `ViewQuery (..)` unqualified would make the `results` and `hasMore` selector functions used elsewhere in `tasty/Main.hs` ambiguous under `DuplicateRecordFields`.
+  Date: 2026-09-15
+
+- Decision: EP-4 added the `Filter`/`Sort`/`PropertyCondition` decoders, using the helper names `parsePropertyCondition`, `parseTextCondition`, `parseDateCondition` and so on, plus two small private helpers `flagKey` (for `{"is_empty": true}`) and `emptyKey` (for relative dates such as `{"next_week": {}}`). The round-trip test also covers `CreatedTime`/`CreatedBy`/`LastEditedTime`/`LastEditedBy`/`Url`/`Email`/`PhoneNumber` conditions and `RollupNumber`, beyond the minimum the plan listed.
+  Rationale: EP-5 had not started, so under the MasterPlan's Integration Points this plan owns the instances. EP-5 can extend the parsers in place.
   Date: 2026-09-15
 
 - Decision: Add `UnknownViewType Text` to `ViewType` in this plan.

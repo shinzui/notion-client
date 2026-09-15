@@ -15,12 +15,12 @@ where
 
 import Console (printHeader, printSuccess, runTest)
 import Control.Monad (when)
-import Data.Aeson qualified as Aeson
 import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Vector qualified as Vector
 import Notion.V1 (Methods (..))
 import Notion.V1.Databases (DataSource (..), DatabaseObject (..))
+import Notion.V1.Filter (SortDirection (..))
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.ViewQueries (queryAllViewPages)
 import Notion.V1.Views
@@ -56,8 +56,10 @@ runViewDemo methods databaseIdStr = do
             filter = Nothing,
             sorts = Nothing,
             quickFilters = Nothing,
+            createDatabase_ = Nothing,
             configuration = Nothing,
-            position = Nothing
+            position = Nothing,
+            placement = Nothing
           }
 
   view <-
@@ -102,15 +104,9 @@ runViewDemo methods databaseIdStr = do
   let updateReq =
         UpdateView
           { name = Just "API Demo - Table View (Updated)",
-            filter = Nothing,
-            sorts =
-              Just $
-                Vector.singleton $
-                  Aeson.object
-                    [ ("property", Aeson.String "title"),
-                      ("direction", Aeson.String "ascending")
-                    ],
-            quickFilters = Nothing,
+            filter = Unset,
+            sorts = Set (Vector.singleton ViewPropertySort {property = "title", direction = Ascending}),
+            quickFilters = Unset,
             configuration = Nothing
           }
 

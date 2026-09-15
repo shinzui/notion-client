@@ -2,12 +2,15 @@
 module ViewTests (tests) where
 
 import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy.Char8 qualified as L8
 import Data.IORef (readIORef)
+import Data.Map.Strict qualified as Map
 import Data.Vector qualified as Vector
 import FakeNotion
 import Notion.V1 (makeMethods)
-import Notion.V1.Common (UUID (..))
+import Notion.V1.Common (Parent (..), UUID (..))
+import Notion.V1.Filter
 import Notion.V1.ListOf (ListOf (..))
 import Notion.V1.ViewQueries (queryAllViewPages)
 import Notion.V1.Views
@@ -19,7 +22,10 @@ tests :: TestTree
 tests =
   testGroup
     "Views (EP-4)"
-    [ viewQueryTests
+    [ viewQueryTests,
+      filterSortTests,
+      viewObjectTests,
+      viewRequestTests
     ]
 
 -- ---------------------------------------------------------------------
@@ -110,3 +116,203 @@ testQueryAllViewPages = do
           ("GET", "/views/2b3c4d5e-6f70-4812-9a3b-4c5d6e7f8091/queries/7f1c2a9e-3b4d-4e5f-8a6b-1c2d3e4f5a6b"),
           ("DELETE", "/views/2b3c4d5e-6f70-4812-9a3b-4c5d6e7f8091/queries/7f1c2a9e-3b4d-4e5f-8a6b-1c2d3e4f5a6b")
         ]
+
+-- ---------------------------------------------------------------------
+-- Filters and sorts
+-- ---------------------------------------------------------------------
+
+filterSortTests :: TestTree
+filterSortTests =
+  testGroup
+    "Filters and sorts"
+    [ testCase "Filter values round-trip through JSON" testFilterRoundTrip,
+      testCase "Sort values round-trip through JSON" testSortRoundTrip,
+      testCase "array-valued select filter survives as ViewFilter" testArrayFilterPreserved
+    ]
+
+sampleFilters :: [Filter]
+sampleFilters =
+  [ And
+      [ PropertyFilter "Name" (TitleCondition (TextContains "Tanaka")),
+        Or
+          [ PropertyFilter "Notes" (RichTextCondition TextIsEmpty),
+            PropertyFilter "Phone" (PhoneNumberCondition (TextStartsWith "+81"))
+          ]
+      ],
+    TimestampFilter FilterLastEditedTime DateNextWeek,
+    TimestampFilter FilterCreatedTime (DateOnOrAfter "2026-09-01"),
+    PropertyFilter "Estimate" (NumberCondition (NumGreaterThanOrEqualTo 2.5)),
+    PropertyFilter "Done" (CheckboxCondition (CheckboxDoesNotEqual True)),
+    PropertyFilter "Priority" (SelectCondition (SelectEquals "High")),
+    PropertyFilter "Tags" (MultiSelectCondition MultiSelectIsNotEmpty),
+    PropertyFilter "Due" (DateCondition DatePastMonth),
+    PropertyFilter "Owner" (PeopleCondition (PeopleContains "u1u1u1u1-0000-4000-8000-000000000004")),
+    PropertyFilter "Attachments" (FilesCondition FilesIsEmpty),
+    PropertyFilter "Project" (RelationCondition (RelationDoesNotContain "p1")),
+    PropertyFilter "Stage" (StatusCondition (StatusEquals "In progress")),
+    PropertyFilter "Rollup" (RollupCondition (RollupAny (RichTextCondition (TextContains "Sato")))),
+    PropertyFilter "Rollup count" (RollupCondition (RollupNumber (NumLessThan 10))),
+    PropertyFilter "Score" (FormulaCondition (FormulaNumber (NumGreaterThan 3))),
+    PropertyFilter "Created" (CreatedTimeCondition DateThisYear),
+    PropertyFilter "Author" (CreatedByCondition PeopleIsEmpty),
+    PropertyFilter "Edited" (LastEditedTimeCondition (DateBefore "2026-01-01")),
+    PropertyFilter "Editor" (LastEditedByCondition (PeopleDoesNotContain "u2")),
+    PropertyFilter "Site" (UrlCondition (TextEndsWith ".jp")),
+    PropertyFilter "Email" (EmailCondition (TextEquals "hanako@example.com"))
+  ]
+
+testFilterRoundTrip :: Assertion
+testFilterRoundTrip =
+  mapM_ (\f -> Aeson.fromJSON (Aeson.toJSON f) @?= Aeson.Success f) sampleFilters
+
+testSortRoundTrip :: Assertion
+testSortRoundTrip =
+  mapM_
+    (\s -> Aeson.fromJSON (Aeson.toJSON s) @?= Aeson.Success s)
+    [PropertySort "Due" Ascending, TimestampSort FilterLastEditedTime Descending]
+
+testArrayFilterPreserved :: Assertion
+testArrayFilterPreserved = do
+  let raw = jsonValue "{\"property\":\"Status\",\"select\":{\"does_not_equal\":[\"Done\",\"Archive\"]}}"
+  case Aeson.fromJSON raw :: Aeson.Result ViewFilter of
+    Aeson.Success vf -> Aeson.toJSON vf @?= raw
+    Aeson.Error err -> assertFailure err
+
+-- ---------------------------------------------------------------------
+-- View object
+-- ---------------------------------------------------------------------
+
+viewObjectTests :: TestTree
+viewObjectTests =
+  testGroup
+    "View object"
+    [ testCase "decode a board view with typed filter, sorts and quick filters" testDecodeViewObject,
+      testCase "unknown view type decodes as UnknownViewType" testUnknownViewType
+    ]
+
+viewObjectFixture :: L8.ByteString
+viewObjectFixture =
+  "{\"object\":\"view\",\"id\":\"2b3c4d5e-6f70-4812-9a3b-4c5d6e7f8091\",\
+  \\"parent\":{\"type\":\"database_id\",\"database_id\":\"d1d1d1d1-0000-4000-8000-000000000002\"},\
+  \\"name\":\"Tanaka Hanako's tasks\",\"type\":\"board\",\
+  \\"created_time\":\"2026-09-01T09:00:00.000Z\",\"last_edited_time\":\"2026-09-02T10:30:00.000+00:00\",\
+  \\"url\":\"https://www.notion.so/d1d1d1d1000040008000000000000002?v=2b3c4d5e6f7048129a3b4c5d6e7f8091\",\
+  \\"data_source_id\":\"e5e5e5e5-0000-4000-8000-000000000003\",\
+  \\"created_by\":{\"object\":\"user\",\"id\":\"u1u1u1u1-0000-4000-8000-000000000004\"},\
+  \\"last_edited_by\":{\"object\":\"user\",\"id\":\"u1u1u1u1-0000-4000-8000-000000000004\"},\
+  \\"filter\":{\"and\":[{\"property\":\"Assignee\",\"people\":{\"contains\":\"u1u1u1u1-0000-4000-8000-000000000004\"}},\
+  \{\"timestamp\":\"created_time\",\"created_time\":{\"past_month\":{}}}]},\
+  \\"sorts\":[{\"timestamp\":\"created_time\",\"direction\":\"descending\"},{\"property\":\"Due\",\"direction\":\"ascending\"}],\
+  \\"quick_filters\":{\"Priority\":{\"select\":{\"equals\":\"High\"}}},\
+  \\"configuration\":{\"type\":\"board\",\"group_by\":{\"type\":\"status\",\"property_id\":\"a%3Bc\",\
+  \\"group_by\":\"group\",\"sort\":{\"type\":\"manual\"},\"property_name\":\"Status\"}}}"
+
+testDecodeViewObject :: Assertion
+testDecodeViewObject = do
+  ViewObject {parent, type_, filter = viewFilter, sorts, quickFilters} <- decodeOrFail viewObjectFixture
+  case parent of
+    Just (DatabaseParent {}) -> pure ()
+    other -> assertFailure ("expected DatabaseParent, got " <> show other)
+  type_ @?= Just BoardView
+  viewFilter
+    @?= Just
+      ( ViewFilter
+          ( And
+              [ PropertyFilter "Assignee" (PeopleCondition (PeopleContains "u1u1u1u1-0000-4000-8000-000000000004")),
+                TimestampFilter FilterCreatedTime DatePastMonth
+              ]
+          )
+      )
+  fmap Vector.toList sorts
+    @?= Just [ViewSort (TimestampSort FilterCreatedTime Descending), ViewSort (PropertySort "Due" Ascending)]
+  quickFilters @?= Just (Map.fromList [("Priority", QuickFilter (SelectCondition (SelectEquals "High")))])
+
+testUnknownViewType :: Assertion
+testUnknownViewType = do
+  ViewObject {type_} <-
+    decodeOrFail "{\"object\":\"view\",\"id\":\"2b3c4d5e-6f70-4812-9a3b-4c5d6e7f8091\",\"type\":\"wiki_board\"}"
+  type_ @?= Just (UnknownViewType "wiki_board")
+
+-- ---------------------------------------------------------------------
+-- View requests
+-- ---------------------------------------------------------------------
+
+viewRequestTests :: TestTree
+viewRequestTests =
+  testGroup
+    "View requests"
+    [ testCase "UpdateView clears, sets and removes quick filters" testUpdateViewClear,
+      testCase "UpdateView with nothing set encodes to {}" testUpdateViewEmpty,
+      testCase "CreateView position after_view" testCreateViewPosition,
+      testCase "CreateView dashboard widget placement" testCreateViewPlacement,
+      testCase "CreateView create_database" testCreateViewCreateDatabase
+    ]
+
+baseCreateView :: ViewID -> Maybe ViewPosition -> Maybe WidgetPlacement -> Maybe CreateDatabaseForView -> CreateView
+baseCreateView dashboard position placement createDatabase =
+  CreateView
+    { dataSourceId = "ds-1",
+      name = "Sato Kenji's board",
+      type_ = BoardView,
+      databaseId = Nothing,
+      viewId = if dashboard == "" then Nothing else Just dashboard,
+      filter = Nothing,
+      sorts = Nothing,
+      quickFilters = Nothing,
+      createDatabase_ = createDatabase,
+      configuration = Nothing,
+      position = position,
+      placement = placement
+    }
+
+objectKey :: Aeson.Key -> Aeson.Value -> Maybe Aeson.Value
+objectKey k = \case
+  Aeson.Object o -> KeyMap.lookup k o
+  _ -> Nothing
+
+testUpdateViewClear :: Assertion
+testUpdateViewClear =
+  Aeson.toJSON
+    UpdateView
+      { name = Nothing,
+        filter = Clear,
+        sorts = Set (Vector.fromList [ViewPropertySort {property = "Due", direction = Descending}]),
+        quickFilters =
+          Set
+            ( Map.fromList
+                [ ("Priority", Nothing),
+                  ("Status", Just (QuickFilter (StatusCondition (StatusEquals "In progress"))))
+                ]
+            ),
+        configuration = Nothing
+      }
+    @?= jsonValue
+      "{\"filter\":null,\"sorts\":[{\"property\":\"Due\",\"direction\":\"descending\"}],\
+      \\"quick_filters\":{\"Priority\":null,\"Status\":{\"status\":{\"equals\":\"In progress\"}}}}"
+
+testUpdateViewEmpty :: Assertion
+testUpdateViewEmpty =
+  Aeson.toJSON UpdateView {name = Nothing, filter = Unset, sorts = Unset, quickFilters = Unset, configuration = Nothing}
+    @?= jsonValue "{}"
+
+testCreateViewPosition :: Assertion
+testCreateViewPosition =
+  objectKey "position" (Aeson.toJSON (baseCreateView "" (Just (ViewPositionAfterView "view-9")) Nothing Nothing))
+    @?= Just (jsonValue "{\"type\":\"after_view\",\"view_id\":\"view-9\"}")
+
+testCreateViewPlacement :: Assertion
+testCreateViewPlacement = do
+  let json = Aeson.toJSON (baseCreateView "dash-1" Nothing (Just (ExistingRow 0)) Nothing)
+  objectKey "view_id" json @?= Just (Aeson.String "dash-1")
+  objectKey "placement" json @?= Just (jsonValue "{\"type\":\"existing_row\",\"row_index\":0}")
+
+testCreateViewCreateDatabase :: Assertion
+testCreateViewCreateDatabase = do
+  let json = Aeson.toJSON (baseCreateView "" Nothing Nothing (Just (CreateDatabaseForView "page-1" (Just "block-1"))))
+  objectKey "create_database" json
+    @?= Just
+      ( jsonValue
+          "{\"parent\":{\"type\":\"page_id\",\"page_id\":\"page-1\"},\
+          \\"position\":{\"type\":\"after_block\",\"block_id\":\"block-1\"}}"
+      )
+  objectKey "create_database_" json @?= Nothing

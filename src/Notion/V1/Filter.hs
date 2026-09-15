@@ -40,9 +40,11 @@ module Notion.V1.Filter
   )
 where
 
-import Data.Aeson ((.=))
+import Data.Aeson ((.:), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
+import Data.Aeson.Types (Parser)
+import Data.Foldable (asum)
 import Data.Scientific (Scientific)
 import Notion.Prelude
 
@@ -55,6 +57,12 @@ data TimestampType
 timestampTypeToText :: TimestampType -> Text
 timestampTypeToText FilterCreatedTime = "created_time"
 timestampTypeToText FilterLastEditedTime = "last_edited_time"
+
+parseTimestampType :: Text -> Parser TimestampType
+parseTimestampType = \case
+  "created_time" -> pure FilterCreatedTime
+  "last_edited_time" -> pure FilterLastEditedTime
+  other -> fail ("unknown timestamp: " <> unpack other)
 
 -- | Top-level filter type for querying databases and data sources.
 --
@@ -79,6 +87,20 @@ instance ToJSON Filter where
           [ "timestamp" .= tsKey,
             Key.fromText tsKey .= dateConditionToValue condition
           ]
+
+-- | Inverts the 'ToJSON' encoding. Fails on shapes the DSL cannot express.
+instance FromJSON Filter where
+  parseJSON = Aeson.withObject "Filter" $ \o ->
+    asum
+      [ And <$> o .: "and",
+        Or <$> o .: "or",
+        do
+          ts <- o .: "timestamp"
+          tsType <- parseTimestampType ts
+          cond <- o .: Key.fromText ts >>= parseDateCondition
+          pure (TimestampFilter tsType cond),
+        PropertyFilter <$> o .: "property" <*> parsePropertyCondition o
+      ]
 
 -- | Property-type-specific filter condition.
 --
@@ -135,6 +157,52 @@ propertyConditionToObject = \case
   UrlCondition c -> [("url", textConditionToValue c)]
   EmailCondition c -> [("email", textConditionToValue c)]
 
+-- | Encodes a condition as the object Notion uses for quick filters,
+-- e.g. @{"select":{"equals":"High"}}@.
+instance ToJSON PropertyCondition where
+  toJSON c = Aeson.object (propertyConditionToObject c)
+
+instance FromJSON PropertyCondition where
+  parseJSON = Aeson.withObject "PropertyCondition" parsePropertyCondition
+
+-- | Finds the property-type key (title, rich_text, number, …) and parses its condition.
+parsePropertyCondition :: Aeson.Object -> Parser PropertyCondition
+parsePropertyCondition o =
+  asum
+    [ TitleCondition <$> (o .: "title" >>= parseTextCondition),
+      RichTextCondition <$> (o .: "rich_text" >>= parseTextCondition),
+      NumberCondition <$> (o .: "number" >>= parseNumberCondition),
+      CheckboxCondition <$> (o .: "checkbox" >>= parseCheckboxCondition),
+      SelectCondition <$> (o .: "select" >>= parseSelectCondition),
+      MultiSelectCondition <$> (o .: "multi_select" >>= parseMultiSelectCondition),
+      DateCondition <$> (o .: "date" >>= parseDateCondition),
+      PeopleCondition <$> (o .: "people" >>= parsePeopleCondition),
+      FilesCondition <$> (o .: "files" >>= parseFilesCondition),
+      RelationCondition <$> (o .: "relation" >>= parseRelationCondition),
+      StatusCondition <$> (o .: "status" >>= parseStatusCondition),
+      UniqueIdCondition <$> (o .: "unique_id" >>= parseUniqueIdCondition),
+      VerificationCondition <$> (o .: "verification" >>= parseVerificationCondition),
+      FormulaCondition <$> (o .: "formula" >>= parseFormulaCondition),
+      RollupCondition <$> (o .: "rollup" >>= parseRollupCondition),
+      CreatedTimeCondition <$> (o .: "created_time" >>= parseDateCondition),
+      CreatedByCondition <$> (o .: "created_by" >>= parsePeopleCondition),
+      LastEditedTimeCondition <$> (o .: "last_edited_time" >>= parseDateCondition),
+      LastEditedByCondition <$> (o .: "last_edited_by" >>= parsePeopleCondition),
+      PhoneNumberCondition <$> (o .: "phone_number" >>= parseTextCondition),
+      UrlCondition <$> (o .: "url" >>= parseTextCondition),
+      EmailCondition <$> (o .: "email" >>= parseTextCondition)
+    ]
+
+-- | Requires the flag key to hold JSON @true@ (Notion encodes @is_empty@ as @{"is_empty": true}@).
+flagKey :: Aeson.Object -> Aeson.Key -> Parser ()
+flagKey c k = do
+  b <- c .: k
+  if b then pure () else fail ("expected true for " <> show k)
+
+-- | Requires the key to be present (relative dates are encoded as @{"next_week": {}}@).
+emptyKey :: Aeson.Object -> Aeson.Key -> Parser ()
+emptyKey c k = () <$ (c .: k :: Parser Value)
+
 -- | Text filter conditions for title, rich_text, phone_number, url, and email properties.
 data TextCondition
   = TextEquals Text
@@ -157,6 +225,19 @@ textConditionToValue = \case
   TextEndsWith v -> Aeson.object ["ends_with" .= v]
   TextIsEmpty -> Aeson.object ["is_empty" .= True]
   TextIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
+
+parseTextCondition :: Value -> Parser TextCondition
+parseTextCondition = Aeson.withObject "TextCondition" $ \c ->
+  asum
+    [ TextEquals <$> c .: "equals",
+      TextDoesNotEqual <$> c .: "does_not_equal",
+      TextContains <$> c .: "contains",
+      TextDoesNotContain <$> c .: "does_not_contain",
+      TextStartsWith <$> c .: "starts_with",
+      TextEndsWith <$> c .: "ends_with",
+      TextIsEmpty <$ flagKey c "is_empty",
+      TextIsNotEmpty <$ flagKey c "is_not_empty"
+    ]
 
 -- | Number filter conditions.
 data NumberCondition
@@ -181,6 +262,19 @@ numberConditionToValue = \case
   NumIsEmpty -> Aeson.object ["is_empty" .= True]
   NumIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
 
+parseNumberCondition :: Value -> Parser NumberCondition
+parseNumberCondition = Aeson.withObject "NumberCondition" $ \c ->
+  asum
+    [ NumEquals <$> c .: "equals",
+      NumDoesNotEqual <$> c .: "does_not_equal",
+      NumGreaterThan <$> c .: "greater_than",
+      NumGreaterThanOrEqualTo <$> c .: "greater_than_or_equal_to",
+      NumLessThan <$> c .: "less_than",
+      NumLessThanOrEqualTo <$> c .: "less_than_or_equal_to",
+      NumIsEmpty <$ flagKey c "is_empty",
+      NumIsNotEmpty <$ flagKey c "is_not_empty"
+    ]
+
 -- | Checkbox filter conditions.
 data CheckboxCondition
   = CheckboxEquals Bool
@@ -191,6 +285,13 @@ checkboxConditionToValue :: CheckboxCondition -> Aeson.Value
 checkboxConditionToValue = \case
   CheckboxEquals v -> Aeson.object ["equals" .= v]
   CheckboxDoesNotEqual v -> Aeson.object ["does_not_equal" .= v]
+
+parseCheckboxCondition :: Value -> Parser CheckboxCondition
+parseCheckboxCondition = Aeson.withObject "CheckboxCondition" $ \c ->
+  asum
+    [ CheckboxEquals <$> c .: "equals",
+      CheckboxDoesNotEqual <$> c .: "does_not_equal"
+    ]
 
 -- | Select filter conditions.
 data SelectCondition
@@ -207,6 +308,15 @@ selectConditionToValue = \case
   SelectIsEmpty -> Aeson.object ["is_empty" .= True]
   SelectIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
 
+parseSelectCondition :: Value -> Parser SelectCondition
+parseSelectCondition = Aeson.withObject "SelectCondition" $ \c ->
+  asum
+    [ SelectEquals <$> c .: "equals",
+      SelectDoesNotEqual <$> c .: "does_not_equal",
+      SelectIsEmpty <$ flagKey c "is_empty",
+      SelectIsNotEmpty <$ flagKey c "is_not_empty"
+    ]
+
 -- | Multi-select filter conditions.
 data MultiSelectCondition
   = MultiSelectContains Text
@@ -221,6 +331,15 @@ multiSelectConditionToValue = \case
   MultiSelectDoesNotContain v -> Aeson.object ["does_not_contain" .= v]
   MultiSelectIsEmpty -> Aeson.object ["is_empty" .= True]
   MultiSelectIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
+
+parseMultiSelectCondition :: Value -> Parser MultiSelectCondition
+parseMultiSelectCondition = Aeson.withObject "MultiSelectCondition" $ \c ->
+  asum
+    [ MultiSelectContains <$> c .: "contains",
+      MultiSelectDoesNotContain <$> c .: "does_not_contain",
+      MultiSelectIsEmpty <$ flagKey c "is_empty",
+      MultiSelectIsNotEmpty <$ flagKey c "is_not_empty"
+    ]
 
 -- | Date filter conditions. Also used for timestamp filters and created_time/last_edited_time.
 --
@@ -263,6 +382,27 @@ dateConditionToValue = \case
   DatePastMonth -> Aeson.object ["past_month" .= Aeson.object []]
   DatePastYear -> Aeson.object ["past_year" .= Aeson.object []]
 
+parseDateCondition :: Value -> Parser DateCondition
+parseDateCondition = Aeson.withObject "DateCondition" $ \c ->
+  asum
+    [ DateAfter <$> c .: "after",
+      DateBefore <$> c .: "before",
+      DateEquals <$> c .: "equals",
+      DateOnOrAfter <$> c .: "on_or_after",
+      DateOnOrBefore <$> c .: "on_or_before",
+      DateIsEmpty <$ flagKey c "is_empty",
+      DateIsNotEmpty <$ flagKey c "is_not_empty",
+      DateNextWeek <$ emptyKey c "next_week",
+      DateNextMonth <$ emptyKey c "next_month",
+      DateNextYear <$ emptyKey c "next_year",
+      DateThisWeek <$ emptyKey c "this_week",
+      DateThisMonth <$ emptyKey c "this_month",
+      DateThisYear <$ emptyKey c "this_year",
+      DatePastWeek <$ emptyKey c "past_week",
+      DatePastMonth <$ emptyKey c "past_month",
+      DatePastYear <$ emptyKey c "past_year"
+    ]
+
 -- | People filter conditions. The Text value is a user UUID.
 data PeopleCondition
   = PeopleContains Text
@@ -278,6 +418,15 @@ peopleConditionToValue = \case
   PeopleIsEmpty -> Aeson.object ["is_empty" .= True]
   PeopleIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
 
+parsePeopleCondition :: Value -> Parser PeopleCondition
+parsePeopleCondition = Aeson.withObject "PeopleCondition" $ \c ->
+  asum
+    [ PeopleContains <$> c .: "contains",
+      PeopleDoesNotContain <$> c .: "does_not_contain",
+      PeopleIsEmpty <$ flagKey c "is_empty",
+      PeopleIsNotEmpty <$ flagKey c "is_not_empty"
+    ]
+
 -- | Files filter conditions.
 data FilesCondition
   = FilesIsEmpty
@@ -288,6 +437,13 @@ filesConditionToValue :: FilesCondition -> Aeson.Value
 filesConditionToValue = \case
   FilesIsEmpty -> Aeson.object ["is_empty" .= True]
   FilesIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
+
+parseFilesCondition :: Value -> Parser FilesCondition
+parseFilesCondition = Aeson.withObject "FilesCondition" $ \c ->
+  asum
+    [ FilesIsEmpty <$ flagKey c "is_empty",
+      FilesIsNotEmpty <$ flagKey c "is_not_empty"
+    ]
 
 -- | Relation filter conditions. The Text value is a page UUID.
 data RelationCondition
@@ -304,6 +460,15 @@ relationConditionToValue = \case
   RelationIsEmpty -> Aeson.object ["is_empty" .= True]
   RelationIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
 
+parseRelationCondition :: Value -> Parser RelationCondition
+parseRelationCondition = Aeson.withObject "RelationCondition" $ \c ->
+  asum
+    [ RelationContains <$> c .: "contains",
+      RelationDoesNotContain <$> c .: "does_not_contain",
+      RelationIsEmpty <$ flagKey c "is_empty",
+      RelationIsNotEmpty <$ flagKey c "is_not_empty"
+    ]
+
 -- | Status filter conditions.
 data StatusCondition
   = StatusEquals Text
@@ -318,6 +483,15 @@ statusConditionToValue = \case
   StatusDoesNotEqual v -> Aeson.object ["does_not_equal" .= v]
   StatusIsEmpty -> Aeson.object ["is_empty" .= True]
   StatusIsNotEmpty -> Aeson.object ["is_not_empty" .= True]
+
+parseStatusCondition :: Value -> Parser StatusCondition
+parseStatusCondition = Aeson.withObject "StatusCondition" $ \c ->
+  asum
+    [ StatusEquals <$> c .: "equals",
+      StatusDoesNotEqual <$> c .: "does_not_equal",
+      StatusIsEmpty <$ flagKey c "is_empty",
+      StatusIsNotEmpty <$ flagKey c "is_not_empty"
+    ]
 
 -- | Unique ID filter conditions.
 data UniqueIdCondition
@@ -338,6 +512,17 @@ uniqueIdConditionToValue = \case
   UniqueIdLessThan v -> Aeson.object ["less_than" .= v]
   UniqueIdLessThanOrEqualTo v -> Aeson.object ["less_than_or_equal_to" .= v]
 
+parseUniqueIdCondition :: Value -> Parser UniqueIdCondition
+parseUniqueIdCondition = Aeson.withObject "UniqueIdCondition" $ \c ->
+  asum
+    [ UniqueIdEquals <$> c .: "equals",
+      UniqueIdDoesNotEqual <$> c .: "does_not_equal",
+      UniqueIdGreaterThan <$> c .: "greater_than",
+      UniqueIdGreaterThanOrEqualTo <$> c .: "greater_than_or_equal_to",
+      UniqueIdLessThan <$> c .: "less_than",
+      UniqueIdLessThanOrEqualTo <$> c .: "less_than_or_equal_to"
+    ]
+
 -- | Verification filter condition.
 -- The Text is one of @\"verified\"@, @\"expired\"@, or @\"none\"@.
 data VerificationCondition
@@ -347,6 +532,12 @@ data VerificationCondition
 verificationConditionToValue :: VerificationCondition -> Aeson.Value
 verificationConditionToValue (VerificationStatus v) =
   Aeson.object ["status" .= v]
+
+parseVerificationCondition :: Value -> Parser VerificationCondition
+parseVerificationCondition = Aeson.withObject "VerificationCondition" $ \c ->
+  asum
+    [ VerificationStatus <$> c .: "status"
+    ]
 
 -- | Formula filter condition, wrapping a condition by the formula's return type.
 data FormulaCondition
@@ -362,6 +553,15 @@ formulaConditionToValue = \case
   FormulaNumber c -> Aeson.object ["number" .= numberConditionToValue c]
   FormulaDate c -> Aeson.object ["date" .= dateConditionToValue c]
   FormulaCheckbox c -> Aeson.object ["checkbox" .= checkboxConditionToValue c]
+
+parseFormulaCondition :: Value -> Parser FormulaCondition
+parseFormulaCondition = Aeson.withObject "FormulaCondition" $ \c ->
+  asum
+    [ FormulaString <$> (c .: "string" >>= parseTextCondition),
+      FormulaNumber <$> (c .: "number" >>= parseNumberCondition),
+      FormulaDate <$> (c .: "date" >>= parseDateCondition),
+      FormulaCheckbox <$> (c .: "checkbox" >>= parseCheckboxCondition)
+    ]
 
 -- | Rollup filter condition.
 data RollupCondition
@@ -383,6 +583,16 @@ rollupConditionToValue = \case
     conditionInnerValue :: PropertyCondition -> Aeson.Value
     conditionInnerValue cond = Aeson.object (propertyConditionToObject cond)
 
+parseRollupCondition :: Value -> Parser RollupCondition
+parseRollupCondition = Aeson.withObject "RollupCondition" $ \c ->
+  asum
+    [ RollupAny <$> (c .: "any" >>= Aeson.withObject "RollupAny" parsePropertyCondition),
+      RollupEvery <$> (c .: "every" >>= Aeson.withObject "RollupEvery" parsePropertyCondition),
+      RollupNone <$> (c .: "none" >>= Aeson.withObject "RollupNone" parsePropertyCondition),
+      RollupNumber <$> (c .: "number" >>= parseNumberCondition),
+      RollupDate <$> (c .: "date" >>= parseDateCondition)
+    ]
+
 -- =====================================================================
 -- Sorts
 -- =====================================================================
@@ -396,6 +606,12 @@ data SortDirection
 instance ToJSON SortDirection where
   toJSON Ascending = Aeson.String "ascending"
   toJSON Descending = Aeson.String "descending"
+
+instance FromJSON SortDirection where
+  parseJSON = Aeson.withText "SortDirection" $ \case
+    "ascending" -> pure Ascending
+    "descending" -> pure Descending
+    other -> fail ("unknown sort direction: " <> unpack other)
 
 -- | Sort specification for querying databases and data sources.
 data Sort
@@ -413,4 +629,11 @@ instance ToJSON Sort where
     Aeson.object
       [ "timestamp" .= timestampTypeToText tsType,
         "direction" .= dir
+      ]
+
+instance FromJSON Sort where
+  parseJSON = Aeson.withObject "Sort" $ \o ->
+    asum
+      [ PropertySort <$> o .: "property" <*> o .: "direction",
+        TimestampSort <$> (o .: "timestamp" >>= parseTimestampType) <*> o .: "direction"
       ]
