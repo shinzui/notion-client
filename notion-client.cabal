@@ -1,6 +1,6 @@
 cabal-version: 3.4
 name: notion-client
-version: 0.8.0.0
+version: 0.9.0.0
 synopsis: Type-safe Haskell client for the Notion API
 description:
   This package provides comprehensive and type-safe bindings
@@ -121,6 +121,7 @@ test-suite tasty
     MeetingNotesTests
     OAuthTests
     ObjectFieldTests
+    ResponseJSONTests
     RuntimeTests
     ViewTests
     WireFormatTests

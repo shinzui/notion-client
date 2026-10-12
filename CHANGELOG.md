@@ -1,5 +1,18 @@
 # Changelog for notion-client
 
+## 0.9.0.0 (2026-10-12)
+
+### Breaking Changes
+
+* `RelationValue` now carries a trailing `Maybe Bool` containing the supplied relation `has_more`. Change patterns from `RelationValue pid refs` to `RelationValue pid refs hasMore`; manually constructed mutation values become `RelationValue pid refs Nothing`. The `relationValue :: [UUID] -> PropertyValue` smart constructor keeps its signature.
+* Use `notion-client-effectful >=0.3 && <0.4` with this core release; the companion now requires `notion-client >=0.9 && <0.10`.
+
+### New Features
+
+* `Notion.V1.PropertyValue.propertyValueResponseJSON` and `Notion.V1.Pages.pageResponseJSON` serialize modeled response data, preserving property IDs/types, supplied relation completeness, full users in people/mentions/verification, and nested rollup values. Switch response output from `Aeson.encode value` to `Aeson.encode (propertyValueResponseJSON value)` or `Aeson.encode (pageResponseJSON page)`.
+* `Just True` means an incomplete relation list, `Just False` means complete, and `Nothing` means absent/null; no completeness state is inferred from reference count and no additional HTTP request is made. Empty property IDs are treated as absent and omitted, including in nested rollups; nonempty IDs are preserved verbatim. Unmodeled fields and original JSON bytes are outside the guarantee.
+* Existing `ToJSON` instances and mutation builders keep their request encoding.
+
 ## 0.8.0.0 (2026-09-15)
 
 ### Breaking Changes

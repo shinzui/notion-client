@@ -9,10 +9,12 @@
 --
 -- * A 'PropertyValue' sum type for reading page properties via pattern matching
 -- * Smart constructors ('titleValue', 'selectValue', etc.) for writing properties
+-- * 'propertyValueResponseJSON' for exporting modeled response data
 -- * Supporting types ('SelectOptionValue', 'FileValue', 'RelationRef', etc.)
 module Notion.V1.PropertyValue
   ( -- * Property value
     PropertyValue (..),
+    propertyValueResponseJSON,
 
     -- * Supporting types
     SelectOptionValue (..),
@@ -51,14 +53,17 @@ where
 import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
+import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.Types (Pair)
 import Data.Maybe (fromMaybe)
 import Data.Scientific (Scientific)
 import Data.Vector qualified as Vector
 import Notion.Prelude
 import Notion.V1.Common (ExternalFile (..), File, UUID (..))
 import Notion.V1.Properties (RollupFunction)
-import Notion.V1.RichText (Date (..), RichText)
+import Notion.V1.RichText (Date (..), MentionContent (..), RichText (..), RichTextContent (..))
 import Notion.V1.Users (PeopleEntry (..), UserReference (..), UserValue (..))
+import Notion.V1.Users qualified as Users
 import Prelude hiding (id)
 
 -- | A typed property value from a Notion page.
@@ -88,7 +93,10 @@ data PropertyValue
   | EmailValue Text (Maybe Text)
   | PhoneNumberValue Text (Maybe Text)
   | FormulaValue Text FormulaResult
-  | RelationValue Text (Vector RelationRef)
+  | -- | The supplied completeness flag: @Just True@ means the references are
+    -- incomplete, @Just False@ means complete, and @Nothing@ means unspecified.
+    -- No flag is inferred from the reference count and no extra request is made.
+    RelationValue Text (Vector RelationRef) (Maybe Bool)
   | RollupValue Text RollupResult
   | CreatedTimeValue Text Text
   | CreatedByValue Text UserReference
@@ -124,7 +132,7 @@ instance FromJSON PropertyValue where
         "email" -> EmailValue pid <$> o .:? key
         "phone_number" -> PhoneNumberValue pid <$> o .:? key
         "formula" -> FormulaValue pid <$> o .: key
-        "relation" -> RelationValue pid <$> o .: key
+        "relation" -> RelationValue pid <$> o .: key <*> o .:? "has_more"
         "rollup" -> RollupValue pid <$> o .: key
         "created_time" -> CreatedTimeValue pid <$> o .: key
         "created_by" -> CreatedByValue pid <$> o .: key
@@ -153,7 +161,7 @@ instance ToJSON PropertyValue where
     EmailValue _ v -> Aeson.object ["email" .= v]
     PhoneNumberValue _ v -> Aeson.object ["phone_number" .= v]
     FormulaValue _ v -> Aeson.object ["formula" .= v]
-    RelationValue _ v -> Aeson.object ["relation" .= v]
+    RelationValue _ v _ -> Aeson.object ["relation" .= v]
     RollupValue _ v -> Aeson.object ["rollup" .= v]
     CreatedTimeValue _ v -> Aeson.object ["created_time" .= v]
     CreatedByValue _ v -> Aeson.object ["created_by" .= v]
@@ -165,6 +173,99 @@ instance ToJSON PropertyValue where
     ButtonValue _ v -> Aeson.object ["button" .= v]
     VerificationValue _ v -> Aeson.object ["verification" .= v]
     UnknownPropertyValue _ t v -> Aeson.object [Key.fromText t .= v]
+
+-- | Encode modeled response data, including the property's ID and type.
+-- Unlike 'toJSON', which builds mutation payloads, this preserves supplied
+-- relation completeness and full users, and recursively encodes rollup arrays.
+-- An empty ID is the model's absent-ID sentinel and is omitted (including in
+-- nested rollups). Nonempty IDs are preserved verbatim. Unmodeled response
+-- fields and original JSON bytes are not retained.
+propertyValueResponseJSON :: PropertyValue -> Value
+propertyValueResponseJSON = \case
+  TitleValue pid v -> envelope pid "title" (toJSON (fmap richTextResponseJSON v)) []
+  RichTextValue pid v -> envelope pid "rich_text" (toJSON (fmap richTextResponseJSON v)) []
+  NumberValue pid v -> envelope pid "number" (toJSON v) []
+  SelectValue pid v -> envelope pid "select" (toJSON v) []
+  MultiSelectValue pid v -> envelope pid "multi_select" (toJSON v) []
+  DateValue pid v -> envelope pid "date" (toJSON v) []
+  PeopleValue pid v -> envelope pid "people" (toJSON (fmap peopleEntryResponseJSON v)) []
+  FilesValue pid v -> envelope pid "files" (toJSON v) []
+  CheckboxValue pid v -> envelope pid "checkbox" (toJSON v) []
+  UrlValue pid v -> envelope pid "url" (toJSON v) []
+  EmailValue pid v -> envelope pid "email" (toJSON v) []
+  PhoneNumberValue pid v -> envelope pid "phone_number" (toJSON v) []
+  FormulaValue pid v -> envelope pid "formula" (toJSON v) []
+  RelationValue pid v hasMore -> envelope pid "relation" (toJSON v) (optionalResponsePair "has_more" hasMore)
+  RollupValue pid v -> envelope pid "rollup" (rollupResponseJSON v) []
+  CreatedTimeValue pid v -> envelope pid "created_time" (toJSON v) []
+  CreatedByValue pid v -> envelope pid "created_by" (toJSON v) []
+  LastEditedTimeValue pid v -> envelope pid "last_edited_time" (toJSON v) []
+  LastEditedByValue pid v -> envelope pid "last_edited_by" (toJSON v) []
+  StatusValue pid v -> envelope pid "status" (toJSON v) []
+  UniqueIdValue pid v -> envelope pid "unique_id" (toJSON v) []
+  PlaceValue pid v -> envelope pid "place" (toJSON v) []
+  ButtonValue pid v -> envelope pid "button" (toJSON v) []
+  VerificationValue pid v -> envelope pid "verification" (maybe Null verificationResponseJSON v) []
+  UnknownPropertyValue pid t v -> envelope pid t v []
+  where
+    envelope pid t v extra =
+      Aeson.object (["id" .= pid | pid /= ""] <> ["type" .= t, Key.fromText t .= v] <> extra)
+
+optionalResponsePair :: (ToJSON a) => Key.Key -> Maybe a -> [Pair]
+optionalResponsePair key = maybe [] (\v -> [key .= v])
+
+rollupResponseJSON :: RollupResult -> Value
+rollupResponseJSON = \case
+  RollupArrayResult v fn ->
+    Aeson.object ["type" .= ("array" :: Text), "array" .= fmap propertyValueResponseJSON v, "function" .= fn]
+  other -> toJSON other
+
+peopleEntryResponseJSON :: PeopleEntry -> Value
+peopleEntryResponseJSON = \case
+  PersonEntry u -> userResponseJSON u
+  group@(GroupEntry _) -> toJSON group
+
+userResponseJSON :: UserValue -> Value
+userResponseJSON = \case
+  partial@(PartialUser _) -> toJSON partial
+  FullUser (Users.UserObject uid uname avatar userType person bot objectType) ->
+    Aeson.object $
+      ["object" .= objectType, "id" .= uid, "type" .= userTypeText userType]
+        <> optionalResponsePair "name" uname
+        <> optionalResponsePair "avatar_url" avatar
+        <> optionalResponsePair "person" (fmap personResponseJSON person)
+        <> optionalResponsePair "bot" (fmap botResponseJSON bot)
+  where
+    userTypeText Users.Person = "person" :: Text
+    userTypeText Users.Bot = "bot"
+    personResponseJSON (Users.PersonUser email) = Aeson.object (optionalResponsePair "email" email)
+    botResponseJSON (Users.BotUser owner workspaceName workspaceId limits) =
+      Aeson.object $
+        optionalResponsePair "owner" (fmap ownerResponseJSON owner)
+          <> optionalResponsePair "workspace_name" workspaceName
+          <> optionalResponsePair "workspace_id" workspaceId
+          <> optionalResponsePair "workspace_limits" (fmap limitsResponseJSON limits)
+    limitsResponseJSON (Users.WorkspaceLimits maxSize) =
+      Aeson.object (optionalResponsePair "max_file_upload_size_in_bytes" maxSize)
+    ownerResponseJSON = \case
+      Users.UserOwner t uid -> Aeson.object ["type" .= t, "user" .= Aeson.object ["id" .= uid]]
+      Users.WorkspaceOwner t workspace -> Aeson.object ["type" .= t, "workspace" .= workspace]
+      Users.UnknownOwner _ raw -> raw
+
+verificationResponseJSON :: VerificationResult -> Value
+verificationResponseJSON VerificationResult {..} =
+  Aeson.object $
+    ["state" .= state]
+      <> optionalResponsePair "date" date
+      <> optionalResponsePair "verified_by" (fmap userResponseJSON verifiedBy)
+
+-- Reuse the established rich-text envelope, replacing only the nested user.
+richTextResponseJSON :: RichText -> Value
+richTextResponseJSON rt@RichText {content = MentionContentWrapper (UserMention u)} =
+  case toJSON rt of
+    Object o -> Object (KeyMap.insert "mention" (Aeson.object ["type" .= ("user" :: Text), "user" .= userResponseJSON u]) o)
+    v -> v
+richTextResponseJSON rt = toJSON rt
 
 -- ---------------------------------------------------------------------------
 -- Supporting types
@@ -426,7 +527,7 @@ phoneNumberValue t = PhoneNumberValue "" (Just t)
 
 -- | Create a relation property value from a list of page IDs.
 relationValue :: [UUID] -> PropertyValue
-relationValue ids = RelationValue "" (Vector.fromList (map RelationRef ids))
+relationValue ids = RelationValue "" (Vector.fromList (map RelationRef ids)) Nothing
 
 -- | Create a status property value by option name.
 statusValue :: Text -> PropertyValue

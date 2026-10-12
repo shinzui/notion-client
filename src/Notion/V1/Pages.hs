@@ -3,6 +3,7 @@ module Notion.V1.Pages
   ( -- * Main types
     PageID,
     PageObject (..),
+    pageResponseJSON,
     PartialPageObject (..),
     CreatePage (..),
     PagePosition (..),
@@ -52,7 +53,7 @@ import Notion.V1.BlockContent (BlockContent)
 import Notion.V1.Clearable (Clearable (..))
 import Notion.V1.Common (Cover, Icon, ObjectType (..), Parent, UUID)
 import Notion.V1.ListOf (ListOf)
-import Notion.V1.PropertyValue (PropertyValue, RollupResult)
+import Notion.V1.PropertyValue (PropertyValue, RollupResult, propertyValueResponseJSON)
 import Notion.V1.Users (UserReference)
 import Servant.API (QueryParams, StdMethod (PATCH, POST))
 
@@ -103,24 +104,36 @@ instance FromJSON PageObject where
     _ -> fail "Expected object for PageObject"
 
 instance ToJSON PageObject where
-  toJSON PageObject {..} =
-    Aeson.object $
-      [ "id" .= id,
-        "created_time" .= posixToISO8601 createdTime,
-        "last_edited_time" .= posixToISO8601 lastEditedTime,
-        "created_by" .= createdBy,
-        "last_edited_by" .= lastEditedBy,
-        "cover" .= cover,
-        "icon" .= icon,
-        "parent" .= parent,
-        "in_trash" .= inTrash,
-        "properties" .= properties,
-        "url" .= url,
-        "object" .= object
-      ]
-        <> maybe [] (\v -> ["is_locked" .= v]) isLocked
-        <> maybe [] (\v -> ["is_archived" .= v]) isArchived
-        <> maybe [] (\pu -> ["public_url" .= pu]) publicUrl
+  toJSON = pageJSONWith toJSON
+
+-- | Encode the page's modeled response fields and property metadata.
+-- Properties use 'propertyValueResponseJSON', retaining supplied relation
+-- completeness and nested response data. Optional page fields follow the
+-- existing encoding conventions. Unmodeled fields and original JSON bytes are
+-- not retained; this helper performs no HTTP requests. Mutation builders and
+-- the existing 'ToJSON' instances keep their established request encoding.
+pageResponseJSON :: PageObject -> Value
+pageResponseJSON = pageJSONWith propertyValueResponseJSON
+
+pageJSONWith :: (PropertyValue -> Value) -> PageObject -> Value
+pageJSONWith encodeProperty PageObject {..} =
+  Aeson.object $
+    [ "id" .= id,
+      "created_time" .= posixToISO8601 createdTime,
+      "last_edited_time" .= posixToISO8601 lastEditedTime,
+      "created_by" .= createdBy,
+      "last_edited_by" .= lastEditedBy,
+      "cover" .= cover,
+      "icon" .= icon,
+      "parent" .= parent,
+      "in_trash" .= inTrash,
+      "properties" .= Map.map encodeProperty properties,
+      "url" .= url,
+      "object" .= object
+    ]
+      <> maybe [] (\v -> ["is_locked" .= v]) isLocked
+      <> maybe [] (\v -> ["is_archived" .= v]) isArchived
+      <> maybe [] (\pu -> ["public_url" .= pu]) publicUrl
 
 -- | @{"object":"page","id":...}@
 --

@@ -31,7 +31,10 @@ calling `fail` on an unrecognised discriminator:
   `UnknownMention Value`, `UnknownFormulaResult Value`), or the discriminator plus the value
   (`UnknownOwner`, and the older `UnknownBlock Text Value`).
 
-The matching `ToJSON` instance re-emits the raw value unchanged, so a decoded response round-trips.
+The matching encoder re-emits the raw fallback value unchanged. Shared types with
+mutation-oriented `ToJSON` use an explicit response encoder for their response envelope
+(see [ADR 4](4-full-or-partial-responses-and-request-only-types.md)); this does not promise
+preservation of unmodeled fields outside the fallback payload.
 Decoders still fail on structurally wrong input (for example, a non-object where an object is
 required); the fallback is only for unrecognised discriminator values.
 

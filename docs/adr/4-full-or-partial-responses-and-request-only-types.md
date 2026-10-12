@@ -48,6 +48,22 @@ questions for comments and meeting notes.
 - **Request shapes.** A request whose shape differs from the response gets its own request-only
   type (`CommentAttachmentRequest`, `CommentDisplayNameRequest`, `CreateMeetingNote`). Read-side
   types and their tolerant decoders stay unchanged.
+- **Explicit response serialization.** Shared page/property models keep their established
+  mutation-oriented `ToJSON` instances. Since 2026-10-12
+  ([ExecPlan 15](../plans/15-preserve-page-property-response-metadata-and-expose-response-json-encoders.md)),
+  callers export responses with `Notion.V1.PropertyValue.propertyValueResponseJSON` and
+  `Notion.V1.Pages.pageResponseJSON`. These preserve modeled property IDs, discriminators,
+  nested rollups and full users in people, mentions and verification. Nested payloads must
+  follow the response path too: request user encoding intentionally reduces a full user to
+  object/ID. The page envelope is shared between both paths to prevent field-list drift.
+  - **Completeness.** `RelationValue` carries `Maybe Bool` for the supplied `has_more`:
+    true means incomplete, false means complete, and absent/null is unspecified. Neither
+    reference count nor list-level pagination determines it; serialization never fetches
+    more references. Mutation encoding ignores the flag.
+  - **Fidelity.** This preserves modeled data, not unmodeled fields or original bytes.
+    Empty property IDs are the existing absent-ID sentinel and are omitted, including in
+    nested rollups; the model cannot distinguish an explicit empty ID from a missing one.
+    Nonempty IDs are emitted verbatim, and unknown property/formula/rollup payloads survive.
 - **Update payloads.** Block updates follow the request-shapes rule (2026-09-15, from
   `docs/plans/11-close-page-block-property-value-user-file-upload-and-webhook-field-gaps.md`).
   `BlockUpdatePayload` holds `updateContent :: Maybe BlockUpdateContent` and `inTrash`. It has one

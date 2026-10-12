@@ -86,6 +86,35 @@ readPageStatus page =
         _ -> Nothing
 ```
 
+### Serializing page responses
+
+Use the response helpers when exporting API results:
+
+```haskell
+import Data.Aeson qualified as Aeson
+import Data.ByteString.Lazy (ByteString)
+import Notion.V1.Pages (PageObject, pageResponseJSON)
+import Notion.V1.PropertyValue (PropertyValue, propertyValueResponseJSON)
+
+encodePageResponse :: PageObject -> ByteString
+encodePageResponse = Aeson.encode . pageResponseJSON
+encodePropertyResponse :: PropertyValue -> ByteString
+encodePropertyResponse = Aeson.encode . propertyValueResponseJSON
+```
+
+These helpers preserve modeled page fields and property IDs, type discriminators,
+full users, and nested rollup values. Existing `ToJSON` instances and create/update
+builders keep their mutation encoding. Response helpers preserve modeled data;
+they do not preserve unmodeled fields or the original JSON bytes. An empty property
+ID is the model's absent-ID sentinel and is omitted, including inside rollups.
+Nonempty IDs, including URL-encoded IDs, are emitted unchanged.
+
+`RelationValue pid refs hasMore` retains `has_more` as `Maybe Bool`: `Just True`
+means the reference list is incomplete, `Just False` means complete, and `Nothing`
+means the flag was absent (or null). No state is inferred from the reference count,
+and the encoder does not fetch further references. `relationValue` keeps its
+existing `[UUID] -> PropertyValue` signature and supplies `Nothing` for writes.
+
 ### Creating a page with markdown
 
 ```haskell

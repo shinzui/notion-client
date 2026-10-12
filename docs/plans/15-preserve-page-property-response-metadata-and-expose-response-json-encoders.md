@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-10-12T23:21:56Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-12T23:41:52Z
+      mode: "implement"
+      note: "Implement response metadata retention, explicit encoders, and release validation"
 ---
 
 # Preserve page property response metadata and expose response JSON encoders
@@ -28,16 +34,18 @@ This plan implements [IR-1](../improvement-requests/preserve-page-property-respo
 ## Progress
 
 
-- [ ] Milestone 1: Relations retain true, false, and absent completeness states; the public property response encoder covers every constructor and nested rollups while mutation encoding remains unchanged (AC-1, AC-2, AC-4).
-- [ ] Milestone 2: The public page response encoder preserves modeled page data and metadata through retrieve/create/query/search paths, with partial-result handling unchanged (AC-3).
-- [ ] Milestone 3: Both packages and examples build, relevant tests pass, and breaking API migration and compatible release bounds are documented (AC-5).
+- [x] (2026-10-12) Milestone 1: Relations retain true, false, and absent completeness states; all 25 constructors, nested rollups/users, nullable and unknown values pass the 80-test Response JSON group on core 0.9.0.0. Mutation payload assertions pass (AC-1, AC-2, AC-4).
+- [x] (2026-10-12) Milestone 2: Scripted retrieve/create/query/search paths preserve modeled page fields and property metadata. Populated/absent optional page fields and existing full/partial/unknown result tests pass within the complete 419-test suite (AC-3).
+- [x] (2026-10-12) Milestone 3: Core 0.9.0.0, companion 0.3.0.0 and the example build; all 419 enabled tests pass. Both Haddocks, package checks and source distributions succeed, exported helper anchors are present, formatting passes, and migration/bounds are documented (AC-5).
 - [ ] Milestone 4: Hackage releases and matching upstream tags provide the APIs, and a consumer using only published packages passes a response-encoding smoke test (AC-6).
 
-Planning is complete; implementation and publication have not started. IR-1 is accepted and linked to this plan, with all delivery evidence still pending.
+The 80-test Response JSON group passes on core 0.9.0.0, including scripted retrieve/create/query/search response paths. Both libraries and the example build with `cabal build all -j4`; all 419 enabled tests pass with `cabal test all --test-show-details=direct`. Live groups were skipped because the three Notion credential/fixture variables are absent. Both Haddocks and source distributions succeed, both `cabal check` commands report no errors or warnings, and formatting/diff checks pass. Haddock retains existing unrelated missing-link warnings. The effectful package has no separate test suite. Publication has not been authorized or performed, and Milestone 4 remains open.
 
 
 ## Surprises & Discoveries
 
+
+On 2026-10-12, the original implementation failed a runtime relation-response assertion before the encoder changes compiled: `has_more` was expected as `Just (Bool True)` but was `Nothing`. The focused regression now checks the retained constructor field and named response helper directly, with request encoding checked separately.
 
 
 ## Decision Log
@@ -47,11 +55,15 @@ On 2026-10-12, extend `RelationValue` to carry a trailing `Maybe Bool` and expos
 
 On 2026-10-12, treat an empty property ID as the existing model's absent-ID sentinel and omit it from response output. This preserves ID-less nested rollup entries without changing the ID field of every property constructor. Preserve nonempty IDs verbatim, including URL-encoded IDs. The model cannot distinguish an explicit empty ID from an absent ID; document this limitation rather than claiming raw response fidelity.
 
+On 2026-10-12, Hackage metadata and upstream tags still show core 0.8.0.0 and companion 0.2.0.0, with no 0.9/0.3 tags. Select core 0.9.0.0 and companion 0.3.0.0, with the companion bound `notion-client >=0.9 && <0.10`, as planned.
+
 On 2026-10-12, retain publication as a separate acceptance gate. Local fixtures and compilation satisfy implementation criteria but do not fulfill a consumer that resolves published packages. Planning does not authorize uploading packages, pushing tags, or editing the consumer repository.
 
 
 ## Outcomes & Retrospective
 
+
+On 2026-10-12, implementation now exposes both response encoders and preserves the relation flag in the public constructor. All 419 enabled core tests pass, including 80 focused response cases and the existing mutation/full-or-partial regressions. Both libraries and the example build at core 0.9.0.0 / companion 0.3.0.0. ADRs 1 and 4 record the response-versus-request boundary, nested-user traversal and modeled-data limits; ADR 7's compatibility rule is unchanged. Haddocks expose both helpers and both source archives have verified manifests/API content. Publication and the Hackage-only smoke test remain pending, so this plan and IR-1 are not complete.
 
 
 ## Context and Orientation
@@ -114,6 +126,21 @@ Recheck registry versions and tags. With the verified baseline and no intervenin
 Prepare core and companion source distributions, confirm version/bound alignment, and use the project's release convention: core tag `v<version>` and companion tag `notion-client-effectful-v<version>`. There is no checked-in release script, so use Cabal source distributions and the maintainer's Hackage upload process. Obtain publication authorization if the implementation session has not already received it. Keep this milestone open while publication is pending, even if local tests pass.
 
 After publication, verify both Hackage metadata and upstream tags again, confirm the released source contains the helpers, and build/run the isolated smoke project described below using only Hackage dependencies. Capture exact versions, tags, commit IDs, smoke output, and test evidence in this plan and IR-1's Delivery evidence. Only then mark IR-1 completed with `completedAt`, update its generated revision metadata and bundle log, and mark this milestone complete. Consumer CLI changes remain owned by the canonical consumer plan.
+
+
+### Verified local release artifacts (2026-10-12)
+
+
+`cabal build all -j4`, `cabal test all --test-show-details=direct`, `cabal haddock notion-client notion-client-effectful`, both package-local `cabal check` commands, `cabal sdist all`, `nix fmt` and `git diff --check` succeeded. The final full suite includes all 80 Response JSON tests. Archive manifests, helper sources and the new test module were inspected. SHA-256 values identify the prepared archives:
+
+```text
+notion-client-0.9.0.0.tar.gz
+78deb19af5cfa6c7c2c2faeb92cb05cf6f073189898bafaed827f42d7a91ae55
+notion-client-effectful-0.3.0.0.tar.gz
+31df76472e586077c18a295b91d7c0baa2c91f75127804763cc6829cc81cee8b
+```
+
+The Hackage-only smoke project from Concrete Steps is prepared at `/var/folders/fn/022xr90s5mz417hz7fllrhv80000gn/T/notion-response-json-smoke-p15-60n51w03` for this machine. It has not been run: its exact published dependencies do not yet exist. Recreate it from the plan if the temporary directory is unavailable. Publication authorization, both uploads and matching tags, registry re-verification and the published-package smoke result are the remaining work.
 
 
 ## Concrete Steps

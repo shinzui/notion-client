@@ -6,12 +6,12 @@ description: >-
   property/page JSON encoders that preserve property IDs and types without changing
   mutation request encoding.
 requestId: IR-1
-status: accepted
+status: in-progress
 targetPlan: docs/plans/15-preserve-page-property-response-metadata-and-expose-response-json-encoders.md
 origin: mori://shinzui/notion-cli/plans/53-preserve-property-response-metadata-and-add-page-create-json-output
 generated:
   by: openai-codex/gpt-6.1-sol
-  at: "2026-10-12T23:24:56Z"
+  at: "2026-10-12T23:51:05Z"
 reviews:
   - kind: model
     reviewer: openai-codex/gpt-6.1-sol
@@ -98,11 +98,11 @@ The same consumer plan includes
 `page create --json`. That CLI option can be implemented independently; this upstream
 request concerns the shared response serialization it will consume.
 
-## Current implementation and evidence
+## Reported implementation gap
 
-In `src/Notion/V1/PropertyValue.hs`, each constructor retains a property ID, but
-`RelationValue` stores only the ID and reference vector. The decoder's relation branch
-ignores `has_more`. The encoder intentionally omits property IDs and type discriminators:
+Before ExecPlan 15, each constructor in `src/Notion/V1/PropertyValue.hs` retained a property ID, but
+`RelationValue` stored only the ID and reference vector. The decoder's relation branch
+ignored `has_more`. The mutation encoder intentionally omitted property IDs and type discriminators:
 
 ```haskell
 RelationValue Text (Vector RelationRef)
@@ -114,10 +114,10 @@ RelationValue Text (Vector RelationRef)
 RelationValue _ v -> Aeson.object ["relation" .= v]
 ```
 
-`src/Notion/V1/Pages.hs` serializes `PageObject.properties` with the same instance.
-Consequently the information loss also affects consumers serializing full page results.
-The property ID/type are recoverable from modeled constructors, but `has_more` must be
-retained while decoding.
+The original `src/Notion/V1/Pages.hs` serialized `PageObject.properties` with the same instance.
+Consequently consumers exporting full page results also lost metadata.
+The property ID/type were recoverable from modeled constructors, but `has_more` needed to be
+retained while decoding. The response helpers implemented in ExecPlan 15 address this gap.
 
 Relevant test locations include `tasty/Main.hs`'s property-value tests,
 `tasty/ObjectFieldTests.hs`'s unknown-property coverage, and
@@ -179,6 +179,23 @@ tags before choosing consumer bounds or Nix pins.
 This request is accepted for implementation in
 [ExecPlan 15](../plans/15-preserve-page-property-response-metadata-and-expose-response-json-encoders.md),
 which covers all six acceptance criteria, including compatible published releases.
-Implementation has not started. The criteria describe evidence to collect during implementation;
-no upstream change or release is claimed here. The review record documents the author's
+The implementation provides `propertyValueResponseJSON` and `pageResponseJSON` in their
+proposed public modules, and `RelationValue Text (Vector RelationRef) (Maybe Bool)` retains
+true, false and absent completeness states. The original runtime regression failed with
+expected `Just (Bool True)` but actual `Nothing`; the corrected Response JSON group passes
+all 80 cases, including all 25 constructors, nested rollups/users, nullable/unknown payloads,
+scripted retrieve/create/query/search paths and request isolation (AC-1 through AC-4).
+
+Core 0.9.0.0 and companion 0.3.0.0 build with the example under GHC 9.12.4, and all 419
+enabled core tests pass. The effectful package has no separate test suite. Live groups
+were skipped because Notion credentials and fixture IDs are absent. README/changelog
+migration examples and compatible bounds are updated. Both Haddocks expose the public
+helpers; both package checks, formatting and source-distribution checks pass (AC-5).
+Release archives are `dist-newstyle/sdist/notion-client-0.9.0.0.tar.gz` and
+`dist-newstyle/sdist/notion-client-effectful-0.3.0.0.tar.gz`; their SHA-256 hashes are
+recorded in ExecPlan 15. They have not been uploaded.
+
+Publication is pending authorization. No 0.9.0.0 / 0.3.0.0 Hackage release, matching
+upstream tag or published-package smoke result is claimed (AC-6). IR-1 remains
+in-progress without `completedAt`. The existing review remains a historical author
 source audit; no independent approval or live acceptance evidence is claimed.

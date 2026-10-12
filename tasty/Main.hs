@@ -58,6 +58,7 @@ import Notion.V1.Views (Clearable (..), CreateView (..), UpdateView (..), ViewOb
 import Notion.V1.Views qualified as Views
 import OAuthTests qualified
 import ObjectFieldTests qualified
+import ResponseJSONTests qualified
 import RuntimeTests qualified
 import System.Environment qualified as Environment
 import Test.Tasty
@@ -180,6 +181,7 @@ tests = do
         MeetingNotesTests.tests,
         WireFormatTests.tests,
         ObjectFieldTests.tests,
+        ResponseJSONTests.tests,
         RuntimeTests.tests,
         OAuthTests.tests,
         HelpersTests.tests,
@@ -1887,7 +1889,8 @@ testParseRelationValue = do
   let json = "{\"id\":\"rel\",\"type\":\"relation\",\"relation\":[{\"id\":\"page-1\"},{\"id\":\"page-2\"}]}"
   case Aeson.eitherDecode json of
     Left err -> assertFailure $ "Failed to parse RelationValue: " <> err
-    Right (PV.RelationValue pid refs) -> do
+    Right (PV.RelationValue pid refs hasMore) -> do
+      hasMore @?= Nothing
       assertEqual "property id" "rel" pid
       assertEqual "relation count" 2 (Vector.length refs)
     Right other -> assertFailure $ "Expected RelationValue, got: " <> show other
