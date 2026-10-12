@@ -6,11 +6,12 @@ description: >-
   property/page JSON encoders that preserve property IDs and types without changing
   mutation request encoding.
 requestId: IR-1
-status: proposed
+status: accepted
+targetPlan: docs/plans/15-preserve-page-property-response-metadata-and-expose-response-json-encoders.md
 origin: mori://shinzui/notion-cli/plans/53-preserve-property-response-metadata-and-add-page-create-json-output
 generated:
   by: openai-codex/gpt-6.1-sol
-  at: "2026-10-12T22:57:07Z"
+  at: "2026-10-12T23:24:56Z"
 reviews:
   - kind: model
     reviewer: openai-codex/gpt-6.1-sol
@@ -175,6 +176,9 @@ tags before choosing consumer bounds or Nix pins.
 
 ## Delivery evidence
 
-This request is proposed. The criteria describe evidence to collect during implementation;
+This request is accepted for implementation in
+[ExecPlan 15](../plans/15-preserve-page-property-response-metadata-and-expose-response-json-encoders.md),
+which covers all six acceptance criteria, including compatible published releases.
+Implementation has not started. The criteria describe evidence to collect during implementation;
 no upstream change or release is claimed here. The review record documents the author's
 source audit; no independent approval or live acceptance evidence is claimed.
