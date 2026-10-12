@@ -81,7 +81,13 @@ in  Schema.Project::{ project =
         }
       ]
     , docs =
-      [ Schema.DocRef::{ key = "hackage"
+      [ Schema.DocRef::{ key = "improvement-requests"
+        , kind = Schema.DocKind.Guide
+        , audience = Schema.DocAudience.API
+        , description = Some "Proposed upstream improvements and acceptance criteria"
+        , location = Schema.DocLocation.LocalFile "docs/improvement-requests/index.md"
+        }
+      , Schema.DocRef::{ key = "hackage"
         , kind = Schema.DocKind.Reference
         , audience = Schema.DocAudience.API
         , description = Some "Hackage package page"
