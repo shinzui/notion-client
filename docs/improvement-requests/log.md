@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-10-13
+* **Update**: Publish core 0.9.0.0 / effectful 0.3.0.0 and verify matching tags and archives in docs/plans/15-preserve-page-property-response-metadata-and-expose-response-json-encoders.md; isolated smoke awaits Hackage index propagation
+
 ## 2026-10-12
 * **Update**: Verify AC-1 through AC-5 and prepare core 0.9.0.0 / effectful 0.3.0.0 in docs/plans/15-preserve-page-property-response-metadata-and-expose-response-json-encoders.md; publication remains pending
 * **Update**: Begin response metadata and encoder implementation in docs/plans/15-preserve-page-property-response-metadata-and-expose-response-json-encoders.md

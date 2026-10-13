@@ -11,7 +11,7 @@ targetPlan: docs/plans/15-preserve-page-property-response-metadata-and-expose-re
 origin: mori://shinzui/notion-cli/plans/53-preserve-property-response-metadata-and-add-page-create-json-output
 generated:
   by: openai-codex/gpt-6.1-sol
-  at: "2026-10-12T23:51:05Z"
+  at: "2026-10-13T00:13:12Z"
 reviews:
   - kind: model
     reviewer: openai-codex/gpt-6.1-sol
@@ -193,9 +193,16 @@ migration examples and compatible bounds are updated. Both Haddocks expose the p
 helpers; both package checks, formatting and source-distribution checks pass (AC-5).
 Release archives are `dist-newstyle/sdist/notion-client-0.9.0.0.tar.gz` and
 `dist-newstyle/sdist/notion-client-effectful-0.3.0.0.tar.gz`; their SHA-256 hashes are
-recorded in ExecPlan 15. They have not been uploaded.
+recorded in ExecPlan 15. Both packages are now published on Hackage; downloaded published archives match those hashes.
 
-Publication is pending authorization. No 0.9.0.0 / 0.3.0.0 Hackage release, matching
-upstream tag or published-package smoke result is claimed (AC-6). IR-1 remains
+Release commit `3dc913ae838364933af74d52672856f4dbdb1ab2` is pushed, and upstream tags
+`v0.9.0.0` / `notion-client-effectful-v0.3.0.0` both point to that commit.
+[Core 0.9.0.0](https://hackage.haskell.org/package/notion-client-0.9.0.0) and
+[companion 0.3.0.0](https://hackage.haskell.org/package/notion-client-effectful-0.3.0.0)
+are verified published. The isolated consumer build remains pending: the refreshed
+signed index at `2026-10-13T00:03:45Z` does not yet expose companion 0.3.0.0, so the
+solver stops before compiling. No local dependency overrides were used. Per the user's
+request to keep the release simple, further index workarounds were stopped. Rerun the
+plan's isolated smoke check after index propagation to finish AC-6. IR-1 remains
 in-progress without `completedAt`. The existing review remains a historical author
 source audit; no independent approval or live acceptance evidence is claimed.
