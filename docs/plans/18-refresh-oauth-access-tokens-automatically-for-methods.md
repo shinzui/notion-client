@@ -11,9 +11,22 @@ provenance:
     model: "claude-opus-5-5"
     harness: "claude-code"
     at: 2026-10-16T11:24:45Z
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-16T11:53:13Z
+      mode: "update"
+      note: "Correct callback verification, OAuth replay policy, token lifecycle recovery and integration acceptance after source review."
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-16T11:53:13Z
+      verdict: "approved"
+      note: "Revised design reviewed against code, relevant ADRs and current upstream contracts; implementation and live OAuth acceptance remain pending."
 ---
 
 # Refresh OAuth Access Tokens Automatically for Methods
+
 
 This ExecPlan is a living document. The sections Progress, Surprises & Discoveries,
 Decision Log, and Outcomes & Retrospective must be kept up to date as work proceeds.
@@ -22,7 +35,8 @@ If durable project context changes, update or create ADRs in docs/adr/ in the sa
 
 ## Purpose / Big Picture
 
-A Notion *public integration* obtains two tokens through OAuth when a user installs it. The *access token* is sent as `Authorization: Bearer <token>` on every API call. The *refresh token* is traded at `POST /v1/oauth/token` (grant type `refresh_token`) for a new pair when the access token stops working. Notion's authorization guide says that refreshing "will generate a new access token and a new refresh token". The refresh token therefore *rotates*: once a refresh succeeds, the old refresh token is dead. A program that loses the new pair, or that runs two refreshes at once, locks itself out and must send the user through the login again.
+
+A Notion *public integration* obtains two tokens through OAuth when a user installs it. The *access token* is sent as `Authorization: Bearer <token>` on every API call. The *refresh token* is traded at `POST /v1/oauth/token` (grant type `refresh_token`) for a new pair when the access token stops working. Notion's authorization guide says that refreshing "will generate a new access token and a new refresh token". The response therefore contains a replacement pair. The guide does not specify when older tokens stop working or whether reuse revokes a token family. Treat an attempted refresh as potentially consuming its input token. Losing the response or racing another refresh can require a new login; the library must not promise an atomic transaction across Notion and local storage.
 
 Today `Methods`, the record of API calls built by `makeMethodsWith` in `src/Notion/V1.hs`, captures one access token when it is constructed. A program using OAuth has to catch the `unauthorized` error everywhere, refresh by hand, store the new pair safely, and rebuild `Methods`. Every component holding the old `Methods` value keeps failing.
 
@@ -35,16 +49,19 @@ This plan is EP-3 of `docs/masterplans/3-support-notion-public-integrations-with
 
 ## Progress
 
+
 - [ ] Milestone 1: `Notion.V1.TokenSource` (`TokenSource`, `staticTokenSource`, `withAuthorization`) exists. `makeMethodsWithTokenSource` is in `Notion.V1`, and `RequestContext` carries a token source with `withStandardHeaders`. Every existing test passes. New tests show that the header follows the source between calls and that one renewal and retry happen on `unauthorized`. `docs/plans/14-stream-session-updates-over-server-sent-events.md` is updated for the new `RequestContext`.
-- [ ] Milestone 2: `Notion.V1.OAuth.Refresh` (`OAuthTokens`, `TokenStore`, `inMemoryTokenStore`, `OAuthTokenManager`, `ReauthorizationRequired`) exists. The `TokenRefresh` tests cover refresh and retry, single-flight under concurrency, `invalid_grant`, a missing refresh token, and a failing store. README, CHANGELOG and a new ADR describe the behavior.
+- [ ] Milestone 2: `Notion.V1.OAuth.Refresh` (`OAuthTokens`, `TokenStore`, `inMemoryTokenStore`, `OAuthTokenManager`, `ReauthorizationRequired`, `TokenPersistenceError`, `RefreshOutcomeUnknown`) exists. The `TokenRefresh` tests cover refresh and retry, single-flight under concurrency, `invalid_grant`, a missing refresh token, a failing store, a lost response, and asynchronous cancellation. README, CHANGELOG and a new ADR describe the behavior.
 
 
 ## Surprises & Discoveries
+
 
 (None yet.)
 
 
 ## Decision Log
+
 
 - Decision: Attach the bearer token per request through a `TokenSource`, rather than rebuilding `Methods` after a refresh.
   Rationale: Callers keep `Methods` in long-lived state and pass it to `notion-client-effectful`'s `runNotion`, so a rebuilt value would not reach them. The fields of `Methods` stay unchanged, so the lockstep rule of ADR 7 is not triggered.
@@ -58,17 +75,19 @@ This plan is EP-3 of `docs/masterplans/3-support-notion-public-integrations-with
   Rationale: ADR 2 deliberately never retries `unauthorized`. One renewal-then-retry cannot loop, and it keeps ADR 2's rate-limit and 5xx policy unchanged for the retried attempt.
   Date: 2026-10-16
 
-- Decision: When `saveTokens` throws after a successful refresh, keep the new pair in memory and rethrow the exception to the request that triggered the refresh.
-  Rationale: The old refresh token is already dead, so discarding the new pair would lock the program out. Rethrowing makes the persistence failure visible instead of silent.
+- Decision: When `saveTokens` throws after a successful refresh, retain the new pair as pending persistence, block use and further refresh, and expose a retry of that same save.
+  Rationale: The old refresh token may already be unusable. Retaining the new pair permits recovery; letting later calls silently use unsaved credentials would violate persistence-before-use.
   Date: 2026-10-16
 
 
 ## Outcomes & Retrospective
 
+
 (To be filled during and after implementation.)
 
 
 ## Context and Orientation
+
 
 Work in the repository root `/Users/shinzui/Keikaku/bokuno/libraries/haskell/notion-client`. It is a Cabal project (`cabal.project` lists `.` and `notion-client-effectful`) built with GHC 9.12 and `default-language: GHC2024`. The default extensions are `DuplicateRecordFields`, `OverloadedLabels`, `OverloadedStrings` and `RecordWildCards`. `treefmt` formats code in a pre-commit hook; re-stage files it changes. Library modules are listed under `exposed-modules` in `notion-client.cabal`.
 
@@ -100,18 +119,20 @@ data OAuthTokenResponse = OAuthTokenResponse
     owner :: OAuthOwner, duplicatedTemplateId :: Maybe Text, requestId :: Maybe Text }
 ```
 
-The prerequisite `docs/plans/16-decode-oauth-token-endpoint-errors-into-a-typed-exception.md` (Milestone 1 must be merged before this plan's Milestone 2) adds `OAuthError {oauthErrorCode :: OAuthErrorCode, errorDescription, errorUri, requestId, response}` and `OAuthErrorCode` (including `OAuthInvalidGrant`) to `Notion.V1.OAuth`. With it, `createOAuthToken` throws `OAuthError` when Notion rejects a refresh token. Confirm with `grep -n OAuthInvalidGrant src/Notion/V1/OAuth.hs`.
+The prerequisite `docs/plans/16-decode-oauth-token-endpoint-errors-into-a-typed-exception.md` (Milestone 1 must be merged before this plan's Milestone 2) adds `OAuthError {oauthErrorCode :: OAuthErrorCode, errorDescription, errorUri, requestId, response}` and `OAuthErrorCode` (including `OAuthInvalidGrant`) to `Notion.V1.OAuth`. With it, `createOAuthToken` throws `OAuthError` when Notion rejects a refresh token. Confirm with `rg -n OAuthInvalidGrant src/Notion/V1/OAuth.hs`.
 
 **The effectful package.** `notion-client-effectful/src/Notion/V1/Effectful/Interpreter.hs` exports `runNotion :: (IOE :> es, Error NotionError :> es) => Methods -> Eff (Notion : es) a -> Eff es a`. It takes a ready `Methods` value, so a `Methods` built from a token source works there without changes. [ADR 7](../adr/7-effectful-package-mirrors-methods-in-lockstep.md) requires lockstep edits only when `Methods` *fields* change, and this plan adds a constructor function, not a field.
 
-**Tests.** `tasty/FakeNotion.hs` exports `fakeClientEnv :: [FakeReply] -> IO (ClientEnv, IORef [Recorded])`. Its `ClientEnv` middleware ignores the network, records `Recorded {method, path, headers}` for each request, and answers from a fixed script. Non-2xx replies are raised as Servant `FailureResponse`, so they pass through the real `notionMiddleware` and become `NotionError` exactly as live responses would. Because a fixed script cannot react to which token a request carries, this plan adds `fakeClientEnvWith :: (Recorded -> IO FakeReply) -> IO (ClientEnv, IORef [Recorded])`, which chooses each reply by calling a function. `fakeClientEnv` keeps its signature and can be reimplemented on top of it. Register new test modules in `tasty/Main.hs` and in the test suite's `other-modules` in `notion-client.cabal`. Fixtures use made-up Japanese names. A Notion `unauthorized` body is `{"object":"error","status":401,"code":"unauthorized","message":"API token is invalid."}`.
+**Tests.** `tasty/FakeNotion.hs` exports `fakeClientEnv :: [FakeReply] -> IO (ClientEnv, IORef [Recorded])`. Its `ClientEnv` middleware ignores the network, records `Recorded {method, path, headers}` for each request, and answers from a fixed script. Non-2xx replies are raised as Servant `FailureResponse`, so they pass through the real `notionMiddleware` and become `NotionError` exactly as live responses would. Because a fixed script cannot react to which token a request carries, this plan adds `fakeClientEnvWith :: (Recorded -> IO FakeReply) -> IO (ClientEnv, IORef [Recorded])`, which chooses each reply by calling a function. `fakeClientEnv` keeps its signature and can be reimplemented on top of it. Replace the recorder’s current `modifyIORef'` with `atomicModifyIORef'` so concurrent evidence cannot lose requests. Register new test modules in `tasty/Main.hs` and in the test suite's `other-modules` in `notion-client.cabal`. Fixtures use made-up Japanese names. A Notion `unauthorized` body is `{"object":"error","status":401,"code":"unauthorized","message":"API token is invalid."}`.
 
-Relevant ADRs: [ADR 2](../adr/2-client-runtime-retry-policy-and-typed-errors.md) (the runtime this plan extends; its retry policy must not change) and [ADR 7](../adr/7-effectful-package-mirrors-methods-in-lockstep.md) (not triggered, as explained above). [ADR 1](../adr/1-tolerant-response-decoders.md) does not apply, because no decoded enum is added. No other ADR applies.
+Relevant ADRs: [ADR 2](../adr/2-client-runtime-retry-policy-and-typed-errors.md) (the runtime this plan extends; its retry policy must not change) and [ADR 7](../adr/7-effectful-package-mirrors-methods-in-lockstep.md) (not triggered, as explained above). [ADR 1](../adr/1-tolerant-response-decoders.md) does not apply, because no decoded enum is added. [ADR 9](../adr/9-oauth-callback-and-token-lifecycle-boundaries.md) is the accepted design for the proposed lifecycle state machine; its implementation is still pending.
 
 
 ## Plan of Work
 
+
 ### Milestone 1: per-request authorization
+
 
 Create `src/Notion/V1/TokenSource.hs` (module `Notion.V1.TokenSource`, exposed). It imports `Notion.V1.Error` and nothing from `Notion.V1.Client`, so that `Client` can import it.
 
@@ -140,6 +161,7 @@ In `src/Notion/V1/Client.hs`, replace the field `contextAuthorization :: Text` o
 ```haskell
 -- | Run a non-Servant request with the standard headers; on 'Unauthorized' renew the token once
 -- and rerun with fresh headers (see 'withAuthorization'). Put 'withRetries' inside the action.
+-- Scope the action to a replayable request/acquisition, never stream consumption or a user callback.
 withStandardHeaders :: RequestContext -> ([Header] -> IO a) -> IO a
 ```
 
@@ -152,7 +174,7 @@ run clientM = withAuthorization source $ \auth ->
   runClientWith (configureClientEnv config (withAuthorizationHeader auth clientEnv)) clientM
 ```
 
-where `withAuthorizationHeader auth env` returns `env` with a middleware that removes any `Authorization` header from the request and adds `("Authorization", encodeUtf8 auth)` before calling the inner function. Keep a small helper in `Notion.V1.Client` for this, and wrap the caller's existing middleware rather than replacing it. Because renewal reruns the whole `ClientM` action, the request body is rebuilt, which matters for multipart file uploads. Update the Haddock comments of `makeMethods*` and the module header example.
+where `withAuthorizationHeader auth env` returns `env` with a middleware that removes any `Authorization` header from the request and adds `("Authorization", encodeUtf8 auth)` before calling the inner function. Keep a small helper in `Notion.V1.Client` for this, and wrap the caller's existing middleware rather than replacing it. Renewal reruns the generated `ClientM` request. Verify replay of this library's byte and file-backed multipart bodies; an arbitrary one-shot stream is not made replayable merely by rerunning `ClientM`. Put authorization injection outside the caller middleware but inside the runtime so every attempt reaches it with exactly one bearer header. Preserve its custom request builder and base URL. Keep this bearer middleware out of `OAuthMethods`, which uses Basic authentication. Establish and test this middleware ordering with the caller middleware before extending the constructor to every method. Update the Haddock comments of `makeMethods*` and the module header example.
 
 Update `tasty/RuntimeTests.hs` line 70 for `standardHeaders` now returning `IO`. Add tests in a new module `tasty/TokenSourceTests.hs` (group "TokenSource"):
 
@@ -161,11 +183,14 @@ Update `tasty/RuntimeTests.hs` line 70 for `standardHeaders` now returning `IO`.
 3. With `staticTokenSource`, a 401 `unauthorized` surfaces as `NotionError` with code `Unauthorized` after exactly one request.
 4. With replies `[401, 401]` and a renewing source, the second `NotionError` propagates. There are exactly two requests, which proves there is no loop.
 5. A 429 `rate_limited` reply is still retried by the runtime, independent of renewal. Use `RetryOptions` with a tiny delay, as `tasty/RuntimeTests.hs` does.
-6. The producer/consumer check that stands in for plan 14's streaming. `withStandardHeaders ctx action`, where `action` records the headers and throws a hand-built `NotionError {code = Unauthorized, ...}` on its first run, reruns `action` once with `Authorization: Bearer new`, and its headers include `Notion-Version` and `User-Agent`.
+6. The producer/consumer check that stands in for plan 14's streaming must use a loopback HTTP server and the real `http-client` response/error conversion, not only a hand-thrown exception. The first stream-open attempt returns 401, the second accepts the new bearer header. Both carry `Notion-Version` and `User-Agent`; the failed response is closed before renewal. After a successful open, a consumer that throws `NotionError Unauthorized` must propagate without refresh or replay. Put `withStandardHeaders` around the response acquisition only, inside `bracket`'s acquire action, never around reading the body or the user callback. Add test-only `wai` and `warp` if needed.
+7. A multipart upload fixture is byte-for-byte replayable after rejection; no arbitrary failed POST, decode failure, timeout, bare HTTP 401 without the typed `Unauthorized` code, or user callback exception triggers renewal. Test Basic OAuth headers stay intact and a caller middleware/custom request builder still runs.
+8. Verify rate-limit retries before and after renewal use the existing retry budget independently; there is at most one renewal for the logical request. Compile a small effectful consumer using the new constructor; defer tests of the new lifecycle exceptions until Milestone 2, when those types exist.
 
-Cascade to the dependent plan in the same commit. In `docs/plans/14-stream-session-updates-over-server-sent-events.md`, change the descriptions of `RequestContext` and `standardHeaders` (around lines 121–122) and the `StreamEnv` construction (around line 507) so that the authorization comes from `withStandardHeaders` per stream open, with `withRetries` inside it, instead of a fixed `authorization` field. Add a revision note at the bottom of that plan. Add an entry to the Surprises & Discoveries of `docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-sse-streaming.md` that names this plan's path.
+Cascade to the dependent plan in the same commit. In `docs/plans/14-stream-session-updates-over-server-sent-events.md`, change the descriptions of `RequestContext` and `standardHeaders` (around lines 121–122) and the `StreamEnv` construction (around line 507) so that authorization comes from `withStandardHeaders` around response acquisition only, with `withRetries` inside it, instead of a fixed `authorization` field. Change the `StreamEnv` record, transport algorithm, construction sites and tests consistently; never wrap the body or user callback in either retry layer. Add a revision note at the bottom of that plan. Add an entry to the Surprises & Discoveries of `docs/masterplans/2-add-the-custom-agents-and-sessions-api-with-sse-streaming.md` that names this plan's path.
 
 ### Milestone 2: OAuth token manager
+
 
 Before starting, confirm that the prerequisite from `docs/plans/16-decode-oauth-token-endpoint-errors-into-a-typed-exception.md` Milestone 1 exists.
 
@@ -182,7 +207,8 @@ data OAuthTokens = OAuthTokens
     -- | When this pair was received.
     obtainedAt :: UTCTime
   }
-  deriving stock (Eq, Show, Generic)
+  deriving stock (Eq, Generic)
+-- Redacted Show instance; never expose the token pair in logs.
 -- ToJSON/FromJSON with Notion.Prelude.aesonOptions (snake_case keys).
 
 oauthTokensFromResponse :: UTCTime -> OAuthTokenResponse -> OAuthTokens
@@ -200,38 +226,50 @@ newtype ReauthorizationRequired = ReauthorizationRequired {reauthorizationCause 
   deriving stock (Show)
 instance Exception ReauthorizationRequired
 
-data OAuthTokenManager -- abstract: an MVar OAuthTokens, the OAuthMethods and the TokenStore
+-- | A save failed; pending credentials remain available only through currentTokens.
+data TokenPersistenceError -- abstract, Exception and redacted Show
+-- | A refresh may have succeeded remotely but its result is unavailable.
+data RefreshOutcomeUnknown -- abstract, Exception and redacted Show
+
+data OAuthTokenManager -- abstract: an MVar lifecycle state, OAuthMethods and TokenStore
 
 newOAuthTokenManager :: OAuthMethods -> TokenStore -> IO OAuthTokenManager -- calls loadTokens once
 tokenManagerSource :: OAuthTokenManager -> TokenSource
 currentTokens :: OAuthTokenManager -> IO OAuthTokens
 -- | Refresh now regardless of the current token (for example before a long batch job).
 refreshTokensNow :: OAuthTokenManager -> IO OAuthTokens
+-- | Retry persistence of a retained pair; never send another OAuth request.
+retryTokenPersistence :: OAuthTokenManager -> IO OAuthTokens
 ```
 
-Renewal semantics, all under the `MVar` (use `modifyMVar` so that waiting threads queue behind one refresh):
+The manager owns one installation and loads the store exactly once. Keep its lifecycle in an `MVar` with internal states `Ready tokens`, `PendingPersistence tokens`, `NeedsReauthorization cause`, and `UncertainOutcome`. Keep the last known pair alongside every state, including terminal states. `currentTokens` returns it for explicit recovery/inspection only; it is not the source used to authorize requests. `currentToken` waits for an in-progress transition (`readMVar` blocks while the MVar is empty), then returns only a `Ready` token. Pending persistence throws `TokenPersistenceError`; terminal states throw their corresponding exception. Never print token values through `Show` or default exception messages.
 
-1. If the stored access token differs from the rejected one, another thread already refreshed. Return `Just` the stored token and make no request.
-2. If `refreshToken` is `Nothing`, throw `ReauthorizationRequired Nothing`.
-3. Call `createOAuthToken oauth (RefreshToken rt)`. On `OAuthError` with `oauthErrorCode = OAuthInvalidGrant`, throw `ReauthorizationRequired (Just e)`, leaving the state unchanged. Any other exception propagates, and the state is unchanged.
-4. On success, build the new value with `oauthTokensFromResponse` and the current time. If the response's `refresh_token` is `null`, keep the previous refresh token, and record in Surprises & Discoveries whether the live run (`docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md`) ever saw that.
-5. Call `saveTokens new` with `try`. Put `new` into the `MVar` whether or not it succeeded. Then rethrow a save failure, or return `Just (accessToken new)`.
+For automatic renewal, acquire the same lock and first check the lifecycle. In `Ready`, if the access token differs from the rejected token, return the newer token without refreshing. Otherwise a missing refresh token transitions to `NeedsReauthorization Nothing`. Send one `createOAuthToken (RefreshToken rt)` through plan 16's non-retrying methods. `OAuthInvalidGrant` transitions to `NeedsReauthorization (Just e)` so concurrent waiters do not each retry a dead grant. Other explicit OAuth rejections propagate without marking a known pair invalid; do not automatically retry them. An ambiguous outcome, including a network error, timeout, success-body decode failure, unclassified server failure, or cancellation during the exchange, transitions to `UncertainOutcome` before propagating the failure. Later calls fail with `RefreshOutcomeUnknown` without sending the old refresh token again. Recover by completing a new authorization and constructing a new manager; do not reload a potentially stale store and claim recovery.
 
-`refreshTokensNow` follows the same steps 2–5 unconditionally. `currentToken` reads the `MVar` without blocking a refresh in progress (`readMVar`).
+On success, validate a nonempty bearer access token and the same bot/workspace identity, convert the response with `oauthTokensFromResponse`, and retain the pair before invoking the caller's store. Preserve the returned `refreshToken` exactly: a null/missing value becomes `Nothing`, never the previous refresh token. Such an access token can be used after persistence but will require reauthorization on a later renewal. Unexpected token type or changed installation identity is a protocol failure with an uncertain refresh outcome, not permission to use a token for another installation.
 
-Add `tasty/TokenRefreshTests.hs` (group "TokenRefresh"). Use `fakeClientEnvWith` for the API, answering 200 with a user fixture when the `Authorization` header is `Bearer secret_new` and 401 `unauthorized` otherwise. Use a second fake `ClientEnv` for `OAuthMethods`, answering a token response with `access_token = "secret_new"` and `refresh_token = "nrt_new"`. Tests:
+Call `saveTokens` under the same serialization boundary. On success install `Ready new`; on failure install `PendingPersistence new`, then throw `TokenPersistenceError`. No request may use that pair or initiate another refresh while pending. `retryTokenPersistence` saves the identical retained pair, transitions to `Ready` only on success, and never calls Notion. In `Ready` it is a no-op returning the current pair; in terminal states it throws the terminal error. `saveTokens` must be idempotent for the same pair and must not re-enter the manager. A successful return means persistence has met the application's durability contract.
 
-1. Refresh and retry: a manager loaded with `secret_old`/`nrt_old` makes `retrieveMyUser` succeed. The OAuth fake records exactly one `POST /oauth/token`. The in-memory store now holds `secret_new`/`nrt_new`.
-2. Single flight: two threads call `retrieveMyUser` concurrently, released together by an `MVar` barrier, with a 50 ms `threadDelay` inside the OAuth fake's reply function. Both calls succeed and exactly one token request is recorded.
-3. `invalid_grant`: the OAuth fake answers 400 `{"error":"invalid_grant"}`, and the call throws `ReauthorizationRequired (Just OAuthError {oauthErrorCode = OAuthInvalidGrant})`.
-4. A missing refresh token throws `ReauthorizationRequired Nothing` with no token request.
-5. A failing store: `saveTokens` throws `userError "disk full"`. The call rethrows that error, `currentTokens` returns the new pair, and a second `retrieveMyUser` succeeds without another refresh.
-6. `OAuthTokens` round-trips through JSON with snake_case keys (`access_token`, `obtained_at`).
+Implement transitions with asynchronous-exception masking and explicit `Either SomeException result` outcomes: catch around the restored interruptible network/save actions, publish the resulting lifecycle state under masking, then rethrow outside the MVar update. Ordinary `modifyMVar` restores its old value when its action throws, so throwing inside its update after a successful rotation would incorrectly resurrect the old pair. Do not use `uninterruptibleMask` around network or storage. If interruption prevents obtaining a response, record uncertainty; if the response is known, retain it pending persistence. This prevents avoidable in-process loss, but cannot eliminate a process crash between remote rotation and local commit. State this limitation in the API docs.
 
-Documentation: in `README.md`'s "### OAuth" section, show `newOAuthTokenManager` and `makeMethodsWithTokenSource`, and explain `ReauthorizationRequired` and the single-process scope of the lock (see Interfaces). In `CHANGELOG.md`, under `## Unreleased` (create it at the top if absent), add a `### Breaking Changes` entry for `RequestContext.contextAuthorization` being replaced by `contextTokenSource` and `standardHeaders` now returning `IO [Header]`, and `### New Features` entries for token sources and the token manager. Create the next ADR in `docs/adr/` (`ls docs/adr` and take the next number; at drafting time that was 9). Use the existing format, a title line plus `Status:` and `Date:` lines followed by `## Context`, `## Decision` and `## Consequences`, and follow `agents/skills/exec-plan/ADR.md`. The ADR records the per-request token source, reactive single-flight refresh, persistence of the new pair before use, the one-retry rule outside ADR 2's loop, and the single-process scope. Then add a one-line cross-reference in ADR 2's Consequences.
+`refreshTokensNow` acquires the same lock and refreshes only a `Ready` manager. It bypasses the rejected-token comparison, so concurrent explicit calls serialize but may each rotate; automatic rejections for one old token share a single completed refresh. Neither a store implementing compare-and-swap on save nor two separate managers share this lock. Require one manager per installation in one process; applications needing multiple processes must coordinate the entire load/check/remote-refresh/save sequence externally.
+
+Add `tasty/TokenRefreshTests.hs` (group "TokenRefresh"). Use a fake API keyed on the Authorization header and a separate fake OAuth client. Record requests atomically. Use MVar barriers to prove both requests were sent with the old token before releasing either rejection, rather than relying on sleeps; put bounded timeouts around concurrency tests.
+
+1. A rejection refreshes once, persists the pair, retries with the new bearer token, preserves installation identity, and sets `obtainedAt` to the time of the replacement response.
+2. Two concurrent old-token rejections share one refresh. A late rejection arriving after completion also uses the new pair without another refresh. A store barrier proves no new-token request is sent before save succeeds.
+3. `invalid_grant` and a missing refresh token each put the manager into a terminal reauthorization state. Repeated and concurrent callers make no additional refresh attempts.
+4. A failed save retains the new pair; `currentToken` and `refreshTokensNow` fail without network traffic. After storage recovers, `retryTokenPersistence` saves that exact pair, then requests succeed with no second refresh. Repeat with cancellation during save.
+5. Simulate a server consuming a refresh and losing its response. The triggering failure propagates, subsequent callers get `RefreshOutcomeUnknown`, and the consumed token is never retried. Also inject cancellation during exchange and immediately after response receipt; assert the lock is released and either uncertainty or the known pending pair is preserved appropriately.
+6. A null/missing refresh token is stored as `Nothing`, never replaced with the old token. A later unauthorized response requires reauthorization. Invalid token type or mismatched bot/workspace identity cannot authorize a request.
+7. Exercise an effectful consumer with a refreshing `Methods`: final `NotionError` uses `Error NotionError`, while `ReauthorizationRequired`, `TokenPersistenceError` and `RefreshOutcomeUnknown` propagate in IO.
+8. `OAuthTokens` round-trips through JSON; token-bearing `Show` and exception messages redact sentinels. Non-`invalid_grant` explicit rejection remains distinguishable, and both explicit-refresh and automatic-refresh paths use the same transitions.
+
+Documentation: in `README.md`'s "### OAuth" section, show `newOAuthTokenManager` and `makeMethodsWithTokenSource`, and explain `ReauthorizationRequired` and the single-process scope of the lock (see Interfaces). In `CHANGELOG.md`, under `## Unreleased` (create it at the top if absent), add a `### Breaking Changes` entry for `RequestContext.contextAuthorization` being replaced by `contextTokenSource` and `standardHeaders` now returning `IO [Header]`, and `### New Features` entries for token sources and the token manager. Update [ADR 9](../adr/9-oauth-callback-and-token-lifecycle-boundaries.md) with the implemented boundaries and any material discoveries, following `agents/skills/exec-plan/ADR.md`. It already records the proposed state machine and its limits; do not create a second ADR covering the same decision. Then add a one-line cross-reference in ADR 2's Consequences.
 
 
 ## Concrete Steps
+
 
 From `/Users/shinzui/Keikaku/bokuno/libraries/haskell/notion-client`:
 
@@ -252,7 +290,7 @@ Expected after Milestone 2 (abridged):
   All N tests passed
 ```
 
-Run the concurrency test several times (`--test-options='-p concurrent --num-threads 4'` or a shell loop of 20 runs) to show that it is not flaky. Commit at each milestone with Conventional Commits and trailers, for example:
+Use deterministic barriers and bounded timeouts for the concurrency cases. Additional repeated runs are useful only when resolving a concurrency failure; passing repetitions do not replace the ordering assertions. Commit at each milestone with Conventional Commits and trailers, for example:
 
 ```text
 feat(client)!: attach bearer tokens per request through a TokenSource
@@ -265,27 +303,33 @@ Intention: intention_01m52739hkexps2gwzdp5hnn4a
 
 ## Validation and Acceptance
 
-Milestone 1 is accepted when the six `TokenSource` tests pass, every pre-existing test passes unchanged except the one `standardHeaders` adaptation, `cabal build all` builds `notion-client-effectful` without source changes, and plan 14 and its MasterPlan carry the cascade notes. Milestone 2 is accepted when the six `TokenRefresh` tests pass, the concurrency test passes 20 consecutive runs, and the README example type-checks.
 
-A live refresh against Notion is not required here. It needs real OAuth tokens and is the acceptance of `docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md`. If that plan's live run contradicts an assumption here (for example, the old access token keeps working after a refresh, or the response omits `refresh_token`), it records the finding in the MasterPlan, and this plan's semantics must be revisited.
+Milestone 1 is accepted when all `TokenSource` tests pass, every pre-existing test passes unchanged except the one `standardHeaders` adaptation, `cabal build all` builds `notion-client-effectful` without source changes, and plan 14 and its MasterPlan carry the cascade notes. Milestone 2 is accepted when all `TokenRefresh` tests pass, including the deterministic failure/cancellation and persistence-order cases, and the README example type-checks.
+
+A live refresh against Notion is not required here. It needs real OAuth tokens and is the acceptance of `docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md`. If that plan's live run contradicts an assumption here (for example, a response shape differs from the published contract), it records the finding in the MasterPlan, and this plan's semantics must be revisited.
 
 
 ## Idempotence and Recovery
 
-The changes are code and tests and can be re-run. The breaking change to `RequestContext` is confined to one record field and one function signature. If it proves too disruptive, an alternative is to keep `contextAuthorization :: Text` as a deprecated field holding the initial value alongside `contextTokenSource`. Record that choice in the Decision Log, because it would leave non-Servant callers unable to refresh. Do not bump the package version; the parent MasterPlan assigns the `0.10.0.0` bump to `docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md`.
+
+The changes are code and tests and can be re-run. The breaking change to `RequestContext` is confined to one record field and one function signature. Do not retain a stale `contextAuthorization` field as a compatibility workaround; a caller could unknowingly keep using the old token. Keep the legacy constructor functions through `staticTokenSource`. Do not bump the package version; the parent MasterPlan assigns the `0.10.0.0` bump to `docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md`.
 
 
 ## Interfaces and Dependencies
 
-No new package dependencies. `Control.Concurrent.MVar` and `Control.Exception` come from `base`, and `time` and `aeson` are already library dependencies.
+
+No new library package dependencies. Put the effectful consumer check in the companion package or a scratch executable with both library dependencies; do not add a dependency from the core library to its adapter. The real HTTP consumer test adds test-only `wai` and `warp` if absent; verify current releases before choosing bounds. `Control.Concurrent.MVar` and `Control.Exception` come from `base`, and `time` and `aeson` are already library dependencies.
 
 Produced for other plans:
 
 - `Notion.V1.TokenSource`: `TokenSource (..)`, `staticTokenSource`, `withAuthorization`.
 - `Notion.V1` / `Notion.V1.Client`: `makeMethodsWithTokenSource :: ClientConfig -> ClientEnv -> TokenSource -> Methods`, `requestContextWithTokenSource`, `withStandardHeaders :: RequestContext -> ([Header] -> IO a) -> IO a`, and `RequestContext {contextConfig, contextManager, contextBaseUrl, contextTokenSource}`. `docs/plans/14-stream-session-updates-over-server-sent-events.md` consumes these.
-- `Notion.V1.OAuth.Refresh`: `OAuthTokens (..)`, `oauthTokensFromResponse`, `TokenStore (..)`, `inMemoryTokenStore`, `ReauthorizationRequired (..)`, `OAuthTokenManager`, `newOAuthTokenManager`, `tokenManagerSource`, `currentTokens`, `refreshTokensNow`. `docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md` implements a file-backed `TokenStore` against these and uses them in its example.
+- `Notion.V1.OAuth.Refresh`: `OAuthTokens (..)`, `oauthTokensFromResponse`, `TokenStore (..)`, `inMemoryTokenStore`, `ReauthorizationRequired (..)`, `OAuthTokenManager`, `newOAuthTokenManager`, `tokenManagerSource`, `currentTokens`, `refreshTokensNow`, `retryTokenPersistence`, `TokenPersistenceError`, `RefreshOutcomeUnknown`. `docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md` implements a file-backed `TokenStore` against these and uses them in its example.
 - `tasty/FakeNotion.hs`: `fakeClientEnvWith`.
 
-Scope limit to document: the manager serializes refreshes within one process. Several processes sharing one store must coordinate refreshes themselves, for example with a store whose `saveTokens` performs a compare-and-swap. The parent MasterPlan excludes multi-tenant and cross-process stores.
+Scope limit to document: the manager serializes refreshes within one manager instance. Several managers or processes sharing one installation must coordinate the whole refresh transaction externally; a compare-and-swap on `saveTokens` alone is too late to prevent two requests consuming the same remote credential. The parent MasterPlan excludes multi-tenant and cross-process stores.
 
 Prerequisites: none for Milestone 1. Milestone 2 requires Milestone 1 of `docs/plans/16-decode-oauth-token-endpoint-errors-into-a-typed-exception.md` (`OAuthError` and `OAuthInvalidGrant`). This plan does not depend on `docs/plans/17-build-authorization-urls-and-exchange-codes-from-verified-oauth-callbacks.md`.
+
+
+Revision (2026-10-16): Replace optimistic save-failure handling with explicit pending/terminal states, specify cancellation and uncertain remote outcomes, preserve nullable refresh-token responses, and require a real HTTP consumer test plus deterministic concurrency checks.
