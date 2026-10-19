@@ -4,8 +4,12 @@
 
 ### Breaking Changes
 
-* Requires `notion-client >=0.10 && <0.11`. `runNotion` accepts refreshing `Methods` unchanged; no effect constructors changed. OAuth reauthorization, persistence and uncertain-refresh exceptions propagate in IO; `Error NotionError` catches only final Notion API errors.
-* OAuth runtime consumer tests verify reactive refresh and the IO exception boundary.
+* Requires `notion-client >=0.10 && <0.11`. Upgrade this companion to 0.4.0.0 alongside core 0.10.0.0. `runNotion` accepts refreshing `Methods` unchanged; no effect constructors changed.
+* `OAuthError`, `ReauthorizationRequired`, `TokenPersistenceError` and `RefreshOutcomeUnknown` propagate in IO; `Error NotionError` catches only final Notion API errors. Retry persistence on the same manager; reauthorization and uncertain refresh outcomes require a new login and manager.
+
+### Validation
+
+* Four OAuth runtime consumer tests verify reactive refresh and the IO exception boundary. The core client's live public-integration gate also passed login, rotation, persisted restart, cancellation and logout on 2026-10-19.
 
 ## 0.3.0.0 - 2026-10-12
 

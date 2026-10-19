@@ -54,13 +54,9 @@ data PaginationResult a = PaginationResult
 --
 -- @
 -- allPages <- paginateAll $ \\cursor ->
---   queryDataSource methods dsId QueryDataSource
---     { filter = Nothing
---     , sorts = Nothing
---     , startCursor = cursor
+--   queryDataSource methods dsId _QueryDataSource
+--     { startCursor = cursor
 --     , pageSize = Just 100
---     , inTrash = Nothing
---     , filterProperties = Nothing
 --     }
 -- @
 paginateAll :: (Maybe Text -> IO (ListOf a)) -> IO (Vector a)

@@ -7,6 +7,7 @@
 --
 -- import Notion.V1
 -- import Notion.V1.Pages
+-- import Network.HTTP.Client.TLS (newTlsManager)
 -- import Data.Text qualified as Text
 -- import System.Environment qualified as Environment
 --

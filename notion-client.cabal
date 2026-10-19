@@ -7,6 +7,10 @@ description:
   to the Notion API, providing both a Servant interface and
   non-Servant interface for convenience.
   .
+  Includes browser OAuth authorization helpers, typed OAuth errors,
+  per-request token sources and automatic refresh with caller-supplied
+  persistence. A POSIX example demonstrates the complete login flow.
+  .
   Read the @README@ below for a fully worked usage example.
   .
   Otherwise, browse the "Notion.V1" module, which is the
@@ -20,7 +24,7 @@ maintainer: nadeem@gmail.com
 homepage: https://github.com/shinzui/notion-client
 bug-reports: https://github.com/shinzui/notion-client/issues
 build-type: Simple
-tested-with: ghc ==9.12.2
+tested-with: ghc ==9.12.4
 extra-doc-files:
   CHANGELOG.md
   README.md

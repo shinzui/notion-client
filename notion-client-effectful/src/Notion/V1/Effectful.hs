@@ -14,10 +14,13 @@
 -- here shares its name with a field of @Methods@ on purpose, so
 -- migrating an IO call site is a near-mechanical rewrite.
 --
--- Error handling: 'runNotion' catches 'NotionError' from the
--- underlying 'Methods' value and re-throws via the @Error NotionError@
+-- Error handling: 'runNotion' catches @NotionError@ from the
+-- underlying @Methods@ value and re-throws via the @Error NotionError@
 -- effect. Other 'Servant.Client.ClientError' values (network
 -- failures, decoding errors) remain 'IO' exceptions.
+-- Refreshing @Methods@ work with the same effect operations. OAuth errors,
+-- required reauthorization, persistence failures and uncertain refresh outcomes
+-- also remain 'IO' exceptions; handle them at the application boundary.
 module Notion.V1.Effectful
   ( -- * Effect
     Notion,

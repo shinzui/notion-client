@@ -36,6 +36,18 @@ import Notion.V1.Effectful qualified as NE
 
 Then `NE.retrievePage`, `NE.search`, `NE.runNotion`, and so on.
 
+The umbrella module exposes the common operations. For the complete surface,
+including filtered page requests, background operations, meeting notes and
+comment retrieval/update/deletion, import the effect and interpreter directly:
+
+```haskell
+import Notion.V1.Effectful.Effect qualified as NE
+import Notion.V1.Effectful.Interpreter (runNotion)
+```
+
+Use `NE.createPageFiltered`, `NE.createPageAsync`, `NE.retrieveAsyncTask`, and
+the other effect operations with the unqualified `runNotion` interpreter.
+
 ## Error handling
 
 `runNotion` catches `Notion.V1.Error.NotionError` thrown by the
@@ -50,11 +62,28 @@ This preserves the contract of the underlying `notion-client`
 library and lets callers layer their own `Error ClientError`
 interpretation on top later. The same applies to
 `UnknownHTTPResponseError`, `RequestTimeoutError` and
-`InvalidPathParameterError` from `Notion.V1.Error`. Retries of
-rate-limited requests happen inside `Methods`, before an error reaches
-`runNotion`.
+`InvalidPathParameterError` from `Notion.V1.Error`. Retries of rate-limited
+requests and reactive OAuth renewal happen inside `Methods`, before an error
+reaches `runNotion`.
+
+### OAuth installations
+
+Build `Methods` with core `makeMethodsWithTokenSource` and pass it to `runNotion`;
+existing effect operations need no changes. See the core
+[OAuth walkthrough](https://github.com/shinzui/notion-client#oauth) for browser
+login and token-store setup.
+
+`OAuthError`, `ReauthorizationRequired`, `TokenPersistenceError` and
+`RefreshOutcomeUnknown` propagate as IO exceptions. Handle them at the application
+boundary outside `runEff`; `Error NotionError` catches only final Notion API errors.
+For a persistence failure, call `retryTokenPersistence` on the same manager to
+save its retained pair without another refresh. Reauthorization or an uncertain
+remote outcome requires a new login and manager. Use one manager per installation;
+multiple processes must coordinate the entire load/refresh/save sequence.
 
 ## Minimum viable usage
+
+Use `GHC2024` with `OverloadedStrings` for this example.
 
 ```haskell
 module Demo where
@@ -110,14 +139,17 @@ with no other change to the call site.
 
 ## Versioning
 
-The `0.y.z` series tracks `notion-client` 0.7.x. A major version
-bump is planned if `notion-client` changes the shape of `Methods`
-in a way that forces a constructor rename.
+Use compatible versions of both packages:
 
+| `notion-client-effectful` | Required `notion-client` |
+|---|---|
+| 0.4.x | `>=0.10 && <0.11` |
+| 0.3.x | `>=0.9 && <0.10` |
+| 0.2.x | `>=0.8 && <0.9` |
 
-OAuth methods built with `makeMethodsWithTokenSource` work with `runNotion` unchanged.
-`Error NotionError` catches final Notion API errors. `OAuthError`,
-`ReauthorizationRequired`, `TokenPersistenceError` and `RefreshOutcomeUnknown`
-propagate as IO exceptions; handle them at the application boundary. A persistence
-retry saves the retained pair, while reauthorization or an uncertain remote outcome
-requires a new login. Use one manager per installation.
+The prepared release is `notion-client-effectful-0.4.0.0` with
+`notion-client-0.10.0.0`. The companion's core bound moves with each breaking core
+release, even when `Methods` fields are unchanged. See the
+[changelog](CHANGELOG.md) for migration details and the repository's
+[release preparation](https://github.com/shinzui/notion-client#release-preparation)
+for validation.

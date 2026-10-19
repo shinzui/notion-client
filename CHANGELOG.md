@@ -8,17 +8,23 @@
 
 * `RequestContext.contextAuthorization` is replaced by `contextTokenSource`; `standardHeaders` now returns `IO [Header]`. Use `withStandardHeaders` around non-Servant response acquisition for one reactive renewal, and keep body readers and user callbacks outside it.
 
-* OAuth endpoint failures with OAuth error bodies now throw `OAuthError` instead of `UnknownHTTPResponseError`.
+* OAuth endpoint failures with OAuth error bodies now throw `OAuthError` instead of `UnknownHTTPResponseError`. Known OAuth codes in the alternate Notion error envelope also become `OAuthError`; ordinary Notion API codes remain `NotionError`.
 
 ### New Features
 
-* POSIX `notion-client-oauth-example` demonstrates localhost login, durable private file persistence, explicit refresh and confirmed local logout. Offline callback, listener and file-store tests cover single use and recovery; full live public-integration acceptance remains pending credentials.
+* POSIX `notion-client-oauth-example` demonstrates localhost login, durable private file persistence, explicit refresh and confirmed local logout. Offline callback, listener and file-store tests cover single use and recovery. Live public-integration acceptance passed login, user-owner decoding, explicit and automatic token rotation, persisted restart, consent cancellation and revoke/local logout on 2026-10-19.
 
 * Per-request `TokenSource`, `makeMethodsWithTokenSource` and `Notion.V1.OAuth.Refresh` support automatic renewal once on typed `Unauthorized`, serialized token rotation and persistence-before-use. Failed saves retain the pair for `retryTokenPersistence`; uncertain exchanges block grant replay.
 
 * `Notion.V1.OAuth.Authorization` provides secure state generation, consent URLs, strict state-first callback verification and code exchange.
 
 * Typed `OAuthErrorCode` and route-local normalization of OAuth failures; OAuth requests never automatically replay grants. Default error rendering and OAuth debug logging omit server descriptions, headers and bodies.
+
+### Migration
+
+* Existing `makeMethods`, `makeMethodsWith` and `makeMethodsWithEnv` callers keep their fixed-token behavior. Opt into refresh with `makeMethodsWithTokenSource` and `tokenManagerSource`; neither `Methods` fields nor effectful operations change in this release.
+* Construct custom request contexts with `requestContextFor` for a fixed token or `requestContextWithTokenSource` for a dynamic source. Call `standardHeaders` in IO for headers without renewal, or use `withStandardHeaders` for a replayable acquisition that can renew once. Close rejected responses and classify them before throwing; consume an opened response outside the retry wrappers.
+* Handle `OAuthError` for OAuth endpoint failures. For a managed installation, handle `ReauthorizationRequired`, `TokenPersistenceError` and `RefreshOutcomeUnknown` at the IO boundary, including when using `runNotion`. Persistence recovery calls `retryTokenPersistence` on the same manager; reauthorization and uncertain refresh outcomes require a new login and manager.
 
 ## 0.9.0.0 (2026-10-12)
 

@@ -1,9 +1,11 @@
 -- | Client runtime: configuration, timeout, retries and logging.
 --
 -- 'Notion.V1.makeMethodsWith' builds 'Notion.V1.Methods' from a 'ClientConfig'.
--- The building blocks below ('RequestContext', 'standardHeaders',
--- 'responseTimeoutFor', 'withRetries') are exported so requests made outside
--- Servant, such as streaming responses, behave exactly like 'Notion.V1.Methods'.
+-- The building blocks below ('RequestContext', 'withStandardHeaders',
+-- 'responseTimeoutFor', 'withRetries') let non-Servant requests share the runtime.
+-- 'standardHeaders' reads current authorization in IO without renewal.
+-- 'withStandardHeaders' can renew once around replayable response acquisition;
+-- keep body consumption and user callbacks outside both retry wrappers.
 module Notion.V1.Client
   ( -- * Configuration
     ClientConfig (..),

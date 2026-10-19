@@ -3,13 +3,15 @@ name: notion-client-effectful
 version: 0.4.0.0
 synopsis: Effectful effects for notion-client
 description:
-  Effectful effect + default interpreter for shinzui/notion-client.
+  Effectful effect and default interpreter for notion-client.
   Exposes every operation on 'Notion.V1.Methods' as a smart
   constructor of the 'Notion.V1.Effectful.Notion' effect and provides
   a 'runNotion' interpreter that dispatches through a concrete
   @Methods@ value. API-level 'Notion.V1.Error.NotionError' responses
   are surfaced via the @Error NotionError@ effect; other
-  @Servant.Client.ClientError@ values remain 'IO' exceptions.
+  @Servant.Client.ClientError@ values and OAuth lifecycle or persistence
+  failures remain 'IO' exceptions. Accepts fixed-token or refreshing
+  @Methods@ without changing effect operations.
   See @README.md@ for the full import pattern and a worked example.
 
 license: MIT
@@ -17,10 +19,18 @@ license-file: LICENSE
 author: Nadeem Bitar
 maintainer: nadeem@gmail.com
 category: Web
+homepage: https://github.com/shinzui/notion-client/tree/master/notion-client-effectful
+bug-reports: https://github.com/shinzui/notion-client/issues
+tested-with: ghc ==9.12.4
 build-type: Simple
 extra-doc-files:
   CHANGELOG.md
   README.md
+
+source-repository head
+  type: git
+  location: https://github.com/shinzui/notion-client.git
+  subdir: notion-client-effectful
 
 common warnings
   ghc-options:

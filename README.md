@@ -6,7 +6,7 @@ A type-safe Haskell client for the [Notion API](https://developers.notion.com/re
 
 - Type-safe API bindings using Servant
 - Comprehensive coverage of Notion API endpoints
-- Support for all Notion object types: Pages, Databases, Data Sources, Blocks, Users, etc.
+- Typed pages, databases, data sources, blocks, users, and other published API objects
 - Simple client interface with sensible defaults
 - Automatic retries of rate-limited and overloaded requests, honoring `retry-after`
 - Typed error codes with request IDs for support
@@ -14,14 +14,38 @@ A type-safe Haskell client for the [Notion API](https://developers.notion.com/re
 
 ## Installation
 
-Add to your `package.yaml` or `.cabal` file:
+For this release, use `notion-client` 0.10.x with `notion-client-effectful` 0.4.x
+if you need the effectful adapter. Add to your `.cabal` file:
+
+```cabal
+build-depends: notion-client >=0.10 && <0.11
+```
+
+Or add to `package.yaml`:
 
 ```yaml
 dependencies:
-  - notion-client
+  - notion-client >=0.10 && <0.11
 ```
 
+### Upgrading from 0.9
+
+Fixed-token constructors (`makeMethods`, `makeMethodsWith`, `makeMethodsWithEnv`)
+keep their signatures. Automatic refresh is opt-in through
+`makeMethodsWithTokenSource`; `Methods` fields are unchanged.
+
+Custom HTTP clients must replace `RequestContext.contextAuthorization` with
+`contextTokenSource`. Prefer `requestContextFor` for a fixed token or
+`requestContextWithTokenSource` for an installation's source. `standardHeaders`
+now runs in IO and does not renew; use `withStandardHeaders` around replayable
+response acquisition for renewal, keeping response bodies outside retry scopes.
+OAuth endpoint failures now use `OAuthError`. See [OAuth](#oauth) for lifecycle
+exceptions and the [changelog](CHANGELOG.md#01000-2026-10-19) for the full migration.
+
 ## Usage
+
+Examples assume `GHC2024` with `OverloadedStrings` and `DuplicateRecordFields`.
+Replace placeholder IDs with real IDs from pages shared with your connection.
 
 Here's a simple example of retrieving a Notion page:
 
@@ -48,19 +72,23 @@ main = do
 
 ### Creating a page with typed properties
 
+The target data source must have properties with matching names and types;
+this example uses a status property named `Status` and a select named `Priority`.
+
 ```haskell
 import Notion.V1
 import Notion.V1.Common (Parent(..))
 import Notion.V1.Pages
 import Notion.V1.PropertyValue qualified as PV
+import Notion.V1.RichText (RichText)
 import Data.Map qualified as Map
 import Data.Vector qualified as Vector
 
-createNewPage :: Methods -> IO PageObject
-createNewPage Methods{createPage} = do
+createNewPage :: Methods -> RichText -> IO PageObject
+createNewPage Methods{createPage} titleRichText = do
     let pageProperties = Map.fromList
             [ ("title", PV.titleValue (Vector.singleton titleRichText))
-            , ("Status", PV.selectValue "In Progress")
+            , ("Status", PV.statusValue "In Progress")
             , ("Priority", PV.selectValue "High")
             , ("Due", PV.dateValue "2024-06-01" Nothing)
             , ("Score", PV.numberValue 42)
@@ -68,7 +96,7 @@ createNewPage Methods{createPage} = do
             ]
 
         newPage = mkCreatePage
-            (DataSourceParent { dataSourceId = "data-source-id-here" })
+            (DataSourceParent { dataSourceId = "data-source-id-here", parentDatabaseId = Nothing })
             pageProperties
 
     createPage newPage
@@ -77,12 +105,15 @@ createNewPage Methods{createPage} = do
 ### Reading typed properties
 
 ```haskell
-import Notion.V1.PropertyValue
+import Data.Map qualified as Map
+import Data.Text (Text)
+import Notion.V1.Pages (PageObject(..))
+import Notion.V1.PropertyValue (PropertyValue(StatusValue), SelectOptionValue(..))
 
 readPageStatus :: PageObject -> Maybe Text
 readPageStatus page =
     case Map.lookup "Status" (properties page) of
-        Just (SelectValue _ (Just opt)) -> Just (name opt)
+        Just (StatusValue _ (Just SelectOptionValue{name = optionName})) -> Just optionName
         _ -> Nothing
 ```
 
@@ -120,12 +151,12 @@ existing `[UUID] -> PropertyValue` signature and supplies `Nothing` for writes.
 ```haskell
 import Notion.V1
 import Notion.V1.Common (Parent(..))
-import Notion.V1.Pages
+import Notion.V1.Pages (CreatePage(..), PageObject, mkCreatePage)
 
 createMarkdownPage :: Methods -> IO PageObject
 createMarkdownPage Methods{createPage} = do
     let newPage = (mkCreatePage
-            (DataSourceParent { dataSourceId = "data-source-id" })
+            (DataSourceParent { dataSourceId = "data-source-id", parentDatabaseId = Nothing })
             mempty)
             { markdown = Just "# Hello\n\nThis page was created with **markdown**." }
 
@@ -135,6 +166,7 @@ createMarkdownPage Methods{createPage} = do
 ### Editing page content with markdown
 
 ```haskell
+import Data.Vector qualified as Vector
 import Notion.V1
 import Notion.V1.Pages
 
@@ -142,7 +174,7 @@ editPage :: Methods -> PageID -> IO PageMarkdown
 editPage Methods{updatePageMarkdown} pageId =
     updatePageMarkdown pageId $
         UpdateContent UpdateContentRequest
-            { contentUpdates = fromList
+            { contentUpdates = Vector.fromList
                 [ ContentUpdate
                     { oldStr = "old text"
                     , newStr = "new text"
@@ -161,9 +193,12 @@ URL, timeout (default 60 seconds), retries and logging, build a `ClientConfig`:
 ```haskell
 import Network.HTTP.Client.TLS (newTlsManager)
 import Notion.V1
+import Data.Text qualified as Text
+import System.Environment (getEnv)
 
 main :: IO ()
 main = do
+    token <- Text.pack <$> getEnv "NOTION_TOKEN"
     manager <- newTlsManager
     let config = defaultClientConfig {logger = Just stderrLogger, logLevel = LogInfo}
         methods = makeMethodsWith config manager token
@@ -182,7 +217,9 @@ delay; otherwise the delay grows exponentially with jitter. Disable retries with
 ```haskell
 import Control.Exception (catch)
 import Data.Text qualified as Text
+import Notion.V1 (Methods(..))
 import Notion.V1.Error
+import Notion.V1.Pages (PageID)
 
 safeRetrieve :: Methods -> PageID -> IO ()
 safeRetrieve Methods{retrievePage} pageId =
@@ -247,6 +284,7 @@ implements this recovery. Then construct stable methods from your store:
 
 ```haskell
 import Notion.V1 (ClientConfig, Methods, makeMethodsWithTokenSource)
+import Notion.V1.OAuth (OAuthMethods)
 import Notion.V1.OAuth.Refresh
 import Servant.Client (ClientEnv)
 
@@ -293,11 +331,14 @@ The effectful adapter accepts these same `Methods`. Final `NotionError` values u
 ### URL helpers
 
 ```haskell
+import Notion.V1.Common (UUID)
 import Notion.V1.Helpers (extractBlockId, extractNotionId)
 
-extractNotionId "https://www.notion.so/team/Tasks-abc123def456789012345678901234ab?v=..."
+notionId :: Maybe UUID
+notionId = extractNotionId "https://www.notion.so/team/Tasks-abc123def456789012345678901234ab?v=..."
 -- Just (UUID "abc123de-f456-7890-1234-5678901234ab")
-extractBlockId "https://www.notion.so/Page-0123456789abcdef0123456789abcdef#block-fedcba9876543210fedcba9876543210"
+blockId :: Maybe UUID
+blockId = extractBlockId "https://www.notion.so/Page-0123456789abcdef0123456789abcdef#block-fedcba9876543210fedcba9876543210"
 -- Just (UUID "fedcba98-7654-3210-fedc-ba9876543210")
 ```
 
@@ -305,14 +346,15 @@ extractBlockId "https://www.notion.so/Page-0123456789abcdef0123456789abcdef#bloc
 
 ```haskell
 import Notion.V1.Pagination (paginateAll)
-import Notion.V1.DataSources (QueryDataSource(..))
+import Data.Vector (Vector)
+import Notion.V1 (Methods(..))
+import Notion.V1.DataSources (DataSourceID, QueryDataSource(..), _QueryDataSource)
+import Notion.V1.Search (PageOrDataSource)
 
-allPages <- paginateAll $ \cursor ->
-    queryDataSource methods dsId QueryDataSource
-        { filter = Nothing, sorts = Nothing
-        , startCursor = cursor, pageSize = Just 100
-        , inTrash = Nothing, filterProperties = Nothing
-        }
+allPages :: Methods -> DataSourceID -> IO (Vector PageOrDataSource)
+allPages methods dsId = paginateAll $ \cursor ->
+    queryDataSource methods dsId
+        _QueryDataSource {startCursor = cursor, pageSize = Just 100}
 ```
 
 `paginateFoldM` and `paginateForM_` process every item while holding only one
@@ -323,7 +365,7 @@ page in memory.
 Callers that use the [`effectful`](https://hackage.haskell.org/package/effectful)
 effect system can opt into an `Eff`-typed surface via the companion
 package
-[`notion-client-effectful`](./notion-client-effectful/). Every
+[`notion-client-effectful`](https://hackage.haskell.org/package/notion-client-effectful). Every
 `Notion.V1.Methods` field is re-exposed as a smart constructor of a
 `Notion` effect, and a `runNotion` interpreter dispatches through a
 concrete `Methods` value. `NotionError` responses surface via the
@@ -358,7 +400,7 @@ main = do
   print result
 ```
 
-See [`notion-client-effectful/README.md`](./notion-client-effectful/README.md)
+See the [companion README](https://github.com/shinzui/notion-client/tree/master/notion-client-effectful#readme)
 for the full import pattern (qualifying one of the two `Notion.V1`
 modules is required — every smart constructor shares its name with
 the matching `Methods` record selector).
@@ -367,12 +409,15 @@ the matching `Methods` record selector).
 
 - **Databases**: Create, retrieve, update, and query databases
 - **Data Sources**: Create, retrieve, update, query data sources; list templates
-- **Pages**: Create (with blocks or markdown), retrieve, update, move pages; retrieve and update page markdown
+- **Pages**: Create (with blocks or markdown), retrieve, update, move pages; retrieve and update page markdown, including background operations
 - **Blocks**: Retrieve, update, append children (with position control), and delete blocks
 - **Users**: List, retrieve users and bot users
 - **Views**: Create, retrieve, update, delete, list, and query database views (all 10 view types)
 - **Search**: Search for pages and data sources
-- **Comments**: Create and list comments
+- **Comments**: Create, retrieve, update, delete and list comments
+- **File Uploads**: Create, upload content, complete, retrieve and list uploads
+- **Meeting Notes**: Create from recordings and query meeting notes
+- **Async Tasks**: Retrieve status and wait for background operations
 - **Custom Emojis**: List workspace custom emojis
 - **Webhooks**: Event types (including view events) and signature verification
 - **OAuth**: Browser login helpers, verified callbacks, automatic token refresh with persistence, revoke and introspect tokens
@@ -398,8 +443,12 @@ cabal run notion-client-example
 ### OAuth example
 
 The POSIX-only `notion-client-oauth-example` runs a trusted local confidential
-client. Register `http://localhost:8765/callback` in the public connection's OAuth
-configuration, then set credentials in your shell (never commit them):
+client. In the [developer portal](https://www.notion.so/profile/integrations),
+choose **Build → Public connections**, create a test connection, and enable the
+capabilities your application needs. Register `http://localhost:8765/callback`
+under its OAuth configuration, then copy its OAuth client ID and secret from the
+**Configuration** tab. See Notion's [public-connection setup guide](https://developers.notion.com/guides/get-started/public-connections).
+Set the credentials in your shell (never commit them):
 
 ```bash
 export NOTION_OAUTH_CLIENT_ID=...
@@ -410,6 +459,16 @@ cabal run notion-client-oauth-example -- refresh
 cabal run notion-client-oauth-example -- whoami
 cabal run notion-client-oauth-example -- revoke
 ```
+
+For a local checkout using direnv, the same exports can live in gitignored
+`.envrc.local`, which `.envrc` loads after the development shell. The executable
+reads environment variables; it does not load dotenv files itself.
+
+If port 8765 is occupied, register another exact callback URI and set both
+`NOTION_OAUTH_REDIRECT_URI=http://localhost:8767/callback` and
+`NOTION_OAUTH_LISTEN_PORT=8767`. A real public integration accepted this localhost
+HTTP callback during live validation on 2026-10-19. Always open the authorization
+URL printed by `login`; visiting `/callback` directly returns “Invalid callback”.
 
 `login` prints a consent URL after the listener is ready on `127.0.0.1`, validates
 state, consumes the callback once, exchanges the code and saves credentials before
@@ -438,17 +497,58 @@ loopback. No framework adapter, PKCE, timer refresh, distributed store or Notion
 MCP OAuth is provided. The executable and its POSIX file tests are disabled on
 Windows; the core library and ordinary HTTP tests remain portable.
 
-### Obtaining API Credentials
+### Internal connection credentials
 
-1. Create a Notion integration at [https://www.notion.so/my-integrations](https://www.notion.so/my-integrations)
-2. Get your integration token from the integration settings
-3. Share any Notion pages or databases you want to access with your integration
-   - Open the page/database in Notion
-   - Click "Share" in the top right
-   - Enter your integration name and click "Invite"
+These credentials are for `notion-client-example`; the OAuth example above uses
+a public connection's client ID and secret instead.
+
+1. Create an internal connection in the [developer portal](https://www.notion.so/profile/integrations).
+2. Copy its API token from **Configuration** and set `NOTION_TOKEN`.
+3. Share the pages or databases you want to access: open the page's **•••** menu,
+   choose **Add connections**, and select your connection. See the
+   [authorization guide](https://developers.notion.com/guides/get-started/authorization).
 4. Get the page/database IDs from their URLs:
    - Page URL: `https://www.notion.so/Your-Page-Title-83715d7c1111424aaa11d7fc1111bd2a`
    - Page ID: `83715d7c1111424aaa11d7fc1111bd2a` (the last part of the URL)
+
+## Release preparation
+
+The release pair is `notion-client-0.10.0.0` and
+`notion-client-effectful-0.4.0.0`, targeting Notion API `2026-03-11` and validated
+with GHC 9.12.4. Keep both Cabal versions, the companion's core bound and both
+changelogs aligned. Run from the repository root:
+
+```bash
+cabal build all
+env -u NOTION_TOKEN cabal test all --test-show-details=direct
+cabal haddock all
+cabal check
+(cd notion-client-effectful && cabal check)
+cabal sdist all
+```
+
+The offline suites currently contain 462 core tests and four companion runtime
+tests. The separate live OAuth gate passed login, user-owner decoding, explicit
+and reactive rotation, persisted restart, cancellation and revoke/local logout;
+its evidence is in [plan 19](https://github.com/shinzui/notion-client/blob/master/docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md).
+After OAuth runtime changes, repeat that sequence with a disposable test
+installation. The explicit automatic-refresh harness is:
+
+```bash
+cabal exec -- runghc -package=notion-client -XGHC2024 -XOverloadedStrings -XDuplicateRecordFields -XRecordWildCards -inotion-client-oauth-example scripts/OAuthLiveCheck.hs
+```
+
+Run it after login/explicit refresh and before revoke. It changes only the
+in-memory access token, uses the current saved refresh token, and durably saves
+the replacement. It is excluded from offline tests.
+
+Inspect both archives under `dist-newstyle/sdist/` before upload. Each must contain
+its README, changelog, license and all sources required by its tests and examples;
+local environment and token files must be absent. Build and test both extracted
+archives together in a fresh Cabal project to catch dependencies on the checkout.
+Publish the core package before its companion so the companion's bound resolves.
+These preparation commands generate local artifacts; uploading, tagging and
+publishing are separate maintainer actions.
 
 ## License
 
