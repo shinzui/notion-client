@@ -1,14 +1,18 @@
 # Changelog for notion-client
 
-## Unreleased
+## 0.10.0.0 (2026-10-19)
 
 ### Breaking Changes
+
+* Use `notion-client-effectful >=0.4 && <0.5`; the companion requires `notion-client >=0.10 && <0.11`.
 
 * `RequestContext.contextAuthorization` is replaced by `contextTokenSource`; `standardHeaders` now returns `IO [Header]`. Use `withStandardHeaders` around non-Servant response acquisition for one reactive renewal, and keep body readers and user callbacks outside it.
 
 * OAuth endpoint failures with OAuth error bodies now throw `OAuthError` instead of `UnknownHTTPResponseError`.
 
 ### New Features
+
+* POSIX `notion-client-oauth-example` demonstrates localhost login, durable private file persistence, explicit refresh and confirmed local logout. Offline callback, listener and file-store tests cover single use and recovery; full live public-integration acceptance remains pending credentials.
 
 * Per-request `TokenSource`, `makeMethodsWithTokenSource` and `Notion.V1.OAuth.Refresh` support automatic renewal once on typed `Unauthorized`, serialized token rotation and persistence-before-use. Failed saves retain the pair for `retryTokenPersistence`; uncertain exchanges block grant replay.
 

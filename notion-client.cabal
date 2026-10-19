@@ -1,6 +1,6 @@
 cabal-version: 3.4
 name: notion-client
-version: 0.9.0.0
+version: 0.10.0.0
 synopsis: Type-safe Haskell client for the Notion API
 description:
   This package provides comprehensive and type-safe bindings
@@ -25,7 +25,9 @@ extra-doc-files:
   CHANGELOG.md
   README.md
 
-extra-source-files: LICENSE
+extra-source-files:
+  LICENSE
+  scripts/OAuthLiveCheck.hs
 
 source-repository head
   type: git
@@ -125,6 +127,7 @@ test-suite tasty
     FakeNotion
     HelpersTests
     MeetingNotesTests
+    OAuthExamplePlatform
     OAuthTests
     ObjectFieldTests
     ResponseJSONTests
@@ -168,6 +171,17 @@ test-suite tasty
     -Wall
     -threaded
 
+  if !os(windows)
+    hs-source-dirs: notion-client-oauth-example
+    other-modules:
+      FileTokenStore
+      Login
+      OAuthExampleTests
+
+    build-depends:
+      filepath,
+      unix >=2.8 && <2.9,
+
 executable notion-client-example
   default-language: GHC2024
   hs-source-dirs: notion-client-example
@@ -202,3 +216,40 @@ executable notion-client-example
     vector,
 
   ghc-options: -Wall
+
+executable notion-client-oauth-example
+  default-language: GHC2024
+  hs-source-dirs: notion-client-oauth-example
+  main-is: Main.hs
+  other-modules:
+    FileTokenStore
+    Login
+
+  default-extensions:
+    DuplicateRecordFields
+    OverloadedStrings
+    RecordWildCards
+
+  ghc-options:
+    -Wall
+    -threaded
+
+  if os(windows)
+    buildable: False
+  else
+    build-depends:
+      aeson,
+      base,
+      bytestring,
+      directory >=1.3 && <1.4,
+      filepath,
+      http-client-tls,
+      http-types,
+      notion-client,
+      servant-client,
+      text,
+      time,
+      unix >=2.8 && <2.9,
+      vector,
+      wai >=3.2.4 && <3.3,
+      warp >=3.4.13 && <3.5,

@@ -17,6 +17,11 @@ provenance:
       at: 2026-10-16T11:53:13Z
       mode: "update"
       note: "Correct callback verification, OAuth replay policy, token lifecycle recovery and integration acceptance after source review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T20:35:27Z
+      mode: "implement"
+      note: "Implement loopback OAuth example, durable POSIX token store, offline acceptance and release documentation."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -52,15 +57,17 @@ This plan is EP-4 of `docs/masterplans/3-support-notion-public-integrations-with
 ## Progress
 
 
-- [ ] Milestone 1: The `notion-client-oauth-example` executable builds and implements `login`, `whoami`, `refresh` and `revoke` with a file-backed `TokenStore`. network-free listener and file-store tests pass, `cabal build all` is green, and running it without credentials prints a clear usage message.
-- [ ] Milestone 2: A live run against a real public integration completes login, `whoami`, `refresh` (rotation observed), `revoke`, and a cancelled consent. Findings are recorded here and in the MasterPlan.
-- [ ] Milestone 3: README OAuth walkthrough, CHANGELOG `0.10.0.0` section, version bumps (`notion-client` 0.10.0.0; `notion-client-effectful` bound and version), and the scope-exclusions ADR are done. `cabal build all` and `cabal test` are green.
+- [x] (2026-10-19) Milestone 1: The `notion-client-oauth-example` executable builds and implements `login`, `whoami`, `refresh` and `revoke` with a file-backed `TokenStore`. network-free listener and file-store tests pass, `cabal build all` is green, and running it without credentials prints a clear usage message.
+- [ ] Milestone 2 (live run pending credentials and browser consent): A live run against a real public integration completes login, `whoami`, `refresh` (rotation observed), `revoke`, and a cancelled consent. Findings are recorded here and in the MasterPlan.
+- [x] (2026-10-19) Milestone 3: README OAuth walkthrough, CHANGELOG `0.10.0.0` section, version bumps (`notion-client` 0.10.0.0; `notion-client-effectful` bound and version), and the scope-exclusions ADR are done. `cabal build all` and `cabal test` are green.
 
 
 ## Surprises & Discoveries
 
 
-(None yet.)
+- On 2026-10-19, neither `NOTION_OAUTH_CLIENT_ID` nor `NOTION_OAUTH_CLIENT_SECRET` is available in the implementation environment. The live run is pending credentials and browser consent. No live refresh or installation is claimed.
+- Enabling CPP for the entire core test suite broke existing multiline JSON string gaps. A small `OAuthExamplePlatform` module alone owns the platform guard; other test modules retain their existing parsing. The POSIX helper/module dependencies remain conditional.
+- Source archive checks exposed a companion test fixture dependency outside its package. Fixtures now live inside the adapter's own test directory so its sdist is self-contained.
 
 
 ## Decision Log
@@ -78,7 +85,11 @@ This plan is EP-4 of `docs/masterplans/3-support-notion-public-integrations-with
 ## Outcomes & Retrospective
 
 
-(To be filled during and after implementation.)
+The offline example and release preparation are implemented. `cabal test all --test-show-details=direct` passes 462 core tests (including 11 OAuth example cases) and four companion runtime tests. Callback tests prove invalid-state recovery, authenticated cancellation, concurrent single use and persistence-before-success. File tests prove private complete replacement, failure cleanup, restart reads, symlink/unsafe-directory rejection and command-lock exclusion. Listener startup failure and timeout cleanup are exercised over real loopback HTTP.
+
+Core 0.10.0.0 and companion 0.4.0.0 are prepared together, and the README protocol/runtime snippets type-check. A separate explicit live harness, `scripts/OAuthLiveCheck.hs`, compiles and is ready to prove reactive renewal using the current saved refresh token; it never writes its invalid access-token fixture or probes superseded refresh tokens. ADR 9 records the implemented durable boundaries.
+
+Milestone 2 remains open. Neither OAuth credential is present, and no person has completed browser consent in this run. Localhost registration, live owner decoding, explicit and automatic rotation, restart, cancellation and confirmed live logout are all unverified. Do not mark this child or the MasterPlan Complete until the documented live sequence and six observations pass. Nothing has been published.
 
 
 ## Context and Orientation
@@ -172,7 +183,7 @@ Run the sequence in Concrete Steps and record short evidence (no secrets) in Sur
 1. Did Notion accept `http://localhost` as a redirect URI?
 2. Does the token response's `owner` decode (user or workspace)?
 3. Does explicit refresh return a new pair, persist it, and let a fresh process run `whoami` successfully? Compare full values in memory and record booleans only. A matching last-four suffix is not evidence that two tokens are identical.
-4. Does a public `Methods` request rejected with `unauthorized` take the automatic path? In a test-only harness, replace only the locally held access-token value with a deliberately invalid sentinel while retaining the freshly saved valid refresh token. Make one `retrieveMyUser` call through the manager, observe one refresh and a successful retry, then persist the replacement pair. Do not expose a corruption flag in the user-facing executable or reuse an older refresh token. This proves the real rejection/classification/renewal path without waiting for expiry.
+4. The checked-in test-only `scripts/OAuthLiveCheck.hs` provides the isolated reactive-refresh harness. Run it explicitly with the command below; it is never part of offline `cabal test`. Does a public `Methods` request rejected with `unauthorized` take the automatic path? In a test-only harness, replace only the locally held access-token value with a deliberately invalid sentinel while retaining the freshly saved valid refresh token. Make one `retrieveMyUser` call through the manager, observe one refresh and a successful retry, then persist the replacement pair. Do not expose a corruption flag in the user-facing executable or reuse an older refresh token. This proves the real rejection/classification/renewal path without waiting for expiry.
 5. After `revoke`, is local logout complete and does `whoami` require login without attempting refresh? The remote response and optional introspection may document remote validity, but acceptance does not assume revocation of an entire token family.
 6. Does a cancelled consent with matching state produce `AuthorizationDenied OAuthAccessDenied` and no exchange?
 
@@ -229,6 +240,14 @@ cabal run notion-client-oauth-example -- revoke
 cabal run notion-client-oauth-example -- whoami   # expect: "Run `login` again" (or record what happens)
 cabal run notion-client-oauth-example -- login    # click Cancel; expect "Consent was cancelled"
 ```
+
+Run the isolated automatic-refresh acceptance check after explicit refresh and restart, before revoke. It uses the current saved refresh token and changes only the in-memory access token:
+
+```bash
+cabal exec -- runghc -package=notion-client -XGHC2024 -XOverloadedStrings -XDuplicateRecordFields -XRecordWildCards -inotion-client-oauth-example scripts/OAuthLiveCheck.hs
+```
+
+Expected: a successful unauthorized/refresh/retry path, exactly one refresh, persisted replacement `True`, and full-value token rotation booleans. This is an explicit live operation on the installation, not an offline fixture.
 
 Final checks for Milestone 3:
 

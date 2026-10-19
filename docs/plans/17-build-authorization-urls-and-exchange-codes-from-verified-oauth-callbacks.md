@@ -93,6 +93,8 @@ This plan is EP-2 of `docs/masterplans/3-support-notion-public-integrations-with
 ## Outcomes & Retrospective
 
 
+Final example integration (2026-10-19) also verifies that default callback exception rendering omits untrusted descriptions and unknown code text. Explicit constructor fields still retain them. This refines the skeleton’s derived Show instance to meet ADR 9’s redaction boundary.
+
 Authorization helpers and callback verification are implemented and build with both packages. The Authorization test group exercises exact URL encoding, secure-state shape, constant-time comparison regressions, malformed and forged callbacks, one decoding pass and Basic-authenticated exchange. A live authorize request returned HTTP 302 with the expected parameters on 2026-10-19. Library protocol helpers deliberately leave session binding, expiry and atomic single use to callers, as recorded in ADR 9.
 
 

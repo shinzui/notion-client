@@ -57,6 +57,7 @@ import Notion.V1.Search (PageOrDataSource (..), SearchRequest (..), dataSourceFi
 import Notion.V1.Users (BotUser (..), UserObject (..), WorkspaceLimits (..))
 import Notion.V1.Views (Clearable (..), CreateView (..), UpdateView (..), ViewObject (..), ViewType (..))
 import Notion.V1.Views qualified as Views
+import OAuthExamplePlatform qualified
 import OAuthTests qualified
 import ObjectFieldTests qualified
 import ResponseJSONTests qualified
@@ -192,6 +193,7 @@ tests = do
         TokenSourceTests.tests,
         TokenRefreshTests.tests,
         TokenHTTPTests.tests,
+        OAuthExamplePlatform.tests,
         HelpersTests.tests,
         ViewTests.tests,
         DataSourceSearchTests.tests,

@@ -113,3 +113,11 @@ with no other change to the call site.
 The `0.y.z` series tracks `notion-client` 0.7.x. A major version
 bump is planned if `notion-client` changes the shape of `Methods`
 in a way that forces a constructor rename.
+
+
+OAuth methods built with `makeMethodsWithTokenSource` work with `runNotion` unchanged.
+`Error NotionError` catches final Notion API errors. `OAuthError`,
+`ReauthorizationRequired`, `TokenPersistenceError` and `RefreshOutcomeUnknown`
+propagate as IO exceptions; handle them at the application boundary. A persistence
+retry saves the retained pair, while reauthorization or an uncertain remote outcome
+requires a new login. Use one manager per installation.

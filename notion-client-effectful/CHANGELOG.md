@@ -1,5 +1,12 @@
 # Changelog for `notion-client-effectful`
 
+## 0.4.0.0 - 2026-10-19
+
+### Breaking Changes
+
+* Requires `notion-client >=0.10 && <0.11`. `runNotion` accepts refreshing `Methods` unchanged; no effect constructors changed. OAuth reauthorization, persistence and uncertain-refresh exceptions propagate in IO; `Error NotionError` catches only final Notion API errors.
+* OAuth runtime consumer tests verify reactive refresh and the IO exception boundary.
+
 ## 0.3.0.0 - 2026-10-12
 
 ### Breaking Changes

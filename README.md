@@ -10,7 +10,7 @@ A type-safe Haskell client for the [Notion API](https://developers.notion.com/re
 - Simple client interface with sensible defaults
 - Automatic retries of rate-limited and overloaded requests, honoring `retry-after`
 - Typed error codes with request IDs for support
-- OAuth token exchange and URL-to-ID helpers
+- OAuth login, automatic token refresh and URL-to-ID helpers
 
 ## Installation
 
@@ -202,71 +202,93 @@ rejected before sending).
 
 ### OAuth
 
-For a public integration, generate a state with `newOAuthState`, build the consent
-URL with `authorizationUrl (AuthorizationRequest clientId redirectUri state)`,
-and store that request in the initiating user's session. The redirect URI must
-exactly match a URI registered for the integration. On callback, pass WAI's query
-(or `parseQuery` output) to `verifyAuthorizationCallback state`. Atomically consume
-the request on verified success or denial, and expire it after a short interval.
-Invalid callbacks must leave it pending. Exchange a verified `OAuthCode` with
-`exchangeAuthorizationCode oauth request code`; this sends the same redirect URI.
-These helpers are exported by `Notion.V1.OAuth.Authorization`. They provide protocol
-validation; session binding, expiry and single use belong to the application.
+Public integrations (public connections in Notion's portal) use a browser consent
+flow. Create one in the [developer portal](https://www.notion.so/profile/integrations),
+register an exact redirect URI, and keep its OAuth client ID and secret in your
+trusted server environment. The client secret and exchange belong on a trusted
+backend for distributed desktop or browser apps.
 
+The protocol helpers build the URL, verify the callback, and exchange its code:
 
 ```haskell
-import Notion.V1 (defaultBaseUrl, defaultClientConfig)
+import Control.Exception (throwIO)
+import Data.Text (Text)
+import Network.HTTP.Types.URI (Query)
 import Notion.V1.OAuth
-import Servant.Client (mkClientEnv)
+import Notion.V1.OAuth.Authorization
 
-exchangeCode :: Manager -> Text -> IO OAuthTokenResponse
-exchangeCode manager authCode = do
-    let oauth = makeOAuthMethodsWith defaultClientConfig
-            (mkClientEnv manager defaultBaseUrl)
-            OAuthCredentials {clientId = "...", clientSecret = "..."}
-    createOAuthToken oauth $ AuthorizationCode AuthorizationCodeGrant
-        { code = authCode
-        , redirectUri = Just "https://example.com/callback"
-        , externalAccount = Nothing
-        }
+beginLogin :: Text -> Text -> IO AuthorizationRequest
+beginLogin client redirect = do
+    freshState <- newOAuthState
+    pure (AuthorizationRequest client redirect freshState)
+
+-- Run this only after claiming the initiating session's pending request once.
+exchangeVerifiedCode :: OAuthMethods -> AuthorizationRequest -> OAuthCode
+                     -> IO OAuthTokenResponse
+exchangeVerifiedCode = exchangeAuthorizationCode
+
+verifyCallback :: AuthorizationRequest -> Query -> IO OAuthCode
+verifyCallback request query =
+    either throwIO pure (verifyAuthorizationCallback (state request) query)
 ```
 
-`revokeOAuthToken` and `introspectOAuthToken` take a token. OAuth failures throw
-`OAuthError`; match `oauthErrorCode` against `OAuthInvalidGrant` to recognize a
-rejected grant, or `OAuthInvalidClient` for client credential configuration errors.
-All OAuth methods disable automatic retries because a grant may be consumed.
-Default error rendering and logging omit raw bodies and descriptions; explicit
-metadata is available for controlled diagnostics.
+Send the browser to `authorizationUrl request`. Bind the complete request (state,
+client ID and exact redirect URI) to the initiating session and expire it after a
+short interval. Give the verifier an already-decoded WAI query or `parseQuery`
+output; do not decode twice. After verification, atomically consume the pending
+request before exchange. A state-validated `AuthorizationDenied` also consumes it;
+malformed or forged callbacks leave it pending. The pure verifier supplies neither
+session storage nor expiry/replay protection. Descriptions are untrusted text.
 
-For a long-lived public integration, persist `oauthTokensFromResponse now response`
-through a `TokenStore`, then construct a manager and stable methods:
+After a successful exchange, convert with `oauthTokensFromResponse now response`
+and durably save the pair. If that first save fails, retain the received pair and
+retry only its save; never exchange the code again. The runnable example below
+implements this recovery. Then construct stable methods from your store:
 
 ```haskell
-manager <- newOAuthTokenManager oauth store
-let methods = makeMethodsWithTokenSource defaultClientConfig env
-        (tokenManagerSource manager)
+import Notion.V1 (ClientConfig, Methods, makeMethodsWithTokenSource)
+import Notion.V1.OAuth.Refresh
+import Servant.Client (ClientEnv)
+
+connectInstallation :: ClientConfig -> ClientEnv -> OAuthMethods -> TokenStore
+                    -> IO (OAuthTokenManager, Methods)
+connectInstallation config env oauth store = do
+    manager <- newOAuthTokenManager oauth store
+    pure (manager, makeMethodsWithTokenSource config env (tokenManagerSource manager))
 ```
 
-Import `Notion.V1.OAuth.Refresh` for these names. The manager reads the store once
-and refreshes only after typed `Unauthorized`, or when `refreshTokensNow` is called.
-It saves replacement credentials before allowing their use. Catch
-`ReauthorizationRequired` to restart login, `TokenPersistenceError` to retry the
-identical save using `retryTokenPersistence`, and `RefreshOutcomeUnknown` to restart
-login without replaying the old refresh token. `currentTokens` is for explicit
-inspection/recovery and may contain an unusable or unsaved pair.
+`TokenStore` supplies `loadTokens` and an idempotent `saveTokens`; the library also
+provides `inMemoryTokenStore` for volatile use. The manager loads once, renews once
+after typed `Unauthorized`, and persists the replacement before using it.
+`refreshTokensNow` performs explicit refresh. Handle these IO exceptions:
 
-Use one manager per installation. Several processes or managers must coordinate
-the entire load/refresh/save sequence externally; save-time compare-and-swap is
-insufficient. A process crash between remote refresh and durable storage can still
-require another login. Store saves must be idempotent and must not re-enter the
-manager. A null replacement refresh token stays absent and requires login at the
-next renewal. There is no timer refresh because responses carry no expiry.
+- `OAuthError`: inspect `oauthErrorCode`; `OAuthInvalidClient` means client
+  configuration failed, and `OAuthInvalidGrant` means a grant was rejected.
+  OAuth endpoint calls never retry automatically. Default rendering/logging omits
+  descriptions, raw bodies and headers; explicit metadata is available.
+- `ReauthorizationRequired`: start a new login; the refresh token is absent or
+  rejected. A null replacement refresh token remains absent.
+- `TokenPersistenceError`: the manager retains the unsaved replacement and blocks
+  requests/refresh. Call `retryTokenPersistence` to save that identical pair.
+- `RefreshOutcomeUnknown`: a refresh may have succeeded remotely. Start a new login
+  and construct a new manager; do not reload the old store and replay its token.
 
-`RequestContext` now carries `contextTokenSource`. `standardHeaders` reads current
-headers in IO. Non-Servant requests should use `withStandardHeaders context` around
-response acquisition with `withRetries` inside it. Close failed responses before
+Use one manager per installation. Multiple managers/processes must coordinate the
+entire load/refresh/save sequence externally; save-time compare-and-swap is too
+late. Store hooks must not re-enter the manager. A crash between remote rotation
+and durable save may require another login. `currentTokens` is for explicit
+inspection/recovery and can return unsaved or unusable credentials. There is no
+timer refresh because token responses supply no expiry.
+
+`RequestContext` now carries `contextTokenSource`; `standardHeaders` reads current
+headers in IO. Non-Servant clients use `withStandardHeaders` around replayable
+response acquisition, with `withRetries` inside it. Close rejected responses before
 throwing their classified error. Keep body consumption and user callbacks outside
-both retry layers so an opened stream is never replayed.
+both retry layers. Byte and file-backed multipart bodies can be replayed; arbitrary
+one-shot streams cannot. OAuth methods retain Basic authentication.
+
+The effectful adapter accepts these same `Methods`. Final `NotionError` values use
+`Error NotionError`; OAuth lifecycle and persistence exceptions remain IO exceptions.
 
 ### URL helpers
 
@@ -353,7 +375,7 @@ the matching `Methods` record selector).
 - **Comments**: Create and list comments
 - **Custom Emojis**: List workspace custom emojis
 - **Webhooks**: Event types (including view events) and signature verification
-- **OAuth**: Exchange authorization codes and refresh tokens, revoke and introspect tokens
+- **OAuth**: Browser login helpers, verified callbacks, automatic token refresh with persistence, revoke and introspect tokens
 
 ## Running the Example
 
@@ -372,6 +394,49 @@ export NOTION_TEST_PAGE_ID="your-page-id"
 # Run the example
 cabal run notion-client-example
 ```
+
+### OAuth example
+
+The POSIX-only `notion-client-oauth-example` runs a trusted local confidential
+client. Register `http://localhost:8765/callback` in the public connection's OAuth
+configuration, then set credentials in your shell (never commit them):
+
+```bash
+export NOTION_OAUTH_CLIENT_ID=...
+export NOTION_OAUTH_CLIENT_SECRET=...
+cabal run notion-client-oauth-example -- login
+cabal run notion-client-oauth-example -- whoami
+cabal run notion-client-oauth-example -- refresh
+cabal run notion-client-oauth-example -- whoami
+cabal run notion-client-oauth-example -- revoke
+```
+
+`login` prints a consent URL after the listener is ready on `127.0.0.1`, validates
+state, consumes the callback once, exchanges the code and saves credentials before
+reporting success. It expires after ten minutes. Invalid callbacks leave it pending;
+a matching-state cancellation reports cancellation without exchanging. `whoami`
+prints the bot name and up to five shared results; an empty search is valid.
+`refresh` prints full-value rotation comparisons as booleans and offers persistence
+retry without sending a second grant. `revoke` removes local credentials only after
+confirmed remote success. Subsequent commands require login; no remote token-family
+invalidation is assumed.
+
+`NOTION_OAUTH_TOKEN_FILE` defaults to `.notion-oauth-tokens.json`. The example requires
+an owner-only regular token file in a directory owned by you and not writable by
+group or others. It rejects token symlinks, creates private temporary files before
+writing, synchronizes and atomically replaces them, and synchronizes the parent
+directory. Every command holds `<token-file>.lock` across load/refresh/save. After
+a crash, remove a stale lock directory manually only after checking no example
+process is active. Keep the process alive to retry an unsaved pair; stopping it can
+require another login. This file store is an example, not a production secret store.
+
+If the portal refuses HTTP localhost redirects, register an HTTPS tunnel's exact
+callback URL and set `NOTION_OAUTH_REDIRECT_URI` to it. Set
+`NOTION_OAUTH_LISTEN_PORT` to its local target port (default `8765`). Redirect URIs
+must have an absolute path and no query or fragment. The listener still binds
+loopback. No framework adapter, PKCE, timer refresh, distributed store or Notion
+MCP OAuth is provided. The executable and its POSIX file tests are disabled on
+Windows; the core library and ordinary HTTP tests remain portable.
 
 ### Obtaining API Credentials
 

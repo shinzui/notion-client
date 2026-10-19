@@ -63,7 +63,7 @@ This plan is EP-3 of `docs/masterplans/3-support-notion-public-integrations-with
 
 
 - Real multipart replay initially hung because the test kept its temporary file open for writing. Closing the fixture handle before upload makes both attempts read the same complete bytes; the real HTTP test now compares complete multipart request bodies.
-- On 2026-10-19, Hackage reports WAI 3.2.5 and Warp 3.4.16; upstream release tags include Warp 3.4.15 but not the latest registry release yet. Existing compatible bounds admit current registry releases; Cabal resolved Warp 3.4.16. Mori-located sources confirmed bracketed server lifetime and response acquisition APIs. No compatibility workaround or pin was added.
+- On 2026-10-19, Hackage reports WAI 3.2.5 and Warp 3.4.16; upstream release tags include Warp 3.4.15 but not the latest registry release yet. Existing compatible bounds admit current registry releases; Cabal resolved Warp 3.4.16. Source in `mori://yesodweb/wai/packages/warp` confirmed bracketed server lifetime; `mori://snoyberg/http-client/packages/http-client` confirmed response acquisition APIs. No compatibility workaround or pin was added.
 
 
 ## Decision Log

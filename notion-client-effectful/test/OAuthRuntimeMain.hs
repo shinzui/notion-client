@@ -9,16 +9,14 @@ import Data.Aeson qualified as A
 import Data.Time.Clock
 import Effectful (runEff)
 import Effectful.Error.Static (runErrorNoCallStack)
-import FakeNotion
 import Notion.V1
 import Notion.V1.Effectful qualified as E
 import Notion.V1.Error
 import Notion.V1.OAuth qualified as O
 import Notion.V1.OAuth.Refresh qualified as R
-import OAuthTests (personOwner, tokenJson)
+import OAuthFixtures
 import Test.Tasty
 import Test.Tasty.HUnit
-import TokenSourceTests (unauthorized, userJson)
 
 main :: IO ()
 main =
@@ -66,6 +64,6 @@ oauth action = O.OAuthMethods (const action) (const (pure (O.OAuthRevokeResponse
 
 fixture :: IO (R.OAuthTokens, O.OAuthTokenResponse)
 fixture = do
-  response <- either assertFailure pure (A.eitherDecode (tokenJson personOwner))
+  response <- either assertFailure pure (A.eitherDecode tokenResponse)
   now <- getCurrentTime
   pure ((R.oauthTokensFromResponse now response) {R.accessToken = "old", R.refreshToken = Just "old-refresh"}, response)

@@ -44,3 +44,8 @@ db/
 result
 result-*
 .pre-commit-config.yaml
+
+# OAuth example credentials and command lock
+.notion-oauth-tokens.json
+.notion-oauth-tokens.json.tmp-*
+.notion-oauth-tokens.json.lock/

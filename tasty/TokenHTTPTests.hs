@@ -18,11 +18,11 @@ import Notion.V1.FileUploads (mkSendFileUpload)
 import Notion.V1.Search qualified
 import Servant.Client qualified as S
 import Servant.Client.Core qualified
-import System.Directory (removeFile)
+import System.Directory (getTemporaryDirectory, removeFile)
 import System.IO
 import Test.Tasty
 import Test.Tasty.HUnit
-import TokenSourceTests (bounded, userJson)
+import TokenSourceTests (bounded)
 
 rejection :: L.ByteString
 rejection = "{\"object\":\"error\",\"code\":\"unauthorized\",\"message\":\"invalid token\"}"
@@ -106,7 +106,7 @@ tests =
           readIORef renewals >>= (@?= 1),
       testCase "file-backed multipart body can be replayed after rejection" $
         bounded $
-          bracket (openBinaryTempFile "/tmp" "notion-upload") (\(path, h) -> hClose h `finally` removeFile path) $ \(path, h) -> do
+          bracket (getTemporaryDirectory >>= \directory -> openBinaryTempFile directory "notion-upload") (\(path, h) -> hClose h `finally` removeFile path) $ \(path, h) -> do
             BS.hPut h "fixture bytes: Tanaka Hanako"
             hFlush h
             hClose h

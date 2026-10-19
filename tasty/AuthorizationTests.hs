@@ -26,7 +26,8 @@ tests =
         assertBool "URL safe" (T.all (`elem` (['A' .. 'Z'] <> ['a' .. 'z'] <> ['0' .. '9'] <> "-_")) (oauthStateText a))
         assertBool "fresh" (not (sameOAuthState a b))
         show a @?= "OAuthState <redacted>"
-        show (OAuthCode "secret") @?= "OAuthCode <redacted>",
+        show (OAuthCode "secret") @?= "OAuthCode <redacted>"
+        show (AuthorizationDenied (UnknownOAuthErrorCode "SECRET") (Just "SECRET")) @?= "AuthorizationDenied <unknown code>",
       testCase "constant-time primitive rejects differing bytes and lengths" $ do
         assertBool "equal" (sameOAuthState (OAuthState "aa") (OAuthState "aa"))
         mapM_ (\s -> assertBool "different" (not (sameOAuthState (OAuthState "aa") (OAuthState s)))) ["ab", "a", "bb"],

@@ -40,6 +40,8 @@ If durable project context changes, update or create ADRs in docs/adr/ in the sa
 ## Vision & Scope
 
 
+The baseline below describes the repository before this implementation; Progress and Outcomes record the delivered behavior and remaining live gate.
+
 This initiative concerns Notion internal and public integrations. An *internal* integration belongs to one workspace and authenticates with a fixed secret pasted into the program. A *public* integration (Notion's developer portal now calls it a "public connection") can be installed by any Notion user into any workspace. It authenticates through OAuth 2.0: the program sends the user to Notion's consent page, Notion redirects the browser back to the program with a one-time *authorization code*, and the program exchanges that code for an *access token* (used as the bearer token on every API call) and a *refresh token* (used later to obtain a new access token). Notion's authorization guide (https://developers.notion.com/docs/authorization) states that refreshing "will generate a new access token and a new refresh token", so the new pair must replace the stored pair. The guide does not establish old-token invalidation timing or reuse-detection behavior; do not rely on either.
 
 The Haskell library `notion-client` (repository root `/Users/shinzui/Keikaku/bokuno/libraries/haskell/notion-client`) already has the raw token endpoints in `src/Notion/V1/OAuth.hs`: `createOAuthToken` (authorization-code and refresh-token grants), `revokeOAuthToken` and `introspectOAuthToken`, authenticated with HTTP Basic credentials. They were added by `docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md`, whose live OAuth check was skipped for lack of credentials. Everything around those endpoints that a real login flow needs is missing:
@@ -91,7 +93,7 @@ A Mori concept search for OAuth found records in `mori://shinzui/shomei`, an aut
 | 1 | Decode OAuth Token Endpoint Errors into a Typed Exception | docs/plans/16-decode-oauth-token-endpoint-errors-into-a-typed-exception.md | None | None | Complete |
 | 2 | Build Authorization URLs and Exchange Codes from Verified OAuth Callbacks | docs/plans/17-build-authorization-urls-and-exchange-codes-from-verified-oauth-callbacks.md | EP-1 M1 (for EP-2 M2 only) | None | Complete |
 | 3 | Refresh OAuth Access Tokens Automatically for Methods | docs/plans/18-refresh-oauth-access-tokens-automatically-for-methods.md | EP-1 M1 (for EP-3 M2 only) | None | Complete |
-| 4 | Demonstrate and Document the Public Integration OAuth Login End to End | docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md | EP-1, EP-2, EP-3 | None | Not Started |
+| 4 | Demonstrate and Document the Public Integration OAuth Login End to End | docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md | EP-1, EP-2, EP-3 | None | In Progress |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).
@@ -142,13 +144,16 @@ EP-3 M1 (independent) ────┘
 ## Progress
 
 
-EP-1 completed on 2026-10-19, including the live invalid-client probe. EP-2 is also Complete: authorization helpers pass the full 433-test suite and the live authorize redirect check. EP-3 is Complete with 451 core and four effectful consumer tests passing, including real HTTP replay and deterministic lifecycle failure/concurrency coverage. EP-4 is next; its live gate remains mandatory. EP-1, EP-2 M1 and EP-3 M1 are independent. For a single implementer use EP-1, EP-2, EP-3, then EP-4; retain milestone-level dependencies for any separately authorized parallel work.
+EP-1–EP-3 are Complete. EP-4 is In Progress with offline example and release-preparation milestones accepted on 2026-10-19. The final suites pass 462 core tests and four effectful consumer tests; both packages and executables build at core 0.10.0.0 / companion 0.4.0.0. The README snippets and explicit live-refresh harness type-check. The remaining authorized work is EP-4’s real-installation gate. Neither `NOTION_OAUTH_CLIENT_ID` nor `NOTION_OAUTH_CLIENT_SECRET` is set in this environment, and browser consent has not been performed.
 
 The initiative's integration gate is EP-4's live run, which requires a real Notion public integration. Its client ID and client secret must be supplied as `NOTION_OAUTH_CLIENT_ID` and `NOTION_OAUTH_CLIENT_SECRET`, and its redirect URI must be registered in the Notion developer portal. A person must also complete the consent page in a browser. Until that run passes, the initiative is not complete, even if every network-free test passes. Missing credentials leave only the live gate pending; complete EP-4’s offline example tests and documentation first. The live gate includes explicit refresh, restart with the persisted pair, and automatic recovery from a deliberately invalid local access token while retaining the valid current refresh token.
 
 
 ## Surprises & Discoveries
 
+
+- Implementation on 2026-10-19 verified both OAuth response shapes, strict callback validation, serialized lifecycle transitions and per-request authorization. Real HTTP tests prove multipart/byte replay and response-acquisition-only renewal. Plan 14’s `StreamEnv`, algorithm, fixtures and construction now receive a dynamic header wrapper; no streaming code existed to migrate.
+- The only remaining integration prerequisite is a real public integration and a consenting person. The environment provides neither OAuth credential. `scripts/OAuthLiveCheck.hs` is an explicit test-only path for the reactive live gate; the normal executable exposes no access-token corruption flag.
 
 - Source verification on 2026-10-16: the npm registry reports `@notionhq/client` 5.27.0 and its upstream `v5.27.0` tag has the same OAuth success contract inspected locally. The SDK project is `mori://makenotion/notion-sdk-js`, project-relative `src/api-endpoints/oauth.ts` (artifact-level URI pending; not registered locally). Mori-located `mori://haskell-servant/servant/packages/servant-client` source confirms middleware execution and request-body construction; a replayable body still needs an actual retry test. No code or live login was executed in this design review.
 - Review on 2026-10-16 found that callback errors bypassed state verification, the proposed XOR reduction could accept different states when byte differences cancelled, the refresh manager would expose unsaved credentials after a failed save, and `modifyMVar` exceptions could restore the old pair after a successful rotation. Plans 17–19 now require state-first validation, explicit lifecycle states, masked publication of failure outcomes, and deterministic regression tests.
@@ -182,7 +187,9 @@ The initiative's integration gate is EP-4's live run, which requires a real Noti
 ## Outcomes & Retrospective
 
 
-(To be filled during and after implementation.)
+All library behavior, the POSIX login example, offline integration checks and release metadata are implemented and committed in dependency order. Runtime interface changes were cascaded into plan 14 and MasterPlan 2; ADRs 2 and 9 preserve the durable error, retry, lifecycle and streaming boundaries. No publishing was performed.
+
+The initiative remains incomplete only at the required live public-integration gate: login/consent, owner decoding, explicit refresh, persisted restart, one real automatic refresh from an invalid in-memory access token, cancellation and confirmed local logout. Complete that sequence with current credentials using plan 19 and its checked-in live harness. The in-process and file guarantees have offline evidence; no crash-proof or distributed exactly-once remote rotation guarantee is claimed.
 
 
 Revision (2026-10-16): Reviewed all four children against the code, relevant ADRs, dependency sources and current Notion documentation. Preserved decomposition and tightened callback validation, OAuth retry/error handling, token persistence/concurrency, stream acquisition, example security and live acceptance.

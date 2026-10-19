@@ -26,7 +26,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding qualified as T
 import Network.HTTP.Types.URI (Query, renderQuery)
 import Notion.V1.Client (defaultBaseUrl)
-import Notion.V1.OAuth (AuthorizationCodeGrant (..), OAuthErrorCode, OAuthMethods (..), OAuthTokenRequest (..), OAuthTokenResponse, parseOAuthErrorCode)
+import Notion.V1.OAuth (AuthorizationCodeGrant (..), OAuthErrorCode (..), OAuthMethods (..), OAuthTokenRequest (..), OAuthTokenResponse, parseOAuthErrorCode)
 import Servant.Client (BaseUrl, showBaseUrl)
 import System.Entropy (getEntropy)
 
@@ -75,7 +75,16 @@ data AuthorizationCallbackError
   | StateMismatch
   | MissingCode
   | MalformedCallback
-  deriving stock (Eq, Show)
+  deriving stock (Eq)
+
+instance Show AuthorizationCallbackError where
+  show (AuthorizationDenied code _) =
+    "AuthorizationDenied " <> case code of
+      UnknownOAuthErrorCode _ -> "<unknown code>"
+      _ -> show code
+  show StateMismatch = "StateMismatch"
+  show MissingCode = "MissingCode"
+  show MalformedCallback = "MalformedCallback"
 
 instance Exception AuthorizationCallbackError
 

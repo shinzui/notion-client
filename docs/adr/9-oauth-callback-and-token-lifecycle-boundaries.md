@@ -1,6 +1,6 @@
 # ADR 9: OAuth callbacks and rotating tokens have explicit lifecycle boundaries
 
-Status: Accepted (library implemented; live installation gate pending)
+Status: Accepted (library and offline example implemented; live installation gate pending)
 Date: 2026-10-19
 
 
@@ -60,7 +60,13 @@ The store's save is idempotent and must not call back into its manager. Several 
 processes need external coordination over the entire load/refresh/save sequence; compare-and-swap
 at save time alone cannot prevent competing remote refreshes.
 
-The example owns its loopback callback server and POSIX file store. It binds loopback explicitly,
+The example owns its loopback callback server and POSIX file store. Its default
+file store accepts only an owner-only regular token file and an owned destination
+directory without group/other write permission. Private temporary files are created
+with mode 0600 before writing; both file and parent directory are synchronized.
+The complete command holds an exclusive directory lock; crash-stale locks require
+manual removal after checking no process is active. Initial-save recovery retains
+the response pair and retries storage without exchanging the code again. It binds loopback explicitly,
 serves no success page before exchange and save succeed, and keeps invalid callbacks from ending
 a pending login. It locks the complete command, creates private temporary files before writing
 secrets, synchronizes and atomically replaces the token file, and reports tokens only through
@@ -80,6 +86,9 @@ explain that OAuth lifecycle exceptions remain IO exceptions outside `Error Noti
 Network-free tests cover duplicate/forged callbacks, request replay boundaries, concurrent
 rejections, failed persistence, uncertain exchanges and cancellation. Live acceptance separately
 proves consent, explicit and reactive refresh, restart with persisted credentials, cancellation
-and local logout. The library implementation is covered by network-free tests, including real loopback
-HTTP acquisition and multipart replay. The full public-installation live gate remains
+and local logout. The library and example implementations are covered by network-free tests, including
+real loopback HTTP acquisition, multipart replay, callback single use, listener
+cleanup, file permissions, atomic replacement and command-lock exclusion. Callback
+exceptions redact descriptions and unknown code text by default; explicit fields
+remain available to callers. The full public-installation live gate remains
 pending until those checks pass. No claim of crash-proof or distributed exactly-once token rotation is made.

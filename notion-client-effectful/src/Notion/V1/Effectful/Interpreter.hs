@@ -87,7 +87,9 @@ import Notion.V1.Error (NotionError)
 --
 -- The dispatched 'IO' action is wrapped with 'Control.Exception.try':
 -- a 'NotionError' is re-thrown via 'throwError', anything else
--- propagates as an 'IO' exception.
+-- propagates as an 'IO' exception. OAuth reauthorization, pending-persistence
+-- and uncertain-refresh exceptions also remain IO exceptions. A refreshing
+-- Methods value works without changing effect constructors.
 runNotion ::
   (IOE :> es, Error NotionError :> es) =>
   Methods ->
