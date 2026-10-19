@@ -21,6 +21,11 @@ provenance:
       at: 2026-10-19T20:22:20Z
       mode: "implement"
       note: "Implement OAuth errors, authorization helpers, refresh runtime and example in dependency order."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T22:45:58Z
+      mode: "implement"
+      note: "Accept EP-4 live installation gate, complete all four children and distill final evidence into ADR 9."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -82,7 +87,7 @@ ADR context, all local (`docs/adr/` is a plain numbered directory, not an OKF-pr
 - [ADR 7](../adr/7-effectful-package-mirrors-methods-in-lockstep.md) requires lockstep changes to `notion-client-effectful` when `Methods` fields change. This initiative adds constructors, not fields. `runNotion` in `notion-client-effectful/src/Notion/V1/Effectful/Interpreter.hs` takes a `Methods` value, so a refreshing `Methods` works there unchanged.
 - [ADR 8](../adr/8-core-parity-scope-exclusions.md) records the core client's scope exclusions. The exclusions above follow its pattern.
 
-A Mori concept search for OAuth found records in `mori://shinzui/shomei`, an authorization server. None supplies a client-side Notion contract. [ADR 9](../adr/9-oauth-callback-and-token-lifecycle-boundaries.md) now records this initiative’s callback, lifecycle, error/retry and scope boundaries as accepted design awaiting implementation.
+A Mori concept search for OAuth found records in `mori://shinzui/shomei`, an authorization server. None supplies a client-side Notion contract. [ADR 9](../adr/9-oauth-callback-and-token-lifecycle-boundaries.md) records this initiative’s implemented callback, lifecycle, error/retry and scope boundaries, with offline and live acceptance evidence.
 
 
 ## Exec-Plan Registry
@@ -93,7 +98,7 @@ A Mori concept search for OAuth found records in `mori://shinzui/shomei`, an aut
 | 1 | Decode OAuth Token Endpoint Errors into a Typed Exception | docs/plans/16-decode-oauth-token-endpoint-errors-into-a-typed-exception.md | None | None | Complete |
 | 2 | Build Authorization URLs and Exchange Codes from Verified OAuth Callbacks | docs/plans/17-build-authorization-urls-and-exchange-codes-from-verified-oauth-callbacks.md | EP-1 M1 (for EP-2 M2 only) | None | Complete |
 | 3 | Refresh OAuth Access Tokens Automatically for Methods | docs/plans/18-refresh-oauth-access-tokens-automatically-for-methods.md | EP-1 M1 (for EP-3 M2 only) | None | Complete |
-| 4 | Demonstrate and Document the Public Integration OAuth Login End to End | docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md | EP-1, EP-2, EP-3 | None | In Progress |
+| 4 | Demonstrate and Document the Public Integration OAuth Login End to End | docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md | EP-1, EP-2, EP-3 | None | Complete |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).
@@ -144,16 +149,16 @@ EP-3 M1 (independent) ────┘
 ## Progress
 
 
-EP-1–EP-3 are Complete. EP-4 is In Progress with offline example and release-preparation milestones accepted on 2026-10-19. The final suites pass 462 core tests and four effectful consumer tests; both packages and executables build at core 0.10.0.0 / companion 0.4.0.0. The README snippets and explicit live-refresh harness type-check. The remaining authorized work is EP-4’s real-installation gate. Neither `NOTION_OAUTH_CLIENT_ID` nor `NOTION_OAUTH_CLIENT_SECRET` is set in this environment, and browser consent has not been performed.
+All four child plans and the live integration gate are Complete as of 2026-10-19. Recorded offline validation passes 462 core tests and four effectful consumer tests; both packages and executables build at core 0.10.0.0 / companion 0.4.0.0. The README snippets and updated explicit live-refresh harness type-check.
 
-The initiative's integration gate is EP-4's live run, which requires a real Notion public integration. Its client ID and client secret must be supplied as `NOTION_OAUTH_CLIENT_ID` and `NOTION_OAUTH_CLIENT_SECRET`, and its redirect URI must be registered in the Notion developer portal. A person must also complete the consent page in a browser. Until that run passes, the initiative is not complete, even if every network-free test passes. Missing credentials leave only the live gate pending; complete EP-4’s offline example tests and documentation first. The live gate includes explicit refresh, restart with the persisted pair, and automatic recovery from a deliberately invalid local access token while retaining the valid current refresh token.
+With credentials supplied through gitignored `.envrc.local`, the maintainer completed real browser consent at `http://localhost:8767/callback`. Live checks passed initial API access, explicit rotation of both tokens, restart with the saved pair, automatic recovery from an invalid in-memory access token with exactly one refresh and durable replacement, real cancellation and confirmed revoke/local logout. EP-4 records the six observations. No integration gates remain, and nothing has been published.
 
 
 ## Surprises & Discoveries
 
 
 - Implementation on 2026-10-19 verified both OAuth response shapes, strict callback validation, serialized lifecycle transitions and per-request authorization. Real HTTP tests prove multipart/byte replay and response-acquisition-only renewal. Plan 14’s `StreamEnv`, algorithm, fixtures and construction now receive a dynamic header wrapper; no streaming code existed to migrate.
-- The only remaining integration prerequisite is a real public integration and a consenting person. The environment provides neither OAuth credential. `scripts/OAuthLiveCheck.hs` is an explicit test-only path for the reactive live gate; the normal executable exposes no access-token corruption flag.
+- The real-installation gate passed on 2026-10-19 after credentials and browser consent became available. Localhost HTTP worked on port 8767; the token owner decoded as user. Explicit and reactive refresh each rotated both tokens, and the reactive harness observed exactly one refresh and a durably saved replacement. Cancellation and revoke/local logout also passed. `scripts/OAuthLiveCheck.hs` remains an explicit test-only path; the normal executable exposes no access-token corruption flag.
 
 - Source verification on 2026-10-16: the npm registry reports `@notionhq/client` 5.27.0 and its upstream `v5.27.0` tag has the same OAuth success contract inspected locally. The SDK project is `mori://makenotion/notion-sdk-js`, project-relative `src/api-endpoints/oauth.ts` (artifact-level URI pending; not registered locally). Mori-located `mori://haskell-servant/servant/packages/servant-client` source confirms middleware execution and request-body construction; a replayable body still needs an actual retry test. No code or live login was executed in this design review.
 - Review on 2026-10-16 found that callback errors bypassed state verification, the proposed XOR reduction could accept different states when byte differences cancelled, the refresh manager would expose unsaved credentials after a failed save, and `modifyMVar` exceptions could restore the old pair after a successful rotation. Plans 17–19 now require state-first validation, explicit lifecycle states, masked publication of failure outcomes, and deterministic regression tests.
@@ -187,9 +192,9 @@ The initiative's integration gate is EP-4's live run, which requires a real Noti
 ## Outcomes & Retrospective
 
 
-All library behavior, the POSIX login example, offline integration checks and release metadata are implemented and committed in dependency order. Runtime interface changes were cascaded into plan 14 and MasterPlan 2; ADRs 2 and 9 preserve the durable error, retry, lifecycle and streaming boundaries. No publishing was performed.
+All library behavior, the POSIX login example, offline integration checks, release metadata and the required live public-integration gate are complete. Runtime interface changes were cascaded into plan 14 and MasterPlan 2; ADRs 2 and 9 preserve the durable error, retry, lifecycle and streaming boundaries. No publishing was performed.
 
-The initiative remains incomplete only at the required live public-integration gate: login/consent, owner decoding, explicit refresh, persisted restart, one real automatic refresh from an invalid in-memory access token, cancellation and confirmed local logout. Complete that sequence with current credentials using plan 19 and its checked-in live harness. The in-process and file guarantees have offline evidence; no crash-proof or distributed exactly-once remote rotation guarantee is claimed.
+The live sequence verified login/consent, user-owner decoding, explicit refresh, persisted restart, one automatic refresh from an invalid in-memory access token, cancellation and confirmed local logout. Reviewing all four child plans’ Decision Logs, Surprises & Discoveries and Outcomes found their durable boundaries already captured in ADRs 2 and 9; ADR 9 now records final live acceptance. The in-process and file guarantees retain offline evidence; no crash-proof or distributed exactly-once remote rotation guarantee is claimed.
 
 
 Revision (2026-10-16): Reviewed all four children against the code, relevant ADRs, dependency sources and current Notion documentation. Preserved decomposition and tightened callback validation, OAuth retry/error handling, token persistence/concurrency, stream acquisition, example security and live acceptance.

@@ -1,6 +1,6 @@
 # ADR 9: OAuth callbacks and rotating tokens have explicit lifecycle boundaries
 
-Status: Accepted (library and offline example implemented; live installation gate pending)
+Status: Accepted (implemented; offline and live installation gates passed)
 Date: 2026-10-19
 
 
@@ -90,5 +90,10 @@ and local logout. The library and example implementations are covered by network
 real loopback HTTP acquisition, multipart replay, callback single use, listener
 cleanup, file permissions, atomic replacement and command-lock exclusion. Callback
 exceptions redact descriptions and unknown code text by default; explicit fields
-remain available to callers. The full public-installation live gate remains
-pending until those checks pass. No claim of crash-proof or distributed exactly-once token rotation is made.
+remain available to callers. Live acceptance on 2026-10-19 passed with a registered
+HTTP localhost callback: user-owner decoding, explicit rotation of both tokens,
+restart with the persisted pair, reactive renewal with exactly one refresh and
+durable replacement, authenticated cancellation and confirmed local logout after
+revocation. These observations do not establish old-token invalidation timing or
+remote token-family revocation. No claim of crash-proof or distributed exactly-once
+token rotation is made.

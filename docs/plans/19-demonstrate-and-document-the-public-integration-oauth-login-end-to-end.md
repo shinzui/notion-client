@@ -22,6 +22,11 @@ provenance:
       at: 2026-10-19T20:35:27Z
       mode: "implement"
       note: "Implement loopback OAuth example, durable POSIX token store, offline acceptance and release documentation."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T22:45:58Z
+      mode: "implement"
+      note: "Complete real OAuth login, owner decoding, explicit and reactive refresh, restart, cancellation and local logout acceptance."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -58,14 +63,23 @@ This plan is EP-4 of `docs/masterplans/3-support-notion-public-integrations-with
 
 
 - [x] (2026-10-19) Milestone 1: The `notion-client-oauth-example` executable builds and implements `login`, `whoami`, `refresh` and `revoke` with a file-backed `TokenStore`. network-free listener and file-store tests pass, `cabal build all` is green, and running it without credentials prints a clear usage message.
-- [ ] Milestone 2 (live run pending credentials and browser consent): A live run against a real public integration completes login, `whoami`, `refresh` (rotation observed), `revoke`, and a cancelled consent. Findings are recorded here and in the MasterPlan.
+- [x] (2026-10-19) Milestone 2: A real public integration completed browser consent, `whoami`, explicit refresh with both rotation booleans True, restart with the persisted pair, automatic refresh with exactly one request, authenticated cancellation and confirmed revoke/local logout. The six live observations are recorded below.
 - [x] (2026-10-19) Milestone 3: README OAuth walkthrough, CHANGELOG `0.10.0.0` section, version bumps (`notion-client` 0.10.0.0; `notion-client-effectful` bound and version), and the scope-exclusions ADR are done. `cabal build all` and `cabal test` are green.
 
 
 ## Surprises & Discoveries
 
 
-- On 2026-10-19, neither `NOTION_OAUTH_CLIENT_ID` nor `NOTION_OAUTH_CLIENT_SECRET` is available in the implementation environment. The live run is pending credentials and browser consent. No live refresh or installation is claimed.
+- Credentials were initially unavailable on 2026-10-19. The maintainer subsequently supplied them through gitignored `.envrc.local` and completed browser consent. Live acceptance then passed with the following observations; no credentials or authorization codes are recorded here.
+
+  1. Notion accepted `http://localhost:8767/callback` as the registered redirect URI. Ports 8765 and 8766 were occupied. Visiting the bare callback initially returned “Invalid callback”; completing the pending consent URL afterwards succeeded, confirming that the invalid request did not consume the login.
+  2. The token response decoded successfully. The reactive-refresh harness explicitly reported `OAuth owner decoded: user` without printing owner details.
+  3. `whoami` succeeded before refresh. Explicit refresh printed `access token changed: True` and `refresh token changed: True`; a fresh `whoami` process loaded the durably saved pair and succeeded.
+  4. The isolated harness used only an invalid in-memory access token and the current saved refresh token. It reported a successful unauthorized/refresh/retry path, `refresh requests: 1`, `persisted replacement: True` and both rotation booleans True. No superseded refresh token was probed.
+  5. `revoke` completed successfully and printed “Local credentials removed. Run login again”. A subsequent `whoami` exited 1 with “Run login again”; the local pair was absent, so no refresh was attempted.
+  6. Cancelling a separate real consent returned the matching-state denial and printed “Consent was cancelled”. The callback application maps this to `AuthorizationDenied OAuthAccessDenied` without calling the exchange method.
+
+  Tokens were stored outside the repository in the owner-private local configuration directory. Callback, listener and token-file settings are now in `.envrc.local`; its credentials remain untracked. Revocation leaves the example logged out after acceptance.
 - Enabling CPP for the entire core test suite broke existing multiline JSON string gaps. A small `OAuthExamplePlatform` module alone owns the platform guard; other test modules retain their existing parsing. The POSIX helper/module dependencies remain conditional.
 - Source archive checks exposed a companion test fixture dependency outside its package. Fixtures now live inside the adapter's own test directory so its sdist is self-contained.
 
@@ -89,7 +103,7 @@ The offline example and release preparation are implemented. `cabal test all --t
 
 Core 0.10.0.0 and companion 0.4.0.0 are prepared together, and the README protocol/runtime snippets type-check. A separate explicit live harness, `scripts/OAuthLiveCheck.hs`, compiles and is ready to prove reactive renewal using the current saved refresh token; it never writes its invalid access-token fixture or probes superseded refresh tokens. ADR 9 records the implemented durable boundaries.
 
-Milestone 2 remains open. Neither OAuth credential is present, and no person has completed browser consent in this run. Localhost registration, live owner decoding, explicit and automatic rotation, restart, cancellation and confirmed live logout are all unverified. Do not mark this child or the MasterPlan Complete until the documented live sequence and six observations pass. Nothing has been published.
+All three milestones are complete. The live sequence on 2026-10-19 accepted localhost HTTP on port 8767, decoded a user owner, proved explicit and automatic rotation with durable restart, handled real consent cancellation and confirmed local logout after remote revocation. The live harness now prints only the decoded owner variant alongside its existing redacted assertions. Its updated source type-checks and passed the real reactive-refresh check. ADR 9 incorporates the final evidence; the earlier full-suite results remain applicable because library behavior did not change. Nothing has been published.
 
 
 ## Context and Orientation

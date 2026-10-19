@@ -47,7 +47,13 @@ run = do
           baseOAuth
             { O.createOAuthToken = \grant -> do
                 modifyIORef' calls (+ 1)
-                O.createOAuthToken baseOAuth grant
+                response <- O.createOAuthToken baseOAuth grant
+                putStrLn $
+                  "OAuth owner decoded: " <> case O.owner response of
+                    O.OAuthUserOwner _ -> "user"
+                    O.OAuthWorkspaceOwner -> "workspace"
+                    O.UnknownOAuthOwner _ -> "unknown"
+                pure response
             }
         -- Do not write the intentionally invalid access token to disk.
         injectedStore = fileStore {R.loadTokens = pure old {R.accessToken = "intentionally-invalid-live-acceptance-token"}}
