@@ -84,6 +84,7 @@ library
     Notion.V1.MeetingNotes
     Notion.V1.OAuth
     Notion.V1.OAuth.Authorization
+    Notion.V1.OAuth.Refresh
     Notion.V1.Pages
     Notion.V1.Pagination
     Notion.V1.Properties
@@ -91,6 +92,7 @@ library
     Notion.V1.Retry
     Notion.V1.RichText
     Notion.V1.Search
+    Notion.V1.TokenSource
     Notion.V1.Users
     Notion.V1.ViewConfig
     Notion.V1.ViewQueries
@@ -127,6 +129,9 @@ test-suite tasty
     ObjectFieldTests
     ResponseJSONTests
     RuntimeTests
+    TokenHTTPTests
+    TokenRefreshTests
+    TokenSourceTests
     ViewTests
     WireFormatTests
 
@@ -141,6 +146,7 @@ test-suite tasty
     base,
     bytestring,
     containers,
+    directory,
     http-api-data,
     http-client,
     http-client-tls,
@@ -155,8 +161,12 @@ test-suite tasty
     text,
     time,
     vector,
+    wai >=3.2.4 && <3.3,
+    warp >=3.4.13 && <3.5,
 
-  ghc-options: -Wall
+  ghc-options:
+    -Wall
+    -threaded
 
 executable notion-client-example
   default-language: GHC2024

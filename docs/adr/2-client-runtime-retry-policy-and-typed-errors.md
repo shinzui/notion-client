@@ -56,6 +56,9 @@ and `src/Notion/V1/Error.hs`.
 
 ## Consequences
 
+Per-request bearer renewal, persistence-before-use and response-acquisition-only
+replay are specified in [ADR 9](9-oauth-callback-and-token-lifecycle-boundaries.md).
+
 - Rate-limited requests succeed without caller code. The costs are added latency on failure and
   a new dependency on `random`.
 - Retrying re-sends the request. That is safe for multipart uploads, because servant-client

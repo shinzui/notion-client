@@ -28,6 +28,9 @@ module Notion.V1
     makeMethods,
     makeMethodsWith,
     makeMethodsWithEnv,
+    makeMethodsWithTokenSource,
+    TokenSource (..),
+    staticTokenSource,
     Methods (..),
 
     -- * Configuration
@@ -46,6 +49,8 @@ module Notion.V1
     -- * Runtime building blocks
     RequestContext (..),
     requestContextFor,
+    requestContextWithTokenSource,
+    withStandardHeaders,
     standardHeaders,
     responseTimeoutFor,
     withRetries,
@@ -79,11 +84,14 @@ import Notion.V1.Client
     legacyClientConfig,
     noRetries,
     requestContextFor,
+    requestContextWithTokenSource,
     responseTimeoutFor,
     runClientWith,
     standardHeaders,
     stderrLogger,
+    withAuthorizationHeader,
     withRetries,
+    withStandardHeaders,
   )
 import Notion.V1.Comments (CommentContent, CommentObject, CommentResponse)
 import Notion.V1.Comments qualified as Comments
@@ -102,6 +110,7 @@ import Notion.V1.Pages (CreatePage, MovePage, PageID, PageMarkdown, PageObject, 
 import Notion.V1.Pages qualified as Pages
 import Notion.V1.Search (SearchRequest)
 import Notion.V1.Search qualified as Search
+import Notion.V1.TokenSource
 import Notion.V1.Users (UserID, UserObject)
 import Notion.V1.Users qualified as Users
 import Notion.V1.Views (ViewObject)
@@ -146,10 +155,14 @@ makeMethodsWithEnv ::
   -- | API token
   Text ->
   Methods
-makeMethodsWithEnv config clientEnv token = Methods {..}
+makeMethodsWithEnv config clientEnv token = makeMethodsWithTokenSource config clientEnv (staticTokenSource token)
+
+-- | Keep Methods stable while reading a bearer token for each call. One typed
+-- Unauthorized response can renew and replay the request once. Byte and
+-- file-backed multipart bodies are replayable; arbitrary one-shot streams are not.
+makeMethodsWithTokenSource :: ClientConfig -> ClientEnv -> TokenSource -> Methods
+makeMethodsWithTokenSource config clientEnv source = Methods {..}
   where
-    context = requestContextFor config clientEnv token
-    configuredEnv = configureClientEnv config clientEnv
     ( ( createDatabase
           :<|> retrieveDatabase
           :<|> updateDatabase
@@ -214,11 +227,12 @@ makeMethodsWithEnv config clientEnv token = Methods {..}
           Proxy
           run
           (Client.client @API Proxy)
-          (contextAuthorization context)
+          "Bearer placeholder"
           (notionVersion config)
 
     run :: Client.ClientM a -> IO a
-    run = runClientWith configuredEnv
+    run clientM = withAuthorization source $ \auth ->
+      runClientWith (configureClientEnv config (withAuthorizationHeader auth clientEnv)) clientM
 
     -- Wrap retrievePageFiltered to provide backward-compatible retrievePage
     retrievePage pid = retrievePageFiltered pid []

@@ -25,6 +25,9 @@ module Notion.V1.Client
     -- * Runtime building blocks
     RequestContext (..),
     requestContextFor,
+    requestContextWithTokenSource,
+    withStandardHeaders,
+    withAuthorizationHeader,
     standardHeaders,
     configureClientEnv,
     notionMiddleware,
@@ -66,6 +69,7 @@ import Notion.V1.Error
     unknownResponseMessage,
   )
 import Notion.V1.Retry (RetryOptions (..), canRetry, defaultRetryOptions, noRetries, parseRetryAfter, retryDelay, validateRequestPath)
+import Notion.V1.TokenSource
 import Paths_notion_client qualified
 import Servant.Client (BaseUrl (..), ClientEnv (..), ClientM, Scheme (..))
 import Servant.Client qualified as Client
@@ -155,28 +159,51 @@ data RequestContext = RequestContext
     contextManager :: HTTP.Manager,
     -- | The effective base URL, for example @https://api.notion.com/v1@.
     contextBaseUrl :: BaseUrl,
-    -- | Full @Authorization@ header value, for example @Bearer secret_...@.
-    contextAuthorization :: Text
+    -- | Read afresh for every request; one source per installation.
+    contextTokenSource :: TokenSource
   }
 
 -- | Build the context from the same inputs as 'Notion.V1.makeMethodsWithEnv':
 -- manager and base URL from the 'ClientEnv', and a bearer token.
 requestContextFor :: ClientConfig -> ClientEnv -> Text -> RequestContext
-requestContextFor config ClientEnv {manager = m, baseUrl = b} token =
-  RequestContext
-    { contextConfig = config,
-      contextManager = m,
-      contextBaseUrl = b,
-      contextAuthorization = "Bearer " <> token
-    }
+requestContextFor config env token = requestContextWithTokenSource config env (staticTokenSource token)
 
--- | The @Authorization@, @Notion-Version@ and (when configured) @User-Agent@ headers.
-standardHeaders :: RequestContext -> [Header]
-standardHeaders RequestContext {contextConfig = ClientConfig {notionVersion, userAgent}, contextAuthorization} =
-  [ ("Authorization", Text.encodeUtf8 contextAuthorization),
-    ("Notion-Version", Text.encodeUtf8 notionVersion)
-  ]
+requestContextWithTokenSource :: ClientConfig -> ClientEnv -> TokenSource -> RequestContext
+requestContextWithTokenSource config ClientEnv {manager = m, baseUrl = b} source =
+  RequestContext config m b source
+
+-- | Read the current token and attach standard headers, without renewal.
+standardHeaders :: RequestContext -> IO [Header]
+standardHeaders context@RequestContext {contextTokenSource} =
+  headersWith context . ("Bearer " <>) <$> currentToken contextTokenSource
+
+-- | Renew once on typed Unauthorized. Put normal retries inside the action.
+-- Scope this to replayable request/response acquisition only. Never wrap stream
+-- body consumption or a user callback, which must not be replayed.
+withStandardHeaders :: RequestContext -> ([Header] -> IO a) -> IO a
+withStandardHeaders context@RequestContext {contextTokenSource} action =
+  withAuthorization contextTokenSource (action . headersWith context)
+
+headersWith :: RequestContext -> Text -> [Header]
+headersWith RequestContext {contextConfig = ClientConfig {notionVersion, userAgent}} auth =
+  [("Authorization", Text.encodeUtf8 auth), ("Notion-Version", Text.encodeUtf8 notionVersion)]
     <> userAgentHeader userAgent
+
+-- | Replace authorization inside the runtime and outside caller middleware, so
+-- each ordinary retry sees exactly one fresh header. OAuth Basic auth bypasses it.
+withAuthorizationHeader :: Text -> ClientEnv -> ClientEnv
+withAuthorizationHeader auth env =
+  env
+    { middleware = \app req ->
+        middleware
+          env
+          app
+          req
+            { requestHeaders =
+                Seq.singleton ("Authorization", Text.encodeUtf8 auth)
+                  <> Seq.filter ((/= "Authorization") . fst) (requestHeaders req)
+            }
+    }
 
 userAgentHeader :: Maybe Text -> [Header]
 userAgentHeader = maybe [] (\ua -> [("User-Agent", Text.encodeUtf8 ua)])

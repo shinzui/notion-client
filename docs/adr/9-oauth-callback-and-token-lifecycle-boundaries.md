@@ -1,7 +1,7 @@
 # ADR 9: OAuth callbacks and rotating tokens have explicit lifecycle boundaries
 
-Status: Accepted (design; implementation pending)
-Date: 2026-10-16
+Status: Accepted (library implemented; live installation gate pending)
+Date: 2026-10-19
 
 
 ## Context
@@ -80,5 +80,6 @@ explain that OAuth lifecycle exceptions remain IO exceptions outside `Error Noti
 Network-free tests cover duplicate/forged callbacks, request replay boundaries, concurrent
 rejections, failed persistence, uncertain exchanges and cancellation. Live acceptance separately
 proves consent, explicit and reactive refresh, restart with persisted credentials, cancellation
-and local logout. Until those checks pass, this is an accepted design, not evidence of a working
-implementation. No claim of crash-proof or distributed exactly-once token rotation is made.
+and local logout. The library implementation is covered by network-free tests, including real loopback
+HTTP acquisition and multipart replay. The full public-installation live gate remains
+pending until those checks pass. No claim of crash-proof or distributed exactly-once token rotation is made.

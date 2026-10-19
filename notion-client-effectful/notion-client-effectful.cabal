@@ -60,3 +60,42 @@ library
 
   hs-source-dirs: src
   default-language: GHC2024
+
+test-suite oauth-runtime
+  type: exitcode-stdio-1.0
+  default-language: GHC2024
+  default-extensions:
+    DuplicateRecordFields
+    OverloadedStrings
+    RecordWildCards
+
+  hs-source-dirs:
+    test
+    ../tasty
+
+  main-is: OAuthRuntimeMain.hs
+  other-modules:
+    FakeNotion
+    OAuthTests
+    TokenSourceTests
+
+  build-depends:
+    aeson,
+    base,
+    bytestring,
+    containers,
+    effectful-core,
+    http-client,
+    http-types,
+    mtl,
+    notion-client,
+    notion-client-effectful,
+    servant-client,
+    servant-client-core,
+    tasty,
+    tasty-hunit,
+    time,
+
+  ghc-options:
+    -Wall
+    -threaded

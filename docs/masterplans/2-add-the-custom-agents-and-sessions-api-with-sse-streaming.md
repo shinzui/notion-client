@@ -15,6 +15,11 @@ provenance:
       at: 2026-09-15T14:19:29Z
       mode: "update"
       note: "AsyncTask integration notes HTTP 202 (from MP1 EP-3)"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T20:30:56Z
+      mode: "implement"
+      note: "Record OAuth runtime interface cascade into planned stream transport."
 ---
 
 # Add the Custom Agents and Sessions API with SSE Streaming
@@ -172,6 +177,9 @@ EP-3 consumes these. It defines only the stream envelope `SessionStreamEvent`: `
 
 
 ## Surprises & Discoveries
+
+
+- On 2026-10-19, `docs/plans/18-refresh-oauth-access-tokens-automatically-for-methods.md` replaced fixed `RequestContext` authorization with a token source. Plan 14 now receives `withStandardHeaders` around response acquisition, with ordinary retries inside it; its `StreamEnv`, algorithm, construction and tests must never wrap body consumption or user callbacks. No streaming implementation existed when this cascade was applied.
 
 - Drafting on 2026-09-14 found that "model selection" has two different wire shapes, `{mode, id}` on agents and `{type, ids}` on sessions. It is reconciled into one tolerant shared type.
 - Queried session events differ from streamed committed events. Queried `agent.message` can carry file content, queried `session.status` allows only five statuses and has no `usage`/`artifacts`, and file parts carry resolved file metadata instead of `file_id`. EP-2 models both.

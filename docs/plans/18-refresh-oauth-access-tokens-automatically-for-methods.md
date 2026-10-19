@@ -17,6 +17,11 @@ provenance:
       at: 2026-10-16T11:53:13Z
       mode: "update"
       note: "Correct callback verification, OAuth replay policy, token lifecycle recovery and integration acceptance after source review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T20:28:11Z
+      mode: "implement"
+      note: "Implement per-request authorization and serialized rotation with pending and terminal lifecycle states."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -50,14 +55,15 @@ This plan is EP-3 of `docs/masterplans/3-support-notion-public-integrations-with
 ## Progress
 
 
-- [ ] Milestone 1: `Notion.V1.TokenSource` (`TokenSource`, `staticTokenSource`, `withAuthorization`) exists. `makeMethodsWithTokenSource` is in `Notion.V1`, and `RequestContext` carries a token source with `withStandardHeaders`. Every existing test passes. New tests show that the header follows the source between calls and that one renewal and retry happen on `unauthorized`. `docs/plans/14-stream-session-updates-over-server-sent-events.md` is updated for the new `RequestContext`.
-- [ ] Milestone 2: `Notion.V1.OAuth.Refresh` (`OAuthTokens`, `TokenStore`, `inMemoryTokenStore`, `OAuthTokenManager`, `ReauthorizationRequired`, `TokenPersistenceError`, `RefreshOutcomeUnknown`) exists. The `TokenRefresh` tests cover refresh and retry, single-flight under concurrency, `invalid_grant`, a missing refresh token, a failing store, a lost response, and asynchronous cancellation. README, CHANGELOG and a new ADR describe the behavior.
+- [x] (2026-10-19) Milestone 1: `Notion.V1.TokenSource` (`TokenSource`, `staticTokenSource`, `withAuthorization`) exists. `makeMethodsWithTokenSource` is in `Notion.V1`, and `RequestContext` carries a token source with `withStandardHeaders`. Every existing test passes. New tests show that the header follows the source between calls and that one renewal and retry happen on `unauthorized`. `docs/plans/14-stream-session-updates-over-server-sent-events.md` is updated for the new `RequestContext`.
+- [x] (2026-10-19) Milestone 2: `Notion.V1.OAuth.Refresh` (`OAuthTokens`, `TokenStore`, `inMemoryTokenStore`, `OAuthTokenManager`, `ReauthorizationRequired`, `TokenPersistenceError`, `RefreshOutcomeUnknown`) exists. The `TokenRefresh` tests cover refresh and retry, single-flight under concurrency, `invalid_grant`, a missing refresh token, a failing store, a lost response, and asynchronous cancellation. README, CHANGELOG and ADR 9 describe the behavior.
 
 
 ## Surprises & Discoveries
 
 
-(None yet.)
+- Real multipart replay initially hung because the test kept its temporary file open for writing. Closing the fixture handle before upload makes both attempts read the same complete bytes; the real HTTP test now compares complete multipart request bodies.
+- On 2026-10-19, Hackage reports WAI 3.2.5 and Warp 3.4.16; upstream release tags include Warp 3.4.15 but not the latest registry release yet. Existing compatible bounds admit current registry releases; Cabal resolved Warp 3.4.16. Mori-located sources confirmed bracketed server lifetime and response acquisition APIs. No compatibility workaround or pin was added.
 
 
 ## Decision Log
@@ -83,7 +89,7 @@ This plan is EP-3 of `docs/masterplans/3-support-notion-public-integrations-with
 ## Outcomes & Retrospective
 
 
-(To be filled during and after implementation.)
+Both milestones are implemented. `cabal test all --test-show-details=direct` passes 451 core tests and four companion effectful consumer tests. Real loopback HTTP tests prove byte and file-backed multipart replay, custom middleware/request-builder preservation, failed-response cleanup before renewal and no replay of opened consumers. Deterministic MVar barriers prove two old-token rejections share one refresh and cannot send new credentials before save. Failure/cancellation tests cover pending persistence, uncertain outcomes, terminal invalid grants, null refresh tokens and installation identity. Plan 14 and MasterPlan 2 carry the runtime interface cascade. ADR 9 records the durable boundaries. Live refresh remains the separate integration gate in plan 19.
 
 
 ## Context and Orientation

@@ -4,9 +4,13 @@
 
 ### Breaking Changes
 
+* `RequestContext.contextAuthorization` is replaced by `contextTokenSource`; `standardHeaders` now returns `IO [Header]`. Use `withStandardHeaders` around non-Servant response acquisition for one reactive renewal, and keep body readers and user callbacks outside it.
+
 * OAuth endpoint failures with OAuth error bodies now throw `OAuthError` instead of `UnknownHTTPResponseError`.
 
 ### New Features
+
+* Per-request `TokenSource`, `makeMethodsWithTokenSource` and `Notion.V1.OAuth.Refresh` support automatic renewal once on typed `Unauthorized`, serialized token rotation and persistence-before-use. Failed saves retain the pair for `retryTokenPersistence`; uncertain exchanges block grant replay.
 
 * `Notion.V1.OAuth.Authorization` provides secure state generation, consent URLs, strict state-first callback verification and code exchange.
 

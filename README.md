@@ -238,6 +238,36 @@ All OAuth methods disable automatic retries because a grant may be consumed.
 Default error rendering and logging omit raw bodies and descriptions; explicit
 metadata is available for controlled diagnostics.
 
+For a long-lived public integration, persist `oauthTokensFromResponse now response`
+through a `TokenStore`, then construct a manager and stable methods:
+
+```haskell
+manager <- newOAuthTokenManager oauth store
+let methods = makeMethodsWithTokenSource defaultClientConfig env
+        (tokenManagerSource manager)
+```
+
+Import `Notion.V1.OAuth.Refresh` for these names. The manager reads the store once
+and refreshes only after typed `Unauthorized`, or when `refreshTokensNow` is called.
+It saves replacement credentials before allowing their use. Catch
+`ReauthorizationRequired` to restart login, `TokenPersistenceError` to retry the
+identical save using `retryTokenPersistence`, and `RefreshOutcomeUnknown` to restart
+login without replaying the old refresh token. `currentTokens` is for explicit
+inspection/recovery and may contain an unusable or unsaved pair.
+
+Use one manager per installation. Several processes or managers must coordinate
+the entire load/refresh/save sequence externally; save-time compare-and-swap is
+insufficient. A process crash between remote refresh and durable storage can still
+require another login. Store saves must be idempotent and must not re-enter the
+manager. A null replacement refresh token stays absent and requires login at the
+next renewal. There is no timer refresh because responses carry no expiry.
+
+`RequestContext` now carries `contextTokenSource`. `standardHeaders` reads current
+headers in IO. Non-Servant requests should use `withStandardHeaders context` around
+response acquisition with `withRetries` inside it. Close failed responses before
+throwing their classified error. Keep body consumption and user callbacks outside
+both retry layers so an opened stream is never replayed.
+
 ### URL helpers
 
 ```haskell

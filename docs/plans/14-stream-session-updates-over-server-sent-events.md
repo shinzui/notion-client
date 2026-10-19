@@ -10,6 +10,12 @@ provenance:
     model: "claude-opus-5"
     harness: "claude-code"
     at: 2026-09-14T18:46:51Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T20:30:56Z
+      mode: "implement"
+      note: "Cascade dynamic authorization through stream acquisition only, including StreamEnv and tests."
 ---
 
 # Stream Session Updates over Server-Sent Events
@@ -78,7 +84,7 @@ You can see it working three ways: the `tasty` test suite runs a local fake SSE 
   Rationale: The callback form is the simplest for the common "print everything" case. The JS consumer can `break` out of its async iterator; the Haskell equivalent without exceptions is a pull reader scoped by a bracket, which guarantees the response is closed on normal return, exception or early exit.
   Date: 2026-09-14
 
-- Decision: Put the transport in a module that does not import `Notion.V1`, parameterised by a `StreamEnv` record that carries the manager, base URL, auth header, version, open timeout, a retry wrapper and an error builder. `src/Notion/V1.hs` builds the `StreamEnv` from the client configuration.
+- Decision: Put the transport in a module that does not import `Notion.V1`, parameterised by a `StreamEnv` record that carries the manager, base URL, a per-acquisition standard-header wrapper, open timeout, a retry wrapper and an error builder. `src/Notion/V1.hs` builds the `StreamEnv` from the client configuration.
   Rationale: `Notion.V1` will import the stream module, so the stream module cannot import `Notion.V1` (import cycle). Passing EP-2's retry wrapper and error builder in keeps one retry policy (the MasterPlan forbids duplicating it) and lets tests inject a fake server's base URL.
   Date: 2026-09-14
 
@@ -104,7 +110,7 @@ You can see it working three ways: the `tasty` test suite runs a local fake SSE 
 
 **Repository.** `notion-client` (root `/Users/shinzui/Keikaku/bokuno/libraries/haskell/notion-client`) is a Haskell library, GHC 9.12.2, language `GHC2024`, built with cabal. `cabal.project` lists two packages: `.` (`notion-client.cabal`) and `notion-client-effectful`. Build with `cabal build all`, test with `cabal test`. A pre-commit hook runs `treefmt`, which may reformat files; re-stage and commit again if it does. Default extensions in every component are `DuplicateRecordFields`, `OverloadedLabels`, `OverloadedStrings`, `RecordWildCards`.
 
-**How requests work today.** `src/Notion/V1.hs` defines `getClientEnv :: Text -> IO ClientEnv` (a Servant `ClientEnv` holding an `http-client` `Manager` from `Network.HTTP.Client.TLS.newTlsManager` and a parsed `BaseUrl`), the `Methods` record (one `IO` function per endpoint), the Servant `API` type (every route is prefixed by `Header' '[Required, Strict] "Authorization" Text` and `"Notion-Version"`), and `makeMethods :: ClientEnv -> Text -> Methods`. `makeMethods` pattern-binds every client function from `Client.hoistClient @API Proxy run (Client.client @API Proxy) authorization notionVersion` where `authorization = "Bearer " <> token`, `notionVersion = "2026-03-11"`, and `run` executes a `ClientM` and rethrows a decoded `NotionError` (from `src/Notion/V1/Error.hs`) or the raw `ClientError`. Every endpoint is a single request followed by a single JSON response. Nothing in the library streams today.
+**How requests work today.** `src/Notion/V1.hs` builds `Methods` through `makeMethodsWithTokenSource`; legacy constructors wrap static bearer tokens. Each Servant call reads its `TokenSource`, injects exactly one Authorization header inside the runtime, and may renew once on typed `Unauthorized`. Ordinary retry policy remains separate. A non-Servant transport must apply both retry layers only to response acquisition. Nothing in the library streams today. The runtime interface was implemented by `docs/plans/18-refresh-oauth-access-tokens-automatically-for-methods.md`.
 
 **JSON style.** Resource modules (for example `src/Notion/V1/FileUploads.hs`) use `aesonOptions` from `src/Notion/Prelude.hs` (camelCase field names become snake_case, a trailing underscore is dropped so `type_` becomes `type`, `Nothing` fields are omitted) for simple records, and hand-written `FromJSON` instances using `LambdaCase` (`parseJSON = \case Object o -> ...`) or `withObject` for tagged unions. Timestamps are parsed with `parseISO8601 :: Text -> Parser POSIXTime` from `Notion.Prelude`. Identifiers use `newtype UUID = UUID {text :: Text}` from `src/Notion/V1/Common.hs`. Modules with an `id` record field import `Prelude hiding (id)`.
 
@@ -118,8 +124,8 @@ From `docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-co
 
 From `docs/plans/7-add-a-configurable-client-runtime-with-retries-typed-error-codes-and-oauth.md`:
 - `ClientConfig`, with fields `apiBaseUrl`, `notionVersion`, `timeout`, `retryOptions`, `userAgent`, `logger`, `logLevel`.
-- `RequestContext {contextConfig, contextManager, contextBaseUrl, contextAuthorization}`, built by `requestContextFor`.
-- `standardHeaders :: RequestContext -> [Header]`: Authorization, Notion-Version and User-Agent.
+- `RequestContext {contextConfig, contextManager, contextBaseUrl, contextTokenSource}`, built by `requestContextFor`.
+- `standardHeaders :: RequestContext -> IO [Header]` reads current Authorization, Notion-Version and User-Agent. Use `withStandardHeaders :: RequestContext -> ([Header] -> IO a) -> IO a` around acquisition to renew once on typed `Unauthorized`. Never wrap body consumption or user callbacks.
 - `responseTimeoutFor :: ClientConfig -> ResponseTimeout`.
 - `withRetries :: ClientConfig -> Method -> Text -> IO a -> IO a`. `Method` is the http-types `Method`, so pass `methodPost`. The `Text` is a label for logging. It retries only when the action throws `NotionError`.
 - `notionErrorFromResponse :: Status -> ResponseHeaders -> ByteString -> SomeException`.
@@ -441,10 +447,9 @@ Add to `src/Notion/V1/Sessions/Stream.hs`:
 data StreamEnv = StreamEnv
   { manager :: Network.HTTP.Client.Manager,
     baseUrl :: Servant.Client.BaseUrl,     -- ^ e.g. https://api.notion.com/v1
-    authorization :: Text,                 -- ^ full header value, e.g. "Bearer secret_..."
-    notionVersion :: Text,
+    withHeaders :: forall a. ([Network.HTTP.Types.Header] -> IO a) -> IO a,
+      -- ^ standard headers and one authorization renewal around acquisition only
     openTimeout :: Network.HTTP.Client.ResponseTimeout,
-    extraHeaders :: [Network.HTTP.Types.Header],  -- ^ e.g. User-Agent if EP-2 sets one
     retryOpen :: forall a. IO a -> IO a,   -- ^ EP-2's retry policy specialised to POST
     responseError :: Network.HTTP.Client.Response Data.ByteString.Lazy.ByteString -> SomeException
       -- ^ EP-2's typed error for a non-2xx response (status, headers, body)
@@ -460,20 +465,20 @@ withSessionStreamIO :: StreamEnv -> SessionUpdateRequest -> (IO (Maybe SessionSt
 streamSessionIO :: StreamEnv -> SessionUpdateRequest -> (SessionStreamEvent -> IO ()) -> IO ()
 ```
 
-`RankNTypes` is part of `GHC2024`, so the rank-2 `retryOpen` field needs no pragma; bind it with `StreamEnv {..}` pattern matching rather than using it as a selector function.
+`RankNTypes` is part of `GHC2024`, so the rank-2 `retryOpen` and `withHeaders` fields needs no pragma; bind it with `StreamEnv {..}` pattern matching rather than using it as a selector function.
 
 Implementation of `withSessionStreamIO env@StreamEnv {..} body use`:
 
-1. Build the request once: `parseRequest (dropTrailingSlash (showBaseUrl baseUrl) <> "/sessions")`, then set `method = "POST"`, `requestHeaders = [("Authorization", encodeUtf8 authorization), ("Notion-Version", encodeUtf8 notionVersion), ("Accept", "text/event-stream"), ("Content-Type", "application/json")] <> extraHeaders`, `requestBody = RequestBodyLBS (Aeson.encode body)`, `responseTimeout = openTimeout`. `parseRequest` does not throw on non-2xx statuses, which we want.
-2. `openOnce`: `res <- responseOpen request manager`; if `statusIsSuccessful (responseStatus res)` return it; else read the error body with `brConsume` (inside `finally (responseClose res)`) and `throwIO (responseError res {responseBody = LBS.fromChunks chunks})`.
-3. `Control.Exception.bracket (retryOpen openOnce) responseClose $ \res -> do reader <- newEventReader (responseBody res); use reader`. Retries and the open timeout therefore apply to `openOnce` only; exceptions from the body, the decoder or `use` escape the bracket unretried.
+1. Build the base request once: `parseRequest (dropTrailingSlash (showBaseUrl baseUrl) <> "/sessions")`, then set `method = "POST"`, `requestBody = RequestBodyLBS (Aeson.encode body)` and `responseTimeout = openTimeout`. `parseRequest` does not throw on non-2xx statuses.
+2. `openOnce headers` sets `requestHeaders = headers <> [("Accept", "text/event-stream"), ("Content-Type", "application/json")]`, opens with `responseOpen request manager`, and returns only a successful response. Acquire under masking, restoring the network operation. On rejection, restore error-body reading under `finally (responseClose res)` and throw `responseError res {responseBody = LBS.fromChunks chunks}`. The response must be closed before renewal. Cancellation during error-body reading also closes it.
+3. `Control.Exception.bracket (withHeaders (\headers -> retryOpen (openOnce headers))) responseClose $ \res -> do reader <- newEventReader (responseBody res); use reader`. Both renewal and ordinary retries apply to acquisition only. Exceptions from the body, decoder and user callback propagate without renewal or replay. The outer bracket acquires under masking; preserve that protection across successful response return.
 4. `newEventReader :: BodyReader -> IO (IO (Maybe SessionStreamEvent))` keeps an `IORef` with the `SseBuffer`, a list of already-decoded pending events and a `done` flag. `next`: if pending is non-empty, pop one; if done, return `Nothing`; otherwise `chunk <- brRead body`; an empty chunk means end of body, so run `finishSse`, decode those frames, set done and loop; a non-empty chunk runs `feedSse`, decodes the frames with `decodeSessionStreamEvent`, stores them as pending and loops. Any `Left` is thrown with `throwIO` (`SseFramingError` wraps a parser error).
 
 `streamSessionIO env req k = withSessionStreamIO env req $ \next -> let loop = next >>= maybe (pure ()) (\e -> k e >> loop) in loop`.
 
 Known limitation to document in Haddock: because the transport uses the `Manager` directly, a custom `makeClientRequest`, `middleware` or cookie jar installed on the Servant `ClientEnv` does not apply to streams.
 
-Tests (`transportTests`) run against warp and build a `StreamEnv` directly: `manager` from `newManager defaultManagerSettings`, `baseUrl` from `parseBaseUrl ("http://127.0.0.1:" <> show port <> "/v1")`, `authorization = "Bearer test-token"`, `notionVersion = "2026-03-11"`, `openTimeout = responseTimeoutMicro 2000000`, `retryOpen` from EP-2's retry function configured for method POST and the smallest delays its configuration permits, `responseError` from EP-2's builder. The server records each request (method, path, headers, body) in an `IORef`/`MVar` list.
+Tests (`transportTests`) run against warp and build a `StreamEnv` directly: `manager` from `newManager defaultManagerSettings`, `baseUrl` from `parseBaseUrl ("http://127.0.0.1:" <> show port <> "/v1")`, `withHeaders = \action -> action [("Authorization", "Bearer test-token"), ("Notion-Version", "2026-03-11")]`, `openTimeout = responseTimeoutMicro 2000000`, `retryOpen` from EP-2's retry function configured for method POST and the smallest delays its configuration permits, `responseError` from EP-2's builder. The server records each request (method, path, headers, body) in an `IORef`/`MVar` list.
 
 - "sends the SSE request": server answers one `stream.end` frame. Assert method `POST`, path `/v1/sessions`, headers `Accept: text/event-stream`, `Content-Type: application/json`, `Authorization: Bearer test-token`, `Notion-Version: 2026-03-11`, and that the body decodes to the JSON of EP-2's new-turn request for message `hello` (`{"message":"hello"}`).
 - "delivers events as frames arrive": server sends `stream.error` frame, waits on a gate filled by the callback after it sees the first event, then sends `stream.end`. Collected event kinds equal `[stream.error, stream.end]`; whole test under a 5 s `timeout`.
@@ -504,7 +509,7 @@ In `src/Notion/V1.hs`: import `Notion.V1.Sessions.Stream qualified as Stream` an
     withSessionStream :: forall a. SessionUpdateRequest -> (IO (Maybe SessionStreamEvent) -> IO a) -> IO a,
 ```
 
-These are not Servant routes, so nothing is added to `API` or to the `hoistClient` pattern binding. In EP-2's configurable constructor (the function `makeMethods` now wraps), in its `where` block, build `streamEnv = Stream.StreamEnv {manager = Client.manager clientEnv, baseUrl = <EP-2 configured base URL, else Client.baseUrl clientEnv>, authorization, notionVersion, openTimeout = responseTimeoutFor config, extraHeaders = <the User-Agent entry from standardHeaders (requestContextFor ...), if any>, retryOpen = withRetries config methodPost "sessions.stream", responseError = \res -> notionErrorFromResponse (responseStatus res) (responseHeaders res) (responseBody res)}` and define `streamSession = Stream.streamSessionIO streamEnv` and `withSessionStream = Stream.withSessionStreamIO streamEnv`. Re-export `SessionStreamEvent (..)` and friends from `Notion.V1.Sessions.Stream` only; do not re-export from `Notion.V1`. Because `withSessionStream` has a rank-2 type, if `RecordWildCards` construction (`Methods {..}`) rejects the polymorphic binding, give the local binding an explicit signature `withSessionStream :: forall a. ...`.
+These are not Servant routes, so nothing is added to `API` or to the `hoistClient` pattern binding. In `makeMethodsWithTokenSource config clientEnv source`, build `context = requestContextWithTokenSource config clientEnv source` and `streamEnv = Stream.StreamEnv {manager = contextManager context, baseUrl = contextBaseUrl context, withHeaders = withStandardHeaders context, openTimeout = responseTimeoutFor config, retryOpen = withRetries config methodPost "sessions.stream", responseError = \res -> notionErrorFromResponse (responseStatus res) (responseHeaders res) (responseBody res)}`. Define `streamSession = Stream.streamSessionIO streamEnv` and `withSessionStream = Stream.withSessionStreamIO streamEnv`. Re-export `SessionStreamEvent (..)` and friends from `Notion.V1.Sessions.Stream` only; do not re-export from `Notion.V1`. Because `withSessionStream` has a rank-2 type, if `RecordWildCards` construction (`Methods {..}`) rejects the polymorphic binding, give the local binding an explicit signature `withSessionStream :: forall a. ...`.
 
 Add a test in `tasty/SessionStreamTests.hs`, "Methods.streamSession uses the client configuration": build `Methods` with `getClientEnv (Text.pack ("http://127.0.0.1:" <> show port <> "/v1"))` and `makeMethods clientEnv "test-token"` against warp, and assert events arrive and the `Notion-Version` header equals the library default.
 
@@ -710,3 +715,6 @@ and `Notion.V1.Effectful` exports:
 streamSession :: (Notion :> es) => SessionUpdateRequest -> (SessionStreamEvent -> Eff es ()) -> Eff es ()
 withSessionStream :: (Notion :> es) => SessionUpdateRequest -> (Eff es (Maybe SessionStreamEvent) -> Eff es a) -> Eff es a
 ```
+
+
+Revision (2026-10-19): The OAuth runtime now reads tokens per request. `StreamEnv` receives a rank-2 `withHeaders` acquisition wrapper instead of fixed authorization/version/extra-header fields. Its algorithm, construction and fixtures now keep renewal outside ordinary retries and both outside stream consumption. Add real HTTP tests for rejection cleanup before renewal, fresh standard headers, and body/callback Unauthorized exceptions without replay; the representative runtime proof lives in `tasty/TokenHTTPTests.hs`.

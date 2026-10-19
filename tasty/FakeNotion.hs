@@ -6,6 +6,7 @@ module FakeNotion
   ( Recorded (..),
     FakeReply (..),
     fakeClientEnv,
+    fakeClientEnvWith,
     fakeBaseUrl,
     jsonReply,
     lookupRecordedHeader,
@@ -19,7 +20,7 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Builder (toLazyByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Foldable (toList)
-import Data.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef)
+import Data.IORef (IORef, atomicModifyIORef', newIORef)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.HTTP.Types (Header, HeaderName, Method, http11, mkStatus)
 import Servant.Client (BaseUrl (..), ClientEnv (..), ClientError (..), Scheme (..), mkClientEnv)
@@ -54,21 +55,22 @@ lookupRecordedHeader name Recorded {headers} = lookup name headers
 -- | A 'ClientEnv' answering from the script, and the requests it records.
 fakeClientEnv :: [FakeReply] -> IO (ClientEnv, IORef [Recorded])
 fakeClientEnv script = do
-  manager <- newManager defaultManagerSettings
   remaining <- newIORef script
+  fakeClientEnvWith $ \_ -> do
+    next <- atomicModifyIORef' remaining (\case [] -> ([], Nothing); r : rs -> (rs, Just r))
+    maybe (ioError (userError "FakeNotion: script exhausted")) pure next
+
+-- | Header-dependent replies, with an atomic request recorder.
+fakeClientEnvWith :: (Recorded -> IO FakeReply) -> IO (ClientEnv, IORef [Recorded])
+fakeClientEnvWith reply = do
+  manager <- newManager defaultManagerSettings
   recorded <- newIORef []
   let mw _realApp req = do
-        liftIO $
-          modifyIORef'
-            recorded
-            (<> [Recorded (requestMethod req) (toLazyByteString (requestPath req)) (toList (requestHeaders req))])
-        next <- liftIO $ atomicModifyIORef' remaining (\case [] -> ([], Nothing); r : rs -> (rs, Just r))
-        FakeReply {status, replyHeaders, body} <-
-          maybe (liftIO (ioError (userError "FakeNotion: script exhausted"))) pure next
+        let request = Recorded (requestMethod req) (toLazyByteString (requestPath req)) (toList (requestHeaders req))
+        liftIO $ atomicModifyIORef' recorded (\rs -> (rs <> [request], ()))
+        FakeReply {status, replyHeaders, body} <- liftIO (reply request)
         let resp = Response (mkStatus status "") (foldMap pure replyHeaders) http11 body
         if status >= 200 && status < 300
           then pure resp
-          else
-            throwError
-              (FailureResponse (bimap (const ()) (\p -> (fakeBaseUrl, LBS.toStrict (toLazyByteString p))) req) resp)
+          else throwError (FailureResponse (bimap (const ()) (\p -> (fakeBaseUrl, LBS.toStrict (toLazyByteString p))) req) resp)
   pure ((mkClientEnv manager fakeBaseUrl) {middleware = mw}, recorded)

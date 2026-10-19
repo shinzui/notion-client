@@ -64,6 +64,9 @@ import RuntimeTests qualified
 import System.Environment qualified as Environment
 import Test.Tasty
 import Test.Tasty.HUnit
+import TokenHTTPTests qualified
+import TokenRefreshTests qualified
+import TokenSourceTests qualified
 import ViewTests qualified
 import Web.HttpApiData (toQueryParam)
 import WireFormatTests qualified
@@ -186,6 +189,9 @@ tests = do
         RuntimeTests.tests,
         OAuthTests.tests,
         AuthorizationTests.tests,
+        TokenSourceTests.tests,
+        TokenRefreshTests.tests,
+        TokenHTTPTests.tests,
         HelpersTests.tests,
         ViewTests.tests,
         DataSourceSearchTests.tests,

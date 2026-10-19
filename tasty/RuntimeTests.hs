@@ -72,7 +72,7 @@ configurationTests =
       (env, _) <- fakeClientEnv []
       let context = requestContextFor legacyClientConfig env "secret_tanaka"
           sent = [(n, v) | (n, v) <- headers r, n `elem` ["Authorization", "Notion-Version", "User-Agent"]]
-      standardHeaders context @?= sent
+      standardHeaders context >>= (@?= sent)
       contextBaseUrl context @?= fakeBaseUrl
   ]
   where
