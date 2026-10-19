@@ -1,6 +1,7 @@
 module Main where
 
 import AsyncTaskTests qualified
+import AuthorizationTests qualified
 import CommentTests qualified
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
@@ -184,6 +185,7 @@ tests = do
         ResponseJSONTests.tests,
         RuntimeTests.tests,
         OAuthTests.tests,
+        AuthorizationTests.tests,
         HelpersTests.tests,
         ViewTests.tests,
         DataSourceSearchTests.tests,

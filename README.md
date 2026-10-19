@@ -202,6 +202,18 @@ rejected before sending).
 
 ### OAuth
 
+For a public integration, generate a state with `newOAuthState`, build the consent
+URL with `authorizationUrl (AuthorizationRequest clientId redirectUri state)`,
+and store that request in the initiating user's session. The redirect URI must
+exactly match a URI registered for the integration. On callback, pass WAI's query
+(or `parseQuery` output) to `verifyAuthorizationCallback state`. Atomically consume
+the request on verified success or denial, and expire it after a short interval.
+Invalid callbacks must leave it pending. Exchange a verified `OAuthCode` with
+`exchangeAuthorizationCode oauth request code`; this sends the same redirect URI.
+These helpers are exported by `Notion.V1.OAuth.Authorization`. They provide protocol
+validation; session binding, expiry and single use belong to the application.
+
+
 ```haskell
 import Notion.V1 (defaultBaseUrl, defaultClientConfig)
 import Notion.V1.OAuth

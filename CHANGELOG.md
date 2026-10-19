@@ -8,6 +8,8 @@
 
 ### New Features
 
+* `Notion.V1.OAuth.Authorization` provides secure state generation, consent URLs, strict state-first callback verification and code exchange.
+
 * Typed `OAuthErrorCode` and route-local normalization of OAuth failures; OAuth requests never automatically replay grants. Default error rendering and OAuth debug logging omit server descriptions, headers and bodies.
 
 ## 0.9.0.0 (2026-10-12)

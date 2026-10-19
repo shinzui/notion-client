@@ -17,6 +17,11 @@ provenance:
       at: 2026-10-16T11:53:13Z
       mode: "update"
       note: "Correct callback verification, OAuth replay policy, token lifecycle recovery and integration acceptance after source review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T20:25:41Z
+      mode: "implement"
+      note: "Implement secure state, consent URL and state-first callback verification."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -53,12 +58,14 @@ This plan is EP-2 of `docs/masterplans/3-support-notion-public-integrations-with
 ## Progress
 
 
-- [ ] Milestone 1: `Notion.V1.OAuth.Authorization` exports `OAuthState`, `newOAuthState`, `AuthorizationRequest` and `authorizationUrl`. Tests show the exact URL for a fixed request, and show that state values are 43 URL-safe characters that differ between calls. A live `curl` of a generated URL answers HTTP 302 to `app.notion.com/install-integration`.
-- [ ] Milestone 2 (requires EP-1 M1): `verifyAuthorizationCallback`, `AuthorizationCallbackError`, `OAuthCode`, `authorizationCodeGrant` and `exchangeAuthorizationCode` exist. Tests cover success, cancellation, state mismatch, missing state, missing code and percent-encoded values. README and CHANGELOG describe the login steps.
+- [x] (2026-10-19) Milestone 1: `Notion.V1.OAuth.Authorization` exports `OAuthState`, `newOAuthState`, `AuthorizationRequest` and `authorizationUrl`. Tests show the exact URL for a fixed request, and show that state values are 43 URL-safe characters that differ between calls. A live `curl` of a generated URL answers HTTP 302 to `app.notion.com/install-integration`.
+- [x] (2026-10-19) Milestone 2 (requires EP-1 M1): `verifyAuthorizationCallback`, `AuthorizationCallbackError`, `OAuthCode`, `authorizationCodeGrant` and `exchangeAuthorizationCode` exist. Tests cover success, cancellation, state mismatch, missing state, missing code and percent-encoded values. README and CHANGELOG describe the login steps.
 
 
 ## Surprises & Discoveries
 
+
+- On 2026-10-19, Hackage and upstream tags still report entropy 0.4.1.11 and memory 0.18.0. Source inspection confirmed `getEntropy` uses the operating-system source and `constEq` scans equal-length byte arrays without early difference exit. Both dependencies resolve with GHC 9.12.4.
 
 - During MasterPlan drafting (2026-10-16), `GET https://api.notion.com/v1/oauth/authorize?client_id=fake&response_type=code&owner=user&redirect_uri=http%3A%2F%2Flocalhost%3A8765%2Fcallback` answered HTTP 302 with `Location: https://app.notion.com/install-integration?response_type=code&client_id=fake&redirect_uri=http%3A%2F%2Flocalhost%3A8765%2Fcallback&owner=user`, even though the client ID is made up. The redirect proves that the parameters are well-formed, not that the client ID or redirect URI is valid.
 
@@ -78,15 +85,15 @@ This plan is EP-2 of `docs/masterplans/3-support-notion-public-integrations-with
   Rationale: `random`, which the library already uses for retry jitter, is not a cryptographically secure generator. `entropy` supplies operating-system randomness. `memory` supplies an established comparison primitive; a hand-written Haskell fold is not evidence of constant-time machine code. On 2026-10-16 Hackage and upstream tags agree on entropy 0.4.1.11 and memory 0.18.0.
   Date: 2026-10-16
 
-- Decision: When the redirect carries `error`, report `AuthorizationDenied` before checking the state. Report `StateMismatch` before looking at `code`.
-  Rationale: A program never exchanges anything for an error redirect, so a forged error redirect can only show the user a "cancelled" message. Checking the state before the code guarantees that a code is never returned for an unverified state.
-  Date: 2026-10-16
+- Decision: Validate state before success or denial, after rejecting malformed protocol fields. This supersedes the original denial-first decision.
+  Rationale: A forged denial must not terminate a legitimate pending login. Tests reject denial with absent or incorrect state.
+  Date: 2026-10-19
 
 
 ## Outcomes & Retrospective
 
 
-(To be filled during and after implementation.)
+Authorization helpers and callback verification are implemented and build with both packages. The Authorization test group exercises exact URL encoding, secure-state shape, constant-time comparison regressions, malformed and forged callbacks, one decoding pass and Basic-authenticated exchange. A live authorize request returned HTTP 302 with the expected parameters on 2026-10-19. Library protocol helpers deliberately leave session binding, expiry and atomic single use to callers, as recorded in ADR 9.
 
 
 ## Context and Orientation
