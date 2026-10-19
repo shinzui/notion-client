@@ -17,6 +17,11 @@ provenance:
       at: 2026-10-16T11:53:13Z
       mode: "update"
       note: "Correct callback verification, OAuth replay policy, token lifecycle recovery and integration acceptance after source review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T20:22:20Z
+      mode: "implement"
+      note: "Implement route-local OAuth error normalization and disable replay of OAuth requests."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -46,8 +51,8 @@ This plan is EP-1 of `docs/masterplans/3-support-notion-public-integrations-with
 ## Progress
 
 
-- [ ] Milestone 1: `OAuthErrorCode`, `OAuthError` and `oauthErrorFromResponse` exported from `Notion.V1.OAuth`. `createOAuthToken`, `revokeOAuthToken` and `introspectOAuthToken` throw `OAuthError` for OAuth-format error bodies, while ordinary Notion API errors still throw `NotionError`; OAuth requests are never automatically replayed. The new network-free tests in the `OAuth` group pass, and `cabal build all` is green.
-- [ ] Milestone 2: A live probe with made-up credentials throws `OAuthError` with `OAuthInvalidClient` and a request ID. README, CHANGELOG (`## Unreleased`) and ADR 2 describe the new error type.
+- [x] (2026-10-19) Milestone 1: `OAuthErrorCode`, `OAuthError` and `oauthErrorFromResponse` exported from `Notion.V1.OAuth`. `createOAuthToken`, `revokeOAuthToken` and `introspectOAuthToken` throw `OAuthError` for OAuth-format error bodies, while ordinary Notion API errors still throw `NotionError`; OAuth requests are never automatically replayed. The new network-free tests in the `OAuth` group pass, and `cabal build all` is green.
+- [x] (2026-10-19) Milestone 2: A live probe with made-up credentials throws `OAuthError` with `OAuthInvalidClient` and a request ID. README, CHANGELOG (`## Unreleased`) and ADR 2 describe the new error type.
 
 
 ## Surprises & Discoveries
@@ -89,7 +94,7 @@ This plan is EP-1 of `docs/masterplans/3-support-notion-public-integrations-with
 ## Outcomes & Retrospective
 
 
-(To be filled during and after implementation.)
+Both milestones implemented. `cabal build all` succeeds, network-free regression tests cover both envelopes, no replay, timeout propagation and debug redaction. A real token request using fake credentials returned the typed `OAuthInvalidClient`, HTTP 401 and request ID `ed93fd72-7ff9-494a-a02e-820880e9cd2b`. No real credentials were used. Durable route-local classification and retry decisions are recorded in ADR 2 and ADR 9.
 
 
 ## Context and Orientation

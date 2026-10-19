@@ -16,6 +16,11 @@ provenance:
       at: 2026-10-16T11:53:13Z
       mode: "update"
       note: "Correct callback verification, OAuth replay policy, token lifecycle recovery and integration acceptance after source review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-19T20:22:20Z
+      mode: "implement"
+      note: "Implement OAuth errors, authorization helpers, refresh runtime and example in dependency order."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -83,7 +88,7 @@ A Mori concept search for OAuth found records in `mori://shinzui/shomei`, an aut
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 1 | Decode OAuth Token Endpoint Errors into a Typed Exception | docs/plans/16-decode-oauth-token-endpoint-errors-into-a-typed-exception.md | None | None | Not Started |
+| 1 | Decode OAuth Token Endpoint Errors into a Typed Exception | docs/plans/16-decode-oauth-token-endpoint-errors-into-a-typed-exception.md | None | None | Complete |
 | 2 | Build Authorization URLs and Exchange Codes from Verified OAuth Callbacks | docs/plans/17-build-authorization-urls-and-exchange-codes-from-verified-oauth-callbacks.md | EP-1 M1 (for EP-2 M2 only) | None | Not Started |
 | 3 | Refresh OAuth Access Tokens Automatically for Methods | docs/plans/18-refresh-oauth-access-tokens-automatically-for-methods.md | EP-1 M1 (for EP-3 M2 only) | None | Not Started |
 | 4 | Demonstrate and Document the Public Integration OAuth Login End to End | docs/plans/19-demonstrate-and-document-the-public-integration-oauth-login-end-to-end.md | EP-1, EP-2, EP-3 | None | Not Started |
@@ -137,7 +142,7 @@ EP-3 M1 (independent) ────┘
 ## Progress
 
 
-All four child plans remain Not Started; this pass validates and updates the design, not implementation. EP-1, EP-2 M1 and EP-3 M1 are independent. For a single implementer use EP-1, EP-2, EP-3, then EP-4; retain milestone-level dependencies for any separately authorized parallel work.
+EP-1 completed on 2026-10-19, including the live invalid-client probe. EP-2 is next; EP-2–EP-4 remain Not Started. EP-1, EP-2 M1 and EP-3 M1 are independent. For a single implementer use EP-1, EP-2, EP-3, then EP-4; retain milestone-level dependencies for any separately authorized parallel work.
 
 The initiative's integration gate is EP-4's live run, which requires a real Notion public integration. Its client ID and client secret must be supplied as `NOTION_OAUTH_CLIENT_ID` and `NOTION_OAUTH_CLIENT_SECRET`, and its redirect URI must be registered in the Notion developer portal. A person must also complete the consent page in a browser. Until that run passes, the initiative is not complete, even if every network-free test passes. Missing credentials leave only the live gate pending; complete EP-4’s offline example tests and documentation first. The live gate includes explicit refresh, restart with the persisted pair, and automatic recovery from a deliberately invalid local access token while retaining the valid current refresh token.
 

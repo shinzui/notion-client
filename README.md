@@ -219,7 +219,12 @@ exchangeCode manager authCode = do
         }
 ```
 
-`revokeOAuthToken` and `introspectOAuthToken` take a token.
+`revokeOAuthToken` and `introspectOAuthToken` take a token. OAuth failures throw
+`OAuthError`; match `oauthErrorCode` against `OAuthInvalidGrant` to recognize a
+rejected grant, or `OAuthInvalidClient` for client credential configuration errors.
+All OAuth methods disable automatic retries because a grant may be consumed.
+Default error rendering and logging omit raw bodies and descriptions; explicit
+metadata is available for controlled diagnostics.
 
 ### URL helpers
 

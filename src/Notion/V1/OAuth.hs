@@ -2,7 +2,8 @@
 --
 -- These endpoints authenticate with HTTP Basic auth using the integration's
 -- client ID and secret instead of a bearer token, so they have their own API
--- type and methods record.
+-- type and methods record. OAuth failures throw 'OAuthError'; requests are
+-- never automatically retried, because grants may be consumed.
 --
 -- @
 -- manager <- newTlsManager
@@ -30,6 +31,13 @@ module Notion.V1.OAuth
     OAuthRevokeResponse (..),
     OAuthIntrospectResponse (..),
 
+    -- * Errors
+    OAuthErrorCode (..),
+    oauthErrorCodeText,
+    parseOAuthErrorCode,
+    OAuthError (..),
+    oauthErrorFromResponse,
+
     -- * Methods
     OAuthMethods (..),
     makeOAuthMethods,
@@ -40,15 +48,21 @@ module Notion.V1.OAuth
   )
 where
 
+import Control.Applicative ((<|>))
+import Control.Exception (Exception (..), catch, throwIO)
 import Data.Aeson ((.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Base64 qualified as Base64
+import Data.List (find)
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
+import Data.Text qualified as T
 import Data.Text.Encoding qualified as Text
 import Notion.Prelude
 import Notion.V1.Client (ClientConfig (..), configureClientEnv, legacyClientConfig, runClientWith)
 import Notion.V1.Common (UUID)
+import Notion.V1.Error qualified as Error
+import Notion.V1.Retry (noRetries)
 import Servant.Client (ClientEnv)
 import Servant.Client qualified as Client
 import Prelude hiding (id)
@@ -228,7 +242,107 @@ makeOAuthMethodsWith config env creds =
       Client.hoistClient
         @API
         Proxy
-        (runClientWith (configureClientEnv config env))
+        (reinterpret . runClientWith (configureClientEnv safeConfig env))
         (Client.client @API Proxy)
         (basicAuthorization creds)
         (notionVersion config)
+
+    -- Only allow structured operational fields through the shared runtime logger.
+    -- In particular, its debug response body and server-supplied message are secret-bearing.
+    safeConfig = config {retryOptions = noRetries, logger = sanitize <$> logger config}
+    sanitize write level _ fields =
+      write level "OAuth request" (filter ((`elem` ["method", "path", "attempt", "delayMs", "code", "requestId"]) . fst) fields)
+
+reinterpret :: IO a -> IO a
+reinterpret action =
+  action
+    `catch` (\e@(Error.UnknownHTTPResponseError r) -> maybe (throwIO e) throwIO (oauthErrorFromResponse r))
+    `catch` (\e@Error.NotionError {response} -> maybe (throwIO e) throwIO (response >>= oauthErrorFromResponse))
+
+-- | OAuth token and authorization-redirect error codes (RFC 6749).
+data OAuthErrorCode
+  = OAuthInvalidRequest
+  | OAuthInvalidClient
+  | OAuthInvalidGrant
+  | OAuthUnauthorizedClient
+  | OAuthUnsupportedGrantType
+  | OAuthInvalidScope
+  | OAuthAccessDenied
+  | OAuthUnsupportedResponseType
+  | OAuthServerError
+  | OAuthTemporarilyUnavailable
+  | UnknownOAuthErrorCode Text
+  deriving stock (Eq, Show)
+
+knownOAuthCodes :: [(OAuthErrorCode, Text)]
+knownOAuthCodes =
+  [ (OAuthInvalidRequest, "invalid_request"),
+    (OAuthInvalidClient, "invalid_client"),
+    (OAuthInvalidGrant, "invalid_grant"),
+    (OAuthUnauthorizedClient, "unauthorized_client"),
+    (OAuthUnsupportedGrantType, "unsupported_grant_type"),
+    (OAuthInvalidScope, "invalid_scope"),
+    (OAuthAccessDenied, "access_denied"),
+    (OAuthUnsupportedResponseType, "unsupported_response_type"),
+    (OAuthServerError, "server_error"),
+    (OAuthTemporarilyUnavailable, "temporarily_unavailable")
+  ]
+
+oauthErrorCodeText :: OAuthErrorCode -> Text
+oauthErrorCodeText (UnknownOAuthErrorCode t) = t
+oauthErrorCodeText c = maybe "" snd (find ((== c) . fst) knownOAuthCodes)
+
+parseOAuthErrorCode :: Text -> OAuthErrorCode
+parseOAuthErrorCode t = maybe (UnknownOAuthErrorCode t) fst (find ((== t) . snd) knownOAuthCodes)
+
+instance FromJSON OAuthErrorCode where
+  parseJSON = Aeson.withText "OAuthErrorCode" (pure . parseOAuthErrorCode)
+
+instance ToJSON OAuthErrorCode where
+  toJSON = String . oauthErrorCodeText
+
+-- | Explicit metadata may contain secrets or untrusted server text. Default
+-- rendering deliberately omits descriptions, bodies and headers.
+data OAuthError = OAuthError
+  { oauthErrorCode :: OAuthErrorCode,
+    errorDescription :: Maybe Text,
+    errorUri :: Maybe Text,
+    requestId :: Maybe Text,
+    response :: Maybe Error.HttpErrorResponse
+  }
+  deriving stock (Eq)
+
+instance Show OAuthError where
+  show OAuthError {oauthErrorCode, requestId, response} =
+    "Notion OAuth request failed: "
+      <> T.unpack (safeCode oauthErrorCode)
+      <> maybe "" (\r -> " (HTTP " <> show (Error.httpStatus r) <> ")") response
+      <> maybe "" (\r -> " [request " <> T.unpack r <> "]") requestId
+    where
+      safeCode (UnknownOAuthErrorCode _) = "unknown_oauth_error"
+      safeCode c = oauthErrorCodeText c
+
+instance Exception OAuthError where
+  displayException = show
+
+instance FromJSON OAuthError where
+  parseJSON = Aeson.withObject "OAuthError" $ \o -> do
+    c <- o .: "error"
+    if T.null c
+      then fail "Empty OAuth error"
+      else
+        OAuthError (parseOAuthErrorCode c) <$> o .:? "error_description" <*> o .:? "error_uri" <*> o .:? "request_id" <*> pure Nothing
+
+-- | Recognize either OAuth's envelope or a known OAuth code in Notion's
+-- documented envelope, only on OAuth routes.
+oauthErrorFromResponse :: Error.HttpErrorResponse -> Maybe OAuthError
+oauthErrorFromResponse r = do
+  e@OAuthError {requestId} <- Aeson.decode (Error.errorBody r) <|> alternate
+  pure e {response = Just r, requestId = requestId <|> Error.notionRequestId r}
+  where
+    alternate = do
+      Error.NotionError {code, message, requestId} <- Aeson.decode (Error.errorBody r)
+      let c = parseOAuthErrorCode (Error.apiErrorCodeText code)
+      case c of
+        UnknownOAuthErrorCode _ -> Nothing
+        _ -> Just (OAuthError c (Just message) Nothing requestId Nothing)

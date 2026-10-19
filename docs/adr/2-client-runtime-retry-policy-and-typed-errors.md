@@ -41,6 +41,11 @@ and `src/Notion/V1/Error.hs`.
   `UnknownHTTPResponseError`, and timeouts become `RequestTimeoutError`. These are separate
   exception types rather than one sum type, so existing `catch @NotionError` handlers keep
   working.
+- **OAuth amendment (2026-10-19).** OAuth methods normalize both the OAuth envelope
+  and known OAuth codes in the Notion envelope into `OAuthError`, locally to those
+  routes. They disable all automatic retries, including rate-limit retries, because
+  grants may be consumed. Ordinary `Methods` retain the policy above. See
+  [ADR 9](9-oauth-callback-and-token-lifecycle-boundaries.md).
 - **Existing callers.** `makeMethods` keeps its type and gains the default retries. It keeps the
   caller's `Manager` timeout.
 - **Requests outside Servant.** They reuse the runtime through exported names:

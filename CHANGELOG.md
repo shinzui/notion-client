@@ -1,5 +1,15 @@
 # Changelog for notion-client
 
+## Unreleased
+
+### Breaking Changes
+
+* OAuth endpoint failures with OAuth error bodies now throw `OAuthError` instead of `UnknownHTTPResponseError`.
+
+### New Features
+
+* Typed `OAuthErrorCode` and route-local normalization of OAuth failures; OAuth requests never automatically replay grants. Default error rendering and OAuth debug logging omit server descriptions, headers and bodies.
+
 ## 0.9.0.0 (2026-10-12)
 
 ### Breaking Changes
