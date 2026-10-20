@@ -1,8 +1,8 @@
 -- | Client runtime: configuration, timeout, retries and logging.
 --
--- 'Notion.V1.makeMethodsWith' builds 'Notion.V1.Methods' from a 'ClientConfig'.
--- The building blocks below ('RequestContext', 'withStandardHeaders',
--- 'responseTimeoutFor', 'withRetries') let non-Servant requests share the runtime.
+-- 'Notion.V1.makeMethodsWith' builds t'Notion.V1.Methods' from a t'ClientConfig'.
+-- The building blocks below, t'RequestContext', 'withStandardHeaders',
+-- 'responseTimeoutFor' and 'withRetries', let non-Servant requests share the runtime.
 -- 'standardHeaders' reads current authorization in IO without renewal.
 -- 'withStandardHeaders' can renew once around replayable response acquisition;
 -- keep body consumption and user callbacks outside both retry wrappers.
@@ -90,7 +90,7 @@ type Logger = LogLevel -> Text -> [(Text, Value)] -> IO ()
 -- | Configuration of the client runtime.
 data ClientConfig = ClientConfig
   { -- | Base URL including the @/v1@ path. Used by 'Notion.V1.makeMethodsWith';
-    -- ignored by 'Notion.V1.makeMethodsWithEnv', whose 'ClientEnv' already has one.
+    -- ignored by 'Notion.V1.makeMethodsWithEnv', whose t'ClientEnv' already has one.
     apiBaseUrl :: BaseUrl,
     -- | Value of the @Notion-Version@ header.
     notionVersion :: Text,
@@ -154,7 +154,7 @@ logWith ClientConfig {logger, logLevel} level msg extra = case logger of
   Just write | level >= logLevel -> write level msg extra
   _ -> pure ()
 
--- | Everything needed to send a request the same way 'Notion.V1.Methods' does,
+-- | Everything needed to send a request the same way t'Notion.V1.Methods' does,
 -- whether through Servant or a hand-written http-client request.
 data RequestContext = RequestContext
   { contextConfig :: ClientConfig,
@@ -166,7 +166,7 @@ data RequestContext = RequestContext
   }
 
 -- | Build the context from the same inputs as 'Notion.V1.makeMethodsWithEnv':
--- manager and base URL from the 'ClientEnv', and a bearer token.
+-- manager and base URL from the t'ClientEnv', and a bearer token.
 requestContextFor :: ClientConfig -> ClientEnv -> Text -> RequestContext
 requestContextFor config env token = requestContextWithTokenSource config env (staticTokenSource token)
 
@@ -223,7 +223,7 @@ applyTimeout config@ClientConfig {timeout} req = case timeout of
   Just _ -> req {HTTP.responseTimeout = responseTimeoutFor config}
   Nothing -> req
 
--- | Install the runtime (timeout and middleware) into a 'ClientEnv', keeping the
+-- | Install the runtime (timeout and middleware) into a t'ClientEnv', keeping the
 -- caller's own request builder and middleware. The caller's middleware runs
 -- inside ours.
 configureClientEnv :: ClientConfig -> ClientEnv -> ClientEnv
@@ -283,7 +283,7 @@ notionMiddleware config@ClientConfig {userAgent} app req0 = do
       | Just (_ :: RequestTimeoutError) <- fromException ex = Just "Request to Notion API has timed out"
       | otherwise = Nothing
 
--- | Run an action that signals API failures by throwing 'NotionError', retrying
+-- | Run an action that signals API failures by throwing t'NotionError', retrying
 -- per 'retryOptions'. @method@ and @path@ are used for the retry rule and log
 -- lines. Other exceptions propagate immediately. Usable outside Servant, for
 -- example before opening a streaming response.

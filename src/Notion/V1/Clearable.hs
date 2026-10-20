@@ -1,9 +1,9 @@
 -- | A request field that can be left out, explicitly cleared with JSON @null@,
 -- or set to a value.
 --
--- Inside a record encoded with 'genericToJSON' 'aesonOptions', 'Unset' omits
+-- Inside a record encoded with 'genericToJSON' @aesonOptions@, 'Unset' omits
 -- the key entirely, 'Clear' writes @null@, and 'Set' writes the value. When
--- decoded with 'genericParseJSON' 'aesonOptions', a missing key becomes 'Unset'
+-- decoded with 'genericParseJSON' @aesonOptions@, a missing key becomes 'Unset'
 -- and @null@ becomes 'Clear'. (Outside a record, for example as a 'Map' value,
 -- 'Unset' also encodes as @null@; use 'Maybe' there instead.)
 module Notion.V1.Clearable

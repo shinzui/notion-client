@@ -210,8 +210,8 @@ instance ToJSON UpdatePageTemplate where
 
 -- | Create a page request.
 --
--- Every field is optional on the wire. Without a 'parent' the page is created
--- as a private workspace page. 'properties' is omitted when the map is empty.
+-- Every field is optional on the wire. Without a @parent@ the page is created
+-- as a private workspace page. @properties@ is omitted when the map is empty.
 data CreatePage = CreatePage
   { parent :: Maybe Parent,
     properties :: PageProperties,
@@ -236,7 +236,7 @@ instance ToJSON CreatePage where
         <> optionalPair "template" template
         <> optionalPair "position" position
 
--- | Smart constructor for 'CreatePage' with required fields
+-- | Smart constructor for t'CreatePage' with required fields
 mkCreatePage :: Parent -> PageProperties -> CreatePage
 mkCreatePage parent properties =
   CreatePage
@@ -252,7 +252,7 @@ mkCreatePage parent properties =
 
 -- | Update a page request.
 --
--- 'properties' is omitted when the map is empty. 'icon' and 'cover' can be
+-- @properties@ is omitted when the map is empty. @icon@ and @cover@ can be
 -- removed from the page with 'Clear'.
 data UpdatePage = UpdatePage
   { properties :: PageProperties,
@@ -278,7 +278,7 @@ instance ToJSON UpdatePage where
         <> optionalPair "template" template
         <> optionalPair "erase_content" eraseContent
 
--- | Smart constructor for 'UpdatePage' with required fields
+-- | Smart constructor for t'UpdatePage' with required fields
 mkUpdatePage :: PageProperties -> UpdatePage
 mkUpdatePage properties =
   UpdatePage

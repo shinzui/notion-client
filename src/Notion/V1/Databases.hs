@@ -48,7 +48,7 @@ instance FromJSON DataSource where
 -- | Notion database object
 --
 -- In API version 2025-09-03, database schema (properties) moved to data sources.
--- The 'properties' field may be absent; use 'dataSources' and the data source
+-- The @properties@ field may be absent; use 'dataSources' and the data source
 -- endpoints to access schema information.
 data DatabaseObject = DatabaseObject
   { id :: DatabaseID,
@@ -197,7 +197,7 @@ instance ToJSON CreateDatabase where
 -- | Update database request
 --
 -- In API version 2025-09-03, schema updates (properties) are handled via
--- the Update Data Source API ('Notion.V1.DataSources.UpdateDataSource').
+-- the Update Data Source API, t'Notion.V1.DataSources.UpdateDataSource'.
 -- This endpoint only handles database-level attributes.
 data UpdateDatabase = UpdateDatabase
   { title :: Maybe (Vector RichText),

@@ -189,7 +189,7 @@ instance ToJSON CreateDataSource where
 
 -- | Update data source request.
 --
--- Each entry of @properties@ is a 'PropertyUpdate': remove ('RemoveProperty', sent as @null@),
+-- Each entry of @properties@ is a 'PropertyUpdate': remove ('Notion.V1.Properties.RemoveProperty', sent as @null@),
 -- rename only, a full schema, or an option-list update. @Nothing@ leaves properties untouched.
 data UpdateDataSource = UpdateDataSource
   { title :: Maybe (Vector RichText),

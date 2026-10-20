@@ -2,7 +2,7 @@
 --
 -- These endpoints authenticate with HTTP Basic auth using the integration's
 -- client ID and secret instead of a bearer token, so they have their own API
--- type and methods record. OAuth failures throw 'OAuthError'; requests are
+-- type and methods record. OAuth failures throw t'OAuthError'; requests are
 -- never automatically retried, because grants may be consumed.
 --
 -- @
@@ -229,7 +229,7 @@ makeOAuthMethods = makeOAuthMethodsWith legacyClientConfig
 
 -- | OAuth methods with a configuration. The routes are relative to the
 -- 'ClientEnv' base URL (normally @https://api.notion.com/v1@) and use the same
--- runtime (retries, timeout, logging) as 'Notion.V1.Methods'.
+-- runtime (retries, timeout, logging) as t'Notion.V1.Methods'.
 makeOAuthMethodsWith :: ClientConfig -> ClientEnv -> OAuthCredentials -> OAuthMethods
 makeOAuthMethodsWith config env creds =
   OAuthMethods

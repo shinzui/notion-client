@@ -1,17 +1,17 @@
 -- | Default interpreter for the 'Notion' effect.
 --
 -- 'runNotion' dispatches every 'Notion' constructor through a
--- concrete 'Notion.V1.Methods' value. Any 'NotionError' thrown by
+-- concrete t'Notion.V1.Methods' value. Any 'NotionError' thrown by
 -- the underlying 'IO' action is caught and re-raised via the
 -- 'Error' effect, so callers can branch on Notion API error shapes
 -- (e.g. @object_not_found@) without resorting to 'IO'-level exception
 -- handling. Other 'Servant.Client.ClientError' values (network
 -- failures, decoding errors) are intentionally /not/ caught: they
 -- remain 'IO' exceptions, preserving the existing 'Notion.V1' contract.
--- The same holds for 'Notion.V1.Error.UnknownHTTPResponseError',
--- 'Notion.V1.Error.RequestTimeoutError' and
--- 'Notion.V1.Error.InvalidPathParameterError'. Retries happen inside the
--- 'Notion.V1.Methods' value, before an error reaches the interpreter.
+-- The same holds for t'Notion.V1.Error.UnknownHTTPResponseError',
+-- t'Notion.V1.Error.RequestTimeoutError' and
+-- t'Notion.V1.Error.InvalidPathParameterError'. Retries happen inside the
+-- t'Notion.V1.Methods' value, before an error reaches the interpreter.
 module Notion.V1.Effectful.Interpreter
   ( runNotion,
   )

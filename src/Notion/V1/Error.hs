@@ -2,12 +2,12 @@
 --
 -- A failed request surfaces as one of these exceptions:
 --
--- * 'NotionError': Notion answered with its JSON error envelope. 'code' is a
+-- * t'NotionError': Notion answered with its JSON error envelope. 'code' is a
 --   typed 'APIErrorCode'.
--- * 'UnknownHTTPResponseError': a non-2xx response whose body is not a Notion
+-- * t'UnknownHTTPResponseError': a non-2xx response whose body is not a Notion
 --   error, for example an HTML page from Notion's edge proxy.
--- * 'RequestTimeoutError': connecting or waiting for response headers timed out.
--- * 'InvalidPathParameterError': the request path contained @..@ and was not sent.
+-- * t'RequestTimeoutError': connecting or waiting for response headers timed out.
+-- * t'InvalidPathParameterError': the request path contained @..@ and was not sent.
 --
 -- Response decoding failures and other connection problems remain servant's
 -- 'Client.ClientError'.
@@ -232,8 +232,8 @@ buildRequestError httpStatus errorHeaders errorBody =
     rayId = lookupHeader "cf-ray" errorHeaders
     meta = HttpErrorResponse {..}
 
--- | Typed exception for a non-2xx response: a 'NotionError' when the body is a
--- Notion error envelope, else an 'UnknownHTTPResponseError'. Throwing the result
+-- | Typed exception for a non-2xx response: a t'NotionError' when the body is a
+-- Notion error envelope, else an t'UnknownHTTPResponseError'. Throwing the result
 -- with 'Control.Exception.throwIO' can be caught as either type.
 notionErrorFromResponse :: Status -> ResponseHeaders -> ByteString -> SomeException
 notionErrorFromResponse s hs b = either toException toException (buildRequestError (statusCode s) hs b)
@@ -258,7 +258,7 @@ fromClientError = \case
       HTTP.ConnectionTimeout -> True
       _ -> False
 
--- | Try to parse a 'NotionError' from a Servant 'Client.ClientError'.
+-- | Try to parse a t'NotionError' from a Servant 'Client.ClientError'.
 --
 -- Returns 'Just' if the error is a 'Client.FailureResponse' whose body is a
 -- Notion error envelope, 'Nothing' otherwise.

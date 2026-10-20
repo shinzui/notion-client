@@ -936,7 +936,7 @@ blockContentFields = \case
 -- ---------------------------------------------------------------------------
 
 -- | Parse block content from a type name and the inner JSON value (the value
--- under the type key). This is called by 'BlockObject'\'s 'FromJSON' instance
+-- under the type key). This is called by t'Notion.V1.Blocks.BlockObject'\'s 'FromJSON' instance
 -- and by the standalone 'FromJSON BlockContent'.
 parseBlockContent :: Text -> Value -> Parser BlockContent
 parseBlockContent typeName val = case typeName of
@@ -1130,7 +1130,7 @@ instance ToJSON BlockContent where
 -- full block content with 'blockUpdateFromContent'.
 data BlockUpdatePayload = BlockUpdatePayload
   { -- | Named @updateContent@ so it does not clash with
-    -- 'Notion.V1.Blocks.BlockObject'\'s @content@.
+    -- t'Notion.V1.Blocks.BlockObject'\'s @content@.
     updateContent :: Maybe BlockUpdateContent,
     inTrash :: Maybe Bool
   }
@@ -1367,7 +1367,7 @@ blockUpdateFromContent = \case
 -- Smart constructors
 -- ---------------------------------------------------------------------------
 
--- | Build a 'RichText' vector containing a single plain-text segment.
+-- | Build a t'RichText' vector containing a single plain-text segment.
 -- This is the most common way to create block content.
 mkRichText :: Text -> Vector RichText
 mkRichText t =

@@ -333,7 +333,7 @@ mkExternalUrlUpload url fname =
       externalUrl = Just url
     }
 
--- | Create a 'SendFileUpload' for a single-part upload.
+-- | Create a t'SendFileUpload' for a single-part upload.
 mkSendFileUpload ::
   -- | path to the file on disk
   FilePath ->

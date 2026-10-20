@@ -1,7 +1,7 @@
 -- | @\/v1\/async_tasks@
 --
 -- Some operations run in the background: Notion answers with an
--- 'AsyncTask' instead of the finished result. Retrieve the task with
+-- t'AsyncTask' instead of the finished result. Retrieve the task with
 -- 'Notion.V1.retrieveAsyncTask' and wait for it with 'waitForAsyncTask'.
 module Notion.V1.AsyncTasks
   ( -- * Main types
@@ -193,7 +193,7 @@ instance (FromJSON a) => FromJSON (AsyncOr a) where
 
 -- | The responses of an endpoint that may run in the background: Notion
 -- answers @200 OK@ with the result when it finished synchronously and
--- @202 Accepted@ with an 'AsyncTask' when it queued the work. Either body is
+-- @202 Accepted@ with an t'AsyncTask' when it queued the work. Either body is
 -- decoded by 'AsyncOr'\'s instance.
 type AsyncStatuses a = '[WithStatus 200 (AsyncOr a), WithStatus 202 (AsyncOr a)]
 

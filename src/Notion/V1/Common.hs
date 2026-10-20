@@ -289,7 +289,7 @@ instance ToJSON NoticonColor where
     c -> String (fromMaybe "" (lookup c noticonColorNames))
 
 -- | Reference to a workspace custom emoji. Responses always include 'name'
--- and 'url'; requests may send only the ID.
+-- and @url@; requests may send only the ID.
 data CustomEmojiRef = CustomEmojiRef
   { id :: UUID,
     name :: Maybe Text,

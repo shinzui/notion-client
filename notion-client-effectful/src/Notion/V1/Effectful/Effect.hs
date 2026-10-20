@@ -1,13 +1,13 @@
 -- | The 'Notion' effect and its smart constructors.
 --
--- One constructor per field of 'Notion.V1.Methods'. Each smart
+-- One constructor per field of t'Notion.V1.Methods'. Each smart
 -- constructor has the same name, same argument order, and same
 -- argument types as the corresponding @Methods@ field — so migrating
 -- an 'IO'-based call site amounts to dropping the explicit
 -- @methods@ argument.
 --
 -- /Import note./ Every smart constructor name clashes with the
--- matching 'Notion.V1.Methods' record selector. Import one of the
+-- matching t'Notion.V1.Methods' record selector. Import one of the
 -- two modules qualified (mirroring how 'Notion.V1' itself qualifies
 -- @Pages@, @Databases@, etc.).
 module Notion.V1.Effectful.Effect
@@ -118,7 +118,7 @@ import Numeric.Natural (Natural)
 
 -- | Operations on a Notion workspace.
 --
--- One constructor per field of 'Notion.V1.Methods'. The constructor
+-- One constructor per field of t'Notion.V1.Methods'. The constructor
 -- names are the @PascalCase@ form of the field names; argument order
 -- matches the field signature.
 data Notion :: Effect where
@@ -214,21 +214,21 @@ type instance DispatchOf Notion = 'Dynamic
 
 -- ── Databases ─────────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createDatabase'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createDatabase'.
 createDatabase :: (Notion :> es) => CreateDatabase -> Eff es DatabaseObject
 createDatabase = send . CreateDatabase
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveDatabase'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveDatabase'.
 retrieveDatabase :: (Notion :> es) => DatabaseID -> Eff es DatabaseObject
 retrieveDatabase = send . RetrieveDatabase
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updateDatabase'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updateDatabase'.
 updateDatabase :: (Notion :> es) => DatabaseID -> UpdateDatabase -> Eff es DatabaseObject
 updateDatabase dbId upd = send (UpdateDatabase dbId upd)
 
 {-# DEPRECATED queryDatabase "Use 'queryDataSource' instead." #-}
 
--- | See 'Notion.V1.Methods'.'Notion.V1.queryDatabase'. Deprecated upstream;
+-- | See t'Notion.V1.Methods'.'Notion.V1.queryDatabase'. Deprecated upstream;
 -- the constructor is retained for parity so existing call sites can migrate
 -- in lockstep with the base library.
 queryDatabase ::
@@ -240,15 +240,15 @@ queryDatabase dbId q = send (QueryDatabase dbId q)
 
 -- ── Data Sources ──────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveDataSource'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveDataSource'.
 retrieveDataSource :: (Notion :> es) => DataSourceID -> Eff es DataSourceObject
 retrieveDataSource = send . RetrieveDataSource
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createDataSource'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createDataSource'.
 createDataSource :: (Notion :> es) => DataSources.CreateDataSource -> Eff es DataSourceObject
 createDataSource = send . CreateDataSource
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updateDataSource'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updateDataSource'.
 updateDataSource ::
   (Notion :> es) =>
   DataSourceID ->
@@ -256,7 +256,7 @@ updateDataSource ::
   Eff es DataSourceObject
 updateDataSource dsId upd = send (UpdateDataSource dsId upd)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.queryDataSource'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.queryDataSource'.
 queryDataSource ::
   (Notion :> es) =>
   DataSourceID ->
@@ -264,7 +264,7 @@ queryDataSource ::
   Eff es (ListOf DataSources.PageOrDataSource)
 queryDataSource dsId q = send (QueryDataSource dsId q)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.listDataSourceTemplates'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.listDataSourceTemplates'.
 listDataSourceTemplates ::
   (Notion :> es) =>
   DataSourceID ->
@@ -277,31 +277,31 @@ listDataSourceTemplates dsId nameFilter startCursor pageSize =
 
 -- ── Pages ─────────────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createPage'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createPage'.
 createPage :: (Notion :> es) => CreatePage -> Eff es PageObject
 createPage = send . CreatePage
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createPageFiltered'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createPageFiltered'.
 createPageFiltered :: (Notion :> es) => [Text] -> CreatePage -> Eff es PageObject
 createPageFiltered props req = send (CreatePageFiltered props req)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrievePage'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrievePage'.
 retrievePage :: (Notion :> es) => PageID -> Eff es PageObject
 retrievePage = send . RetrievePage
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrievePageFiltered'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrievePageFiltered'.
 retrievePageFiltered :: (Notion :> es) => PageID -> [Text] -> Eff es PageObject
 retrievePageFiltered pid props = send (RetrievePageFiltered pid props)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updatePage'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updatePage'.
 updatePage :: (Notion :> es) => PageID -> UpdatePage -> Eff es PageObject
 updatePage pid upd = send (UpdatePage pid upd)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updatePageFiltered'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updatePageFiltered'.
 updatePageFiltered :: (Notion :> es) => PageID -> [Text] -> UpdatePage -> Eff es PageObject
 updatePageFiltered pid props upd = send (UpdatePageFiltered pid props upd)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrievePageProperty'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrievePageProperty'.
 retrievePageProperty ::
   (Notion :> es) =>
   PageID ->
@@ -312,23 +312,23 @@ retrievePageProperty ::
 retrievePageProperty pid prop cursor size =
   send (RetrievePageProperty pid prop cursor size)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrievePageMarkdown'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrievePageMarkdown'.
 retrievePageMarkdown :: (Notion :> es) => PageID -> Maybe Bool -> Eff es PageMarkdown
 retrievePageMarkdown pid includeTx = send (RetrievePageMarkdown pid includeTx)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updatePageMarkdown'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updatePageMarkdown'.
 updatePageMarkdown :: (Notion :> es) => PageID -> UpdatePageMarkdown -> Eff es PageMarkdown
 updatePageMarkdown pid upd = send (UpdatePageMarkdown pid upd)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.movePage'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.movePage'.
 movePage :: (Notion :> es) => PageID -> MovePage -> Eff es PageObject
 movePage pid mv = send (MovePage pid mv)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createPageAsync'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createPageAsync'.
 createPageAsync :: (Notion :> es) => CreatePage -> Eff es (AsyncOr PageObject)
 createPageAsync = send . CreatePageAsync
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updatePageMarkdownAsync'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updatePageMarkdownAsync'.
 updatePageMarkdownAsync ::
   (Notion :> es) =>
   PageID ->
@@ -338,15 +338,15 @@ updatePageMarkdownAsync pid upd = send (UpdatePageMarkdownAsync pid upd)
 
 -- ── Blocks ────────────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveBlock'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveBlock'.
 retrieveBlock :: (Notion :> es) => BlockID -> Eff es BlockObject
 retrieveBlock = send . RetrieveBlock
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updateBlock'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updateBlock'.
 updateBlock :: (Notion :> es) => BlockID -> Blocks.BlockUpdatePayload -> Eff es BlockObject
 updateBlock bid upd = send (UpdateBlock bid upd)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.listBlockChildren'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.listBlockChildren'.
 listBlockChildren ::
   (Notion :> es) =>
   ParentID ->
@@ -356,7 +356,7 @@ listBlockChildren ::
 listBlockChildren pid pageSize startCursor =
   send (ListBlockChildren pid pageSize startCursor)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.appendBlockChildren'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.appendBlockChildren'.
 appendBlockChildren ::
   (Notion :> es) =>
   ParentID ->
@@ -364,37 +364,37 @@ appendBlockChildren ::
   Eff es (ListOf BlockObject)
 appendBlockChildren pid append = send (AppendBlockChildren pid append)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.deleteBlock'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.deleteBlock'.
 deleteBlock :: (Notion :> es) => BlockID -> Eff es BlockObject
 deleteBlock = send . DeleteBlock
 
 -- ── Users ─────────────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveUser'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveUser'.
 retrieveUser :: (Notion :> es) => UserID -> Eff es UserObject
 retrieveUser = send . RetrieveUser
 
--- | See 'Notion.V1.Methods'.'Notion.V1.listUsers'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.listUsers'.
 listUsers :: (Notion :> es) => Maybe Natural -> Maybe Text -> Eff es (ListOf UserObject)
 listUsers pageSize startCursor = send (ListUsers pageSize startCursor)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveMyUser'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveMyUser'.
 retrieveMyUser :: (Notion :> es) => Eff es UserObject
 retrieveMyUser = send RetrieveMyUser
 
 -- ── Search ────────────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.search'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.search'.
 search :: (Notion :> es) => SearchRequest -> Eff es (ListOf PageOrDataSource)
 search = send . Search
 
 -- ── Comments ──────────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createComment'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createComment'.
 createComment :: (Notion :> es) => Comments.CreateComment -> Eff es CommentResponse
 createComment = send . CreateComment
 
--- | See 'Notion.V1.Methods'.'Notion.V1.listComments'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.listComments'.
 listComments ::
   (Notion :> es) =>
   Maybe BlockID ->
@@ -403,11 +403,11 @@ listComments ::
   Eff es (ListOf CommentObject)
 listComments bid startCursor pageSize = send (ListComments bid startCursor pageSize)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveComment'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveComment'.
 retrieveComment :: (Notion :> es) => Comments.CommentID -> Eff es CommentResponse
 retrieveComment = send . RetrieveComment
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updateComment'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updateComment'.
 updateComment ::
   (Notion :> es) =>
   Comments.CommentID ->
@@ -415,29 +415,29 @@ updateComment ::
   Eff es CommentResponse
 updateComment cid content = send (UpdateComment cid content)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.deleteComment'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.deleteComment'.
 deleteComment :: (Notion :> es) => Comments.CommentID -> Eff es CommentResponse
 deleteComment = send . DeleteComment
 
 -- ── Views ─────────────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createView'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createView'.
 createView :: (Notion :> es) => Views.CreateView -> Eff es ViewObject
 createView = send . CreateView
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveView'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveView'.
 retrieveView :: (Notion :> es) => Views.ViewID -> Eff es ViewObject
 retrieveView = send . RetrieveView
 
--- | See 'Notion.V1.Methods'.'Notion.V1.updateView'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.updateView'.
 updateView :: (Notion :> es) => Views.ViewID -> Views.UpdateView -> Eff es ViewObject
 updateView vid upd = send (UpdateView vid upd)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.deleteView'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.deleteView'.
 deleteView :: (Notion :> es) => Views.ViewID -> Eff es ViewObject
 deleteView = send . DeleteView
 
--- | See 'Notion.V1.Methods'.'Notion.V1.listViews'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.listViews'.
 listViews ::
   (Notion :> es) =>
   Maybe UUID ->
@@ -448,11 +448,11 @@ listViews ::
 listViews dbId dsId startCursor pageSize =
   send (ListViews dbId dsId startCursor pageSize)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createViewQuery'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createViewQuery'.
 createViewQuery :: (Notion :> es) => Views.ViewID -> Views.CreateViewQuery -> Eff es Views.ViewQuery
 createViewQuery vid req = send (CreateViewQuery vid req)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.getViewQueryResults'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.getViewQueryResults'.
 getViewQueryResults ::
   (Notion :> es) =>
   Views.ViewID ->
@@ -462,13 +462,13 @@ getViewQueryResults ::
   Eff es (ListOf PartialPageObject)
 getViewQueryResults vid qid cursor size = send (GetViewQueryResults vid qid cursor size)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.deleteViewQuery'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.deleteViewQuery'.
 deleteViewQuery :: (Notion :> es) => Views.ViewID -> Views.ViewQueryID -> Eff es Views.DeletedViewQuery
 deleteViewQuery vid qid = send (DeleteViewQuery vid qid)
 
 -- ── Custom Emojis ─────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.listCustomEmojis'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.listCustomEmojis'.
 listCustomEmojis ::
   (Notion :> es) =>
   Maybe Text ->
@@ -480,15 +480,15 @@ listCustomEmojis nameFilter startCursor pageSize =
 
 -- ── File Uploads ──────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createFileUpload'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createFileUpload'.
 createFileUpload :: (Notion :> es) => FileUploads.CreateFileUpload -> Eff es FileUploadObject
 createFileUpload = send . CreateFileUpload
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveFileUpload'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveFileUpload'.
 retrieveFileUpload :: (Notion :> es) => FileUploadID -> Eff es FileUploadObject
 retrieveFileUpload = send . RetrieveFileUpload
 
--- | See 'Notion.V1.Methods'.'Notion.V1.sendFileUploadContent'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.sendFileUploadContent'.
 sendFileUploadContent ::
   (Notion :> es) =>
   FileUploadID ->
@@ -496,11 +496,11 @@ sendFileUploadContent ::
   Eff es FileUploadObject
 sendFileUploadContent fid payload = send (SendFileUploadContent fid payload)
 
--- | See 'Notion.V1.Methods'.'Notion.V1.completeFileUpload'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.completeFileUpload'.
 completeFileUpload :: (Notion :> es) => FileUploadID -> Eff es FileUploadObject
 completeFileUpload = send . CompleteFileUpload
 
--- | See 'Notion.V1.Methods'.'Notion.V1.listFileUploads'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.listFileUploads'.
 listFileUploads ::
   (Notion :> es) =>
   Maybe FileUploadStatus ->
@@ -512,21 +512,21 @@ listFileUploads statusFilter startCursor pageSize =
 
 -- ── Async Tasks ───────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.retrieveAsyncTask'. Pass it to
+-- | See t'Notion.V1.Methods'.'Notion.V1.retrieveAsyncTask'. Pass it to
 -- 'Notion.V1.AsyncTasks.waitForAsyncTask' to poll from 'Eff'.
 retrieveAsyncTask :: (Notion :> es) => AsyncTaskID -> Eff es AsyncTask
 retrieveAsyncTask = send . RetrieveAsyncTask
 
 -- ── Meeting Notes ─────────────────────────────────────────────────
 
--- | See 'Notion.V1.Methods'.'Notion.V1.createMeetingNote'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.createMeetingNote'.
 createMeetingNote ::
   (Notion :> es) =>
   MeetingNotes.CreateMeetingNote ->
   Eff es MeetingNotes.CreateMeetingNoteResponse
 createMeetingNote = send . CreateMeetingNote
 
--- | See 'Notion.V1.Methods'.'Notion.V1.queryMeetingNotes'.
+-- | See t'Notion.V1.Methods'.'Notion.V1.queryMeetingNotes'.
 queryMeetingNotes ::
   (Notion :> es) =>
   MeetingNotes.QueryMeetingNotes ->

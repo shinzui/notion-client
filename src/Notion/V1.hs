@@ -141,14 +141,14 @@ makeMethods ::
   Methods
 makeMethods = makeMethodsWithEnv legacyClientConfig
 
--- | Build 'Methods' from a configuration, a connection manager (for example
+-- | Build t'Methods' from a configuration, a connection manager (for example
 -- from 'Network.HTTP.Client.TLS.newTlsManager') and an API token. The base URL
 -- comes from 'apiBaseUrl'.
 makeMethodsWith :: ClientConfig -> Manager -> Text -> Methods
 makeMethodsWith config manager =
   makeMethodsWithEnv config (Client.mkClientEnv manager (apiBaseUrl config))
 
--- | Build 'Methods' from a configuration, an existing 'ClientEnv' (which
+-- | Build t'Methods' from a configuration, an existing 'ClientEnv' (which
 -- supplies the manager and base URL) and an API token.
 makeMethodsWithEnv ::
   ClientConfig ->

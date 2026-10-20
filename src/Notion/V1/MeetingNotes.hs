@@ -107,7 +107,7 @@ instance ToJSON MeetingNotesContent where
         ]
 
 -- | A meeting-notes block as returned by the create and query endpoints.
--- Unlike 'Notion.V1.Blocks.BlockObject' it carries no @parent@.
+-- Unlike t'Notion.V1.Blocks.BlockObject' it carries no @parent@.
 data MeetingNoteBlock = MeetingNoteBlock
   { id :: BlockID,
     meetingNotes :: MeetingNotesContent,

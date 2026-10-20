@@ -139,7 +139,7 @@ instance ToJSON QuickFilter where
     QuickFilter c -> toJSON c
     RawQuickFilter v -> v
 
--- | A property sort, the only kind 'UpdateView' accepts.
+-- | A property sort, the only kind t'UpdateView' accepts.
 data ViewPropertySort = ViewPropertySort
   { property :: Text,
     direction :: SortDirection
@@ -240,7 +240,7 @@ data CreateView = CreateView
   { dataSourceId :: UUID,
     name :: Text,
     type_ :: ViewType,
-    -- | Mutually exclusive with 'viewId' and 'createDatabase_'
+    -- | Mutually exclusive with @viewId@ and 'createDatabase_'
     databaseId :: Maybe UUID,
     -- | Dashboard view to add this view to as a widget
     viewId :: Maybe ViewID,

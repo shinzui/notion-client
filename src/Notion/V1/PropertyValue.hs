@@ -10,7 +10,7 @@
 -- * A 'PropertyValue' sum type for reading page properties via pattern matching
 -- * Smart constructors ('titleValue', 'selectValue', etc.) for writing properties
 -- * 'propertyValueResponseJSON' for exporting modeled response data
--- * Supporting types ('SelectOptionValue', 'FileValue', 'RelationRef', etc.)
+-- * Supporting types such as t'SelectOptionValue', 'FileValue' and t'RelationRef'
 module Notion.V1.PropertyValue
   ( -- * Property value
     PropertyValue (..),
@@ -273,7 +273,7 @@ richTextResponseJSON rt = toJSON rt
 
 -- | A select/multi-select/status option value as it appears in page properties.
 --
--- Note: 'color' is @Maybe Text@ (not 'SelectColor') because the API returns
+-- Note: 'color' is @Maybe Text@ (not 'Notion.V1.Properties.SelectColor') because the API returns
 -- color names as strings in property values, and the set may differ from schema colors.
 data SelectOptionValue = SelectOptionValue
   { id :: Maybe Text,

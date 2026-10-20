@@ -10,7 +10,7 @@
 --
 -- and then uses @NE.retrievePage@, @NE.search@, @NE.runNotion@, etc.
 -- The qualified import avoids name clashes with the matching
--- 'Notion.V1.Methods' record selectors — every smart constructor
+-- t'Notion.V1.Methods' record selectors — every smart constructor
 -- here shares its name with a field of @Methods@ on purpose, so
 -- migrating an IO call site is a near-mechanical rewrite.
 --

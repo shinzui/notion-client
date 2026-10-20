@@ -42,7 +42,7 @@ type CommentID = UUID
 --
 -- Read responses (@GET \/v1\/comments@) contain @category@ + @file@; an
 -- older @name@ + @type@ + @external@\/@file@ shape is also accepted. To attach
--- files to a new comment use 'CommentAttachmentRequest'.
+-- files to a new comment use t'CommentAttachmentRequest'.
 data CommentAttachment = CommentAttachment
   { name :: Maybe Text,
     type_ :: Maybe Text,
